@@ -16,3 +16,57 @@
 @media(max-width:760px){.wrap{width:calc(100% - 30px)}.landing-nav{height:64px}.landing-nav nav{display:none}.nav-actions{gap:8px}.hero{display:flex;flex-direction:column;align-items:stretch;padding-top:45px;padding-bottom:55px;min-height:unset}.hero-copy h1{font-size:50px}.hero-copy>p{font-size:13px}.illustration{height:330px;margin-top:25px;transform:scale(.9);transform-origin:top center}.hero-index{bottom:10px}.section-head{display:block}.section-head h2,.how-inner h2{font-size:27px}.section-head>p{margin-top:12px}.feature-grid{grid-template-columns:1fr}.feature-card{min-height:145px}.how-inner{grid-template-columns:1fr;gap:25px}.how-section{padding:40px 0}.cta-card{padding:25px;align-items:flex-start;flex-direction:column;gap:17px}.cta-card h2{font-size:21px}.cta-mark{right:auto;left:0;top:3px}.footer-inner{flex-wrap:wrap;padding-block:13px;gap:9px}.footer-inner>span{display:none}.auth-layout{grid-template-columns:1fr;padding-top:15px}.auth-story{min-height:unset;padding-bottom:15px}.auth-story h1{font-size:42px}.auth-story .illustration{display:none}.auth-story>p{font-size:12px}.auth-card{padding:21px}.app-sidebar{transform:translateX(105%);transition:transform .2s ease;width:270px;box-shadow:var(--shadow)}.app-sidebar.mobile-open{transform:translateX(0)}.mobile-close,.mobile-menu{display:grid}.main-column{width:100%;margin-right:0}.app-topbar{height:56px;padding:0 14px;justify-content:flex-start;gap:10px}.breadcrumb{flex:1}.top-controls{margin-right:auto}.app-content{width:calc(100% - 30px);padding:21px 0 42px}.page-title{align-items:flex-start;flex-direction:column;gap:13px}.page-title h1{font-size:24px}.dashboard-hero{padding:22px;min-height:250px}.dashboard-hero h2{font-size:22px}.dashboard-art{width:65%;left:-18%;top:16%;opacity:.28}.dashboard-bottom{grid-template-columns:1fr}.empty-room,.active-summary{align-items:flex-start;flex-wrap:wrap}.empty-room>div:nth-child(2),.active-summary>div{min-width:calc(100% - 60px)}.empty-actions{width:100%;margin:4px 0 0}.active-summary .dev-pill{margin-right:0}.form-grid{grid-template-columns:1fr}.span-two{grid-column:auto}.form-footer{align-items:flex-start;flex-direction:column}.room-overview{padding:18px;min-height:unset}.connection-orbit{width:135px;height:130px;transform:scale(.78);margin-left:-18px}.orbit-caption{display:none}.overview-copy h2{font-size:18px}.status-grid{grid-template-columns:1fr 1fr}.member-row{flex-wrap:wrap;padding:9px 0}.member-status{margin-right:auto}.member-ping{width:100%;padding-right:44px}.member-head-dev{max-width:110px;text-align:left}.settings-grid{grid-template-columns:1fr}.privacy-card{grid-column:auto}.diagnostic-card{padding:14px}}
 @media(max-width:430px){.brand-word{font-size:11px}.nav-actions .btn-small{padding-inline:9px;font-size:10px}.nav-login{font-size:10px}.hero-copy h1{font-size:43px}.hero-actions .btn{width:100%}.illustration{width:112%;margin-right:-6%;transform:scale(.8);transform-origin:top center;height:285px}.node{min-width:94px;padding:8px;grid-template-columns:25px 1fr}.node-avatar{width:25px;height:25px}.node b{font-size:9px}.node small{font-size:7px}.float-chip{font-size:8px;padding:7px 9px}.auth-story h1{font-size:36px}.auth-header .nav-login{font-size:9px}.invite-code{gap:8px;padding:8px}.invite-code code{font-size:11px}.page-title-actions{width:100%}.page-title-actions>.btn{flex:1}.room-actions{flex-wrap:wrap}.connection-orbit{display:none}.overview-copy{width:100%}.member-identity{min-width:100px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+/* Shared editorial type scale and controls for Persian-first screens. */
+:root{font-family:"Vazirmatn","Segoe UI Variable","Segoe UI",Tahoma,Arial,sans-serif;font-size:15px;font-synthesis:none;text-rendering:optimizeLegibility}
+body{font-family:inherit;font-size:15px;line-height:1.75}
+button,input,select,textarea{font:inherit}
+.btn{min-height:46px;padding-inline:18px;border-radius:12px;font-family:inherit;font-size:14px;font-weight:600;line-height:1.3;letter-spacing:0;transition:transform .16s ease,background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
+.btn-small{min-height:39px;padding-inline:13px;border-radius:10px;font-size:12px}
+.btn-large{min-height:52px;padding-inline:20px;font-size:14px}
+.btn-primary{background:var(--accent);border-color:var(--accent);box-shadow:0 5px 12px color-mix(in srgb,var(--accent) 17%,transparent)}
+.btn-primary:hover{background:var(--accent-dark);border-color:var(--accent-dark);box-shadow:0 7px 18px color-mix(in srgb,var(--accent) 22%,transparent)}
+.btn-soft,.btn-quiet,.btn-white,.btn-danger{font-weight:600}
+.icon-button{width:40px;height:40px;border-radius:12px;transition:background-color .16s ease,color .16s ease}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 48%,transparent);outline-offset:2px}
+.landing-nav nav{font-size:13px}
+.nav-login,.hero-note{font-size:12px}
+.hero-copy>p,.section-head>p,.how-inner>div:first-child p,.download-main>p{font-size:15px;line-height:1.9}
+.feature-card p,.step p,.page-title p,.field>span,.field input,.field select{font-size:13px}
+.feature-card h3,.step b{font-size:15px}
+.eyebrow{font-size:12px;letter-spacing:0}
+.field input,.field select{min-height:46px;border-radius:11px}
+.setup-grid{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:18px 0 20px}
+.setup-card{min-width:0;padding:23px;border:1px solid var(--line);border-radius:19px;background:var(--surface);box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:flex-start;gap:13px}
+.setup-card-client{border-top:3px solid var(--accent)}
+.setup-card-top{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.setup-number{font:500 13px/1 "Segoe UI",Tahoma,sans-serif;color:var(--accent)}
+.setup-card h2{font-size:21px;line-height:1.4;margin:0}
+.setup-card>p{font-size:13px;line-height:1.9;color:var(--muted);margin:0}
+.setup-detail{width:100%;display:grid;gap:7px;padding:12px 14px;background:var(--surface-alt);border:1px solid var(--line);border-radius:12px}
+.setup-detail b{font-size:12px}
+.setup-detail code,.client-steps code{font:600 12px/1.6 "Segoe UI",Tahoma,monospace;direction:ltr;unicode-bidi:isolate;color:var(--accent)}
+.setup-footnote{color:var(--muted);font-size:11px;line-height:1.8}
+.client-steps{width:100%;margin:0;padding-inline-start:24px;color:var(--muted);font-size:12px;line-height:2.2}
+.client-steps li{padding-inline-start:4px}
+.connection-explainer{display:flex;align-items:flex-start;gap:12px;width:100%;padding:16px 18px;border:1px solid color-mix(in srgb,var(--success) 24%,var(--line));border-radius:15px;background:color-mix(in srgb,var(--success) 6%,var(--surface));color:var(--success)}
+.connection-explainer p{margin:0;color:var(--ink);font-size:13px;line-height:1.9}
+.connection-explainer b{font-weight:700}
+.download-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:19px;margin-bottom:35px}
+@media(max-width:760px){.setup-grid{grid-template-columns:1fr}.setup-card{padding:19px}.setup-card h2{font-size:19px}.setup-card>p,.connection-explainer p{font-size:12px}.download-actions{width:100%}.download-actions .btn{width:100%}}
+@media(prefers-reduced-motion:reduce){.btn,.icon-button{transition:none!important}}
+
+/* Keep the web workspace typography comfortable and aligned with the desktop app. */
+:root{font-family:"Vazirmatn","Segoe UI Variable","Segoe UI",Inter,Tahoma,Arial,sans-serif;font-size:15px}
+body{font-family:inherit;font-size:15px;line-height:1.75}
+button,input,select,textarea{font:inherit}
+.btn{min-height:46px;padding-inline:18px;border-radius:12px;font-size:14px;font-weight:600}
+.btn-small{min-height:40px;padding-inline:14px;font-size:13px}
+.btn-large{min-height:52px;padding-inline:20px}
+.icon-button{width:40px;height:40px;border-radius:12px}
+input,select,textarea{font-size:14px;line-height:1.6}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 36%,transparent);outline-offset:2px}
+.field small{display:block;color:var(--muted);font-size:12px;line-height:1.8;margin-top:4px}
+.setup-card>p,.connection-explainer p{font-size:14px}
+.setup-footnote{font-size:12px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
