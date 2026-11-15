@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { apiBase, healthCheck, request, type Account, type Member, type Room } from './api';
 import { usePreferences, useSession } from './state';
+import { EnglishAuth, EnglishWorkspace } from './EnglishApp';
 
 const devMessage = 'در حال توسعه؛ تونل LAN واقعی به کلاینت دسکتاپ ویندوز نیاز دارد.';
 
@@ -39,11 +40,11 @@ function App() {
 
   return <><button className="site-language" onClick={() => setLanguage(language === 'en' ? 'fa' : 'en')}><Globe2 size={17}/>{language === 'en' ? 'فارسی' : 'English'}</button><Routes>
     <Route path="/" element={<Landing/>}/>
-    <Route path="/login" element={<AuthPage/>}/>
-    <Route path="/register" element={<AuthPage register/>}/>
+    <Route path="/login" element={language === 'en' ? <EnglishAuth/> : <AuthPage/>}/>
+    <Route path="/register" element={language === 'en' ? <EnglishAuth register/> : <AuthPage register/>}/>
     <Route path="/download" element={<DownloadPage/>}/>
     <Route element={<RequireAuth/>}>
-      <Route path="/app" element={<AppShell/>}>
+      <Route path="/app" element={language === 'en' ? <EnglishWorkspace/> : <AppShell/>}>
         <Route index element={<Dashboard/>}/>
         <Route path="create" element={<CreateRoomPage/>}/>
         <Route path="join" element={<JoinRoomPage/>}/>
