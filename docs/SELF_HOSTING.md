@@ -1,10 +1,18 @@
 # Self-hosting on Linux
 
-LANORA needs Docker Engine and the Compose plugin, a VPS with public IPv4, and a domain pointing to it. Open inbound TCP 80/443 and TCP/UDP 11010. The Windows app is downloaded from GitHub Releases; the VPS serves only API and EasyTier traffic.
+LANORA needs Docker Engine and the Compose plugin, a VPS with public IPv4, and a domain pointing to it. Open inbound TCP 80/443 and TCP/UDP 11010. The desktop clients are downloaded from GitHub Releases; the VPS serves only API and EasyTier traffic.
+
+For the guided setup use:
 
 ```sh
 git clone https://github.com/kavianpcx/LANORA.git
 cd LANORA
+bash scripts/setup-server.sh
+```
+
+The script requires Docker/Compose and `openssl`, asks for the domain, writes a private `.env`, checks Compose, and starts services. It refuses to overwrite an existing `.env`. For manual setup instead:
+
+```sh
 cp .env.example .env
 openssl rand -hex 32
 openssl rand -hex 32

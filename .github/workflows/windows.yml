@@ -1,4 +1,4 @@
-name: Windows prerelease
+name: Desktop prerelease
 on:
   push:
     branches: [main]
@@ -55,18 +55,68 @@ jobs:
           name: lanora-windows-x64-prerelease
           path: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Tauri Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libcap2-bin
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Prepare pinned EasyTier v2.6.4 Linux x64
+        run: |
+          curl --fail --location --retry 3 --output easytier.zip https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-linux-x86_64-v2.6.4.zip
+          echo '61b659eaedba658fa66fe47d17e1426cdd77e5d02fa15fed447bb4357c09dfd6  easytier.zip' | sha256sum --check
+          mkdir -p easytier-extracted apps/desktop/src-tauri/resources/easytier apps/desktop/src-tauri/resources/licenses
+          unzip -q easytier.zip -d easytier-extracted
+          find easytier-extracted -type f -exec cp -t apps/desktop/src-tauri/resources/easytier {} +
+          test -f apps/desktop/src-tauri/resources/easytier/easytier-core
+          test -f apps/desktop/src-tauri/resources/easytier/easytier-cli
+          chmod +x apps/desktop/src-tauri/resources/easytier/easytier-core apps/desktop/src-tauri/resources/easytier/easytier-cli
+          curl --fail --location --output apps/desktop/src-tauri/resources/licenses/EasyTier-LGPL-3.0.txt https://raw.githubusercontent.com/EasyTier/EasyTier/v2.6.4/LICENSE
+          cp THIRD_PARTY_LICENSES.md apps/desktop/src-tauri/resources/licenses/
+      - name: Install desktop dependencies and notices
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          cp node_modules/@fontsource/inter/LICENSE src-tauri/resources/licenses/Inter-OFL.txt
+          cp node_modules/@fontsource/vazirmatn/LICENSE src-tauri/resources/licenses/Vazirmatn-OFL.txt
+      - name: Build Linux Debian package
+        working-directory: apps/desktop
+        run: npm run tauri build -- --bundles deb
+      - name: Validate package contents
+        run: |
+          deb=$(find apps/desktop/src-tauri/target/release/bundle/deb -name '*.deb' -print -quit)
+          test -n "$deb"
+          dpkg-deb -c "$deb" | grep -q 'easytier-core'
+          dpkg-deb --ctrl-tarfile "$deb" | tar -tf - | grep -q postinst
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lanora-linux-x64-prerelease
+          path: apps/desktop/src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
   publish:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: windows
+    needs: [windows, linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: lanora-windows-x64-prerelease
           path: installer
+      - uses: actions/download-artifact@v4
+        with:
+          name: lanora-linux-x64-prerelease
+          path: installer
       - name: Publish clearly labeled prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="v0.1.0-alpha.${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" installer/*.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "LANORA $tag (experimental)" --notes 'Experimental Windows build. EasyTier is bundled, but peer connectivity, Windows elevation, firewall behavior, two-PC gaming, and relay fallback have NOT been verified. Do not treat API reachability or an adapter IP as proof that peers can play. See THIRD_PARTY_LICENSES.md and the bundled EasyTier LGPL-3.0 license.'
+          gh release create "$tag" installer/*.exe installer/*.deb --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "LANORA $tag (experimental)" --notes 'Experimental Windows and Linux builds. EasyTier is bundled, but peer connectivity, Windows elevation, Linux network capabilities, firewall behavior, two-PC gaming, and relay fallback have NOT been verified. Do not treat API reachability or an adapter IP as proof that peers can play. See THIRD_PARTY_LICENSES.md and the bundled EasyTier LGPL-3.0 license.'

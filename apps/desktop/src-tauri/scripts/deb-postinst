@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+if [ "${1:-}" = configure ]; then
+  package="${DPKG_MAINTSCRIPT_PACKAGE:-lanora}"
+  core="$(dpkg -L "$package" | grep -m 1 '/easytier-core$' || true)"
+  if [ -z "$core" ] || [ ! -f "$core" ]; then
+    echo 'LANORA: bundled EasyTier core was not found; refusing to configure network privileges.' >&2
+    exit 1
+  fi
+  setcap cap_net_admin,cap_net_raw+ep "$core"
+fi

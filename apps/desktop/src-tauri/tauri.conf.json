@@ -37,6 +37,12 @@
     "resources": [
       "resources/easytier/*",
       "resources/licenses/*"
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "depends": ["libcap2-bin"],
+        "postInstallScript": "scripts/deb-postinst"
+      }
+    }
   }
 }

@@ -10,4 +10,4 @@
 
 **Will every LAN game work?** No. Direct IP is more predictable; broadcast and multicast discovery vary and have not been verified.
 
-**Is there a website?** No. Download the Windows installer from GitHub Releases when a verified build is available.
+**Is there a website?** No. Download the Windows or Linux installer from GitHub Releases when a verified build is available.
