@@ -1,6 +1,6 @@
 # Self-hosting LANORA
 
-This deployment builds and runs the static web app together with the Go control-plane API, SQLite storage, Caddy TLS proxy, and pinned EasyTier node. Caddy serves the web app and forwards `/api/*` to the API. Important limitation: the EasyTier node is not connected to per-room client provisioning. This Compose stack does **not** yet provide a verified virtual LAN or game-traffic relay.
+This deployment builds and runs the static web app, Go API, SQLite, Caddy TLS proxy, and pinned EasyTier shared node. Caddy serves the web app and forwards `/api/*` to the API. Approved room members can request credentials and the configured relay address from the API. Real peer connectivity and game traffic across this deployment are not yet verified.
 
 ## Requirements
 
@@ -24,6 +24,7 @@ Edit `.env`:
 - `LANORA_PUBLIC_HOST`: your public DNS name.
 - `LANORA_ADMIN_TOKEN`: a unique long random bearer secret.
 - `LANORA_RELAY_SECRET`: a distinct long random secret for the isolated node.
+- `LANORA_RELAY_PEER_URL`: a public address such as `tcp://lan.example.org:11010` that Windows clients can reach. This is separate from HTTPS port 443.
 - `LANORA_ALLOWED_ORIGINS`: exact comma-separated app origins, for example `https://kavianpcx.github.io,https://app.example.net,tauri://localhost`.
 - Keep `LANORA_LISTEN_ADDR=:8080` and `LANORA_DB_PATH=/data/lanora.db` unless your deployment requires otherwise.
 
@@ -52,7 +53,7 @@ Caddy serves the frontend and obtains/renews certificates when DNS points to thi
 - `11010/tcp` and `11010/udp`: EasyTier node listeners from Compose, only if you intend to expose this groundwork.
 - The API port 8080 is exposed only to the Compose network; do not publish it directly.
 
-The current listener is not sufficient to assert room traffic will traverse this node. Do not disable host firewall rules or forward a Windows client's default route through LANORA.
+The shared node is scoped to LANORA network names, but two-client P2P and relay fallback have not been verified. Do not disable host firewall rules or forward a Windows client's default route through LANORA.
 
 ## Upgrade and backup
 

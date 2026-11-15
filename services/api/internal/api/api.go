@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -48,6 +49,7 @@ func New(db *store.DB, log *slog.Logger, admin string) http.Handler {
 	mux.HandleFunc("POST /api/v1/rooms/join", a.joinRoom)
 	mux.HandleFunc("GET /api/v1/rooms/{id}", a.getRoom)
 	mux.HandleFunc("GET /api/v1/rooms/{id}/membership", a.membership)
+	mux.HandleFunc("GET /api/v1/rooms/{id}/network", a.networkConfig)
 	mux.HandleFunc("POST /api/v1/rooms/{id}/leave", a.leaveRoom)
 	mux.HandleFunc("POST /api/v1/rooms/{id}/approve", a.approve)
 	mux.HandleFunc("POST /api/v1/rooms/{id}/invite/rotate", a.rotateInvite)
@@ -77,6 +79,17 @@ func (a *API) joinRoom(w http.ResponseWriter,r *http.Request){ account,ok:=a.aut
 func (a *API) getRoom(w http.ResponseWriter,r *http.Request){ p,ok:=a.authenticate(w,r); if !ok{return}; id:=r.PathValue("id"); if p.RoomID!=id {writeErr(w,403,"forbidden","دسترسی به این روم مجاز نیست");return}; rm:=a.loadRoom(id); if rm.ID=="" {writeErr(w,404,"room_not_found","روم پیدا نشد");return}; writeJSON(w,200,rm) }
 
 func (a *API) membership(w http.ResponseWriter,r *http.Request){ raw:=strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"),"Bearer ")); if raw=="" {writeErr(w,401,"unauthorized","توکن دسترسی لازم است");return}; var p principal; var status string; e:=a.db.QueryRow(`SELECT user_id,username,role,room_id,status FROM members WHERE token_hash=?`,hash(raw)).Scan(&p.UserID,&p.Username,&p.Role,&p.RoomID,&status); if e!=nil {writeErr(w,401,"unauthorized","توکن معتبر نیست");return}; if p.RoomID!=r.PathValue("id"){writeErr(w,403,"forbidden","دسترسی مجاز نیست");return}; out:=map[string]any{"status":status,"userId":p.UserID}; if status=="approved" { var secret string; if e=a.db.QueryRow(`SELECT network_secret FROM rooms WHERE id=?`,p.RoomID).Scan(&secret); e==nil {out["networkSecret"]=secret} }; writeJSON(w,200,out) }
+
+// Only approved room members receive tunnel credentials. The relay is configured
+// by the server operator, never accepted as an executable command from a client.
+func (a *API) networkConfig(w http.ResponseWriter,r *http.Request){
+	p,ok:=a.authenticate(w,r);if !ok{return}
+	id:=r.PathValue("id");if p.RoomID!=id {writeErr(w,403,"forbidden","دسترسی مجاز نیست");return}
+	peer:=strings.TrimSpace(os.Getenv("LANORA_RELAY_PEER_URL"))
+	u,e:=url.Parse(peer);if e!=nil||u==nil||(u.Scheme!="tcp"&&u.Scheme!="udp")||u.Hostname()==""||u.Port()==""||u.User!=nil||u.Path!=""||u.RawQuery!=""||u.Fragment!="" {writeErr(w,503,"relay_unconfigured","آدرس Relay روی سرور تنظیم نشده است");return}
+	var secret string;if e=a.db.QueryRow(`SELECT network_secret FROM rooms WHERE id=?`,id).Scan(&secret);e!=nil {writeErr(w,404,"room_not_found","روم پیدا نشد");return}
+	writeJSON(w,200,map[string]string{"networkName":"lanora-"+id,"networkSecret":secret,"peerUrl":peer})
+}
 
 func (a *API) leaveRoom(w http.ResponseWriter,r *http.Request){ p,ok:=a.authenticate(w,r); if !ok{return}; id:=r.PathValue("id"); if p.RoomID!=id {writeErr(w,403,"forbidden","دسترسی مجاز نیست");return}; if p.Role=="host" {writeErr(w,409,"host_must_close","مدیر روم باید روم را ببندد");return}; _,e:=a.db.Exec(`DELETE FROM members WHERE room_id=? AND user_id=?`,id,p.UserID); if e!=nil {serverError(w,e);return}; a.publish(id,"member.left",map[string]any{"userId":p.UserID}); writeJSON(w,200,map[string]any{"status":"left"}) }
 

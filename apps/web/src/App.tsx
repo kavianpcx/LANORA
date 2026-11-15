@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, Route, Routes, useNavigate, useParams } from 're
 import {
   Activity, ArrowLeft, ArrowRight, ArrowUpLeft, Check, ChevronDown,
   CircleHelp, Copy, Gamepad2, Globe2, Home, Link2, LoaderCircle, LogOut, Menu, Moon,
-  Network, Plus, Radio, Settings2, Shield, ShieldCheck, Sun, Users, Wifi, X,
+  Network, Plus, Radio, Server, Settings2, Shield, ShieldCheck, Sun, Users, Wifi, X,
 } from 'lucide-react';
 import { apiBase, healthCheck, request, type Account, type Member, type Room } from './api';
 import { usePreferences, useSession } from './state';
@@ -12,6 +12,8 @@ const devMessage = 'در حال توسعه؛ تونل LAN واقعی به کلا
 
 function App() {
   const theme = usePreferences((s) => s.theme);
+  const language = usePreferences((s) => s.language);
+  const setLanguage = usePreferences((s) => s.setLanguage);
   const token = useSession((s) => s.token);
   const clearAuth = useSession((s) => s.clearAuth);
   const setAuth = useSession((s) => s.setAuth);
@@ -19,9 +21,9 @@ function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    document.documentElement.lang = 'fa';
-    document.documentElement.dir = 'rtl';
-  }, [theme]);
+    document.documentElement.lang = language;
+    document.documentElement.dir = language === 'fa' ? 'rtl' : 'ltr';
+  }, [theme, language]);
 
   useEffect(() => {
     if (!token) { setBooting(false); return; }
@@ -35,7 +37,7 @@ function App() {
 
   if (booting) return <div className="boot-screen"><LoaderCircle className="spin"/><span>در حال بررسی نشست حساب…</span></div>;
 
-  return <Routes>
+  return <><button className="site-language" onClick={() => setLanguage(language === 'en' ? 'fa' : 'en')}><Globe2 size={17}/>{language === 'en' ? 'فارسی' : 'English'}</button><Routes>
     <Route path="/" element={<Landing/>}/>
     <Route path="/login" element={<AuthPage/>}/>
     <Route path="/register" element={<AuthPage register/>}/>
@@ -53,7 +55,7 @@ function App() {
       </Route>
     </Route>
     <Route path="*" element={<NotFound/>}/>
-  </Routes>;
+  </Routes></>;
 }
 
 function RequireAuth() {
@@ -67,6 +69,8 @@ function AuthGate({ location }: { location: string }) {
 }
 
 function Landing() {
+  const language = usePreferences((s) => s.language);
+  if (language === 'en') return <EnglishLanding/>;
   const account = useSession((s) => s.account);
   const theme = usePreferences((s) => s.theme);
   const setTheme = usePreferences((s) => s.setTheme);
@@ -236,6 +240,8 @@ function SettingsPage() {
 }
 
 function DownloadPage() {
+  const language = usePreferences((s) => s.language);
+  if (language === 'en') return <EnglishDownload/>;
   return <div className="download-page">
     <header className="landing-nav wrap"><Brand/><Link className="nav-login" to="/">خانه</Link></header>
     <main className="wrap download-main">
@@ -263,6 +269,21 @@ function DownloadPage() {
       <div className="download-actions"><a className="btn btn-primary btn-large" href="https://github.com/kavianpcx/LANORA" target="_blank" rel="noreferrer">مشاهدهٔ سورس در GitHub <ArrowUpLeft size={16}/></a><Link className="btn btn-quiet btn-large" to="/">بازگشت به صفحهٔ اصلی <ArrowRight size={16}/></Link></div>
     </main>
   </div>;
+}
+
+function EnglishLanding() {
+  const account = useSession((s) => s.account);
+  const theme = usePreferences((s) => s.theme);
+  const setTheme = usePreferences((s) => s.setTheme);
+  return <div className="landing-page english-page"><header className="landing-nav wrap"><Brand/><nav><a href="#features">Features</a><a href="#how">How it works</a><Link to="/download">Get LANORA</Link></nav><div className="nav-actions"><button className="icon-button" aria-label="Toggle theme" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>{theme === 'light' ? <Moon size={17}/> : <Sun size={17}/>}</button><Link className="btn btn-soft btn-small" to="/login">Sign in</Link></div></header>
+  <main><section className="hero wrap"><div className="hero-copy"><span className="eyebrow">YOUR SERVER · YOUR GAME ROOM</span><h1>Play LAN games<br/><em>from anywhere.</em></h1><p>Run LANORA on your VPS. Each player installs the Windows app, enters your server address, and joins a room with a code.</p><div className="hero-actions"><Link className="btn btn-primary btn-large" to="/download">Set up LANORA <ArrowRight size={17}/></Link><Link className="btn btn-quiet btn-large" to={account?'/app':'/register'}>Manage rooms on the web</Link></div><div className="hero-note"><ShieldCheck size={16}/> Windows tunnel and installer are under development. The website manages accounts and rooms.</div></div><ConnectionIllustration/></section>
+  <section id="features" className="feature-section wrap"><div className="section-head"><div><span className="eyebrow">THE BASICS</span><h2>One private place to play.</h2></div><p>A self-hosted server manages invitations. The Windows app is responsible for the virtual network.</p></div><div className="feature-grid"><Feature icon={<Server/>} number="01" title="Your VPS" text="Host the API, database, and relay on a server you control."/><Feature icon={<Users/>} number="02" title="Private rooms" text="Create a room, share a code, and approve players when needed."/><Feature icon={<Activity/>} number="03" title="Honest status" text="The app shows an adapter IP only when the network engine reports it. Peer connectivity remains unverified."/></div></section>
+  <section id="how" className="how-section"><div className="wrap how-inner"><div><span className="eyebrow">FOUR STEPS</span><h2>Simple for players.</h2><p>The server owner handles setup. Friends only need the Windows app, server address, and room code.</p></div><div className="steps"><Step n="01" title="Start the server" text="Deploy on a Linux VPS with Docker Compose."/><Step n="02" title="Install the Windows app" text="Get the installer from GitHub Releases when a verified build is published."/><Step n="03" title="Enter the server address" text="Use its HTTPS domain or IP and port, then sign in."/><Step n="04" title="Create or join a room" text="Share a code. LAN play begins after the desktop tunnel is verified."/></div></div></section>
+  <section className="cta-section wrap"><div className="cta-card"><div><span className="eyebrow">LANORA · IN DEVELOPMENT</span><h2>See what works today.</h2><p>Room management is available with your own API. The Windows tunnel needs validation before public use.</p></div><Link className="btn btn-primary btn-large" to="/download">Setup and downloads <ArrowRight size={16}/></Link></div></section></main><footer className="site-footer"><div className="wrap footer-inner"><Brand compact/><span>Open source and self-hosted</span><div><Link to="/download">Download</Link><a href="https://github.com/kavianpcx/LANORA">GitHub</a></div></div></footer></div>;
+}
+
+function EnglishDownload() {
+  return <div className="download-page english-page"><header className="landing-nav wrap"><Brand/><Link className="nav-login" to="/">Home</Link></header><main className="wrap download-main"><span className="eyebrow">SET UP LANORA</span><h1>One server.<br/><em>One app per player.</em></h1><p>The server owner installs LANORA on a Linux VPS. Friends install the Windows app and enter that server's address. SSH is only for the server owner.</p><div className="setup-grid"><article className="setup-card"><div className="setup-card-top"><span className="setup-number">01</span><span className="dev-pill">LINUX VPS</span></div><h2>Set up the server</h2><p>Install Docker, clone the repository, add your domain and secrets to <code>.env</code>, then run Docker Compose. Open HTTPS and the EasyTier relay port.</p><div className="setup-detail"><b>Give players this address</b><code>https://your-domain.example:443</code></div><a className="btn btn-soft" href="https://github.com/kavianpcx/LANORA/blob/main/docs/SELF_HOSTING.md">Server setup guide <ArrowUpLeft size={15}/></a></article><article className="setup-card setup-card-client"><div className="setup-card-top"><span className="setup-number">02</span><span className="dev-pill">WINDOWS 10/11</span></div><h2>Install the player app</h2><p>Download the LANORA installer from GitHub when the Windows build has passed. Enter the server address, sign in, create or join a room, and check the virtual adapter status.</p><a className="btn btn-primary" href="https://github.com/kavianpcx/LANORA/releases">Check GitHub Releases <ArrowUpLeft size={15}/></a><small className="setup-footnote">No installer is published yet. A successful build is not proof of LAN play across two PCs; that test is still required.</small></article></div><div className="connection-explainer"><ShieldCheck size={19}/><p>The server API manages accounts and rooms. The Windows app must create the virtual network for game traffic. A reachable API does not mean the LAN tunnel is connected.</p></div></main></div>;
 }
 
 function NotFound() { return <main className="auth-gate"><div className="auth-card"><span className="eyebrow">404</span><h1>این صفحه پیدا نشد</h1><Link to="/" className="btn btn-primary">بازگشت به خانه <ArrowRight size={15}/></Link></div></main>; }

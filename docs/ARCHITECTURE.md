@@ -5,13 +5,13 @@ LANORA separates the control plane from the planned peer data plane.
 ## Current components
 
 - `apps/web`: React/TypeScript Vite client; account and room actions call the configured API. Hash routing supports project pages.
-- `apps/desktop`: Tauri 2 + React shell. Rust process supervision is scaffolding and does not establish a tunnel.
+- `apps/desktop`: Tauri 2 + React client. Rust supervises a room-scoped EasyTier process and queries its local node IP; peer reachability and Windows installation remain unverified.
 - `services/api`: Go HTTP API and in-process WebSocket room events.
 - SQLite: accounts, sessions, rooms, members, invite hashes, password hashes and room secrets.
 - `deploy/docker`: API image and Caddy reverse proxy.
 - `docker-compose.yml`: API, Caddy serving the built web frontend, persistent SQLite, and a pinned EasyTier node for infrastructure groundwork.
 
-The API handles authentication and room control, not game packets. EasyTier peer connectivity and virtual interface support are not integrated. Tunnel UI fields remain Development/unknown.
+The API handles authentication and room control, not game packets. Approved members can request the room secret and self-hosted relay endpoint. The native client starts EasyTier and reads its adapter IP; peer connectivity is not measured yet.
 
 ## Intended self-hosted workflow
 

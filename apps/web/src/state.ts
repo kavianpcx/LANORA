@@ -26,7 +26,7 @@ export const useSession = create<SessionState>()(persist((set) => ({
   partialize: (state) => ({ token: state.token, account: state.account, room: state.room }) as SessionState,
 }));
 
-type Preferences = { theme: 'light' | 'dark'; setTheme: (theme: 'light' | 'dark') => void };
+type Preferences = { theme: 'light' | 'dark'; setTheme: (theme: 'light' | 'dark') => void; language: 'en' | 'fa'; setLanguage: (language: 'en' | 'fa') => void };
 export const usePreferences = create<Preferences>()(persist((set) => ({
-  theme: 'light', setTheme: (theme) => set({ theme }),
+  theme: 'light', language: 'en', setTheme: (theme) => set({ theme }), setLanguage: (language) => set({ language }),
 }), { name: 'lanora-web-preferences', storage: createJSONStorage(() => localStorage) }));

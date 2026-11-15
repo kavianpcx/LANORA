@@ -8,6 +8,7 @@ services:
       LANORA_LISTEN_ADDR: ${LANORA_LISTEN_ADDR:-:8080}
       LANORA_DB_PATH: ${LANORA_DB_PATH:-/data/lanora.db}
       LANORA_ADMIN_TOKEN: ${LANORA_ADMIN_TOKEN:?Set LANORA_ADMIN_TOKEN in .env}
+      LANORA_RELAY_PEER_URL: ${LANORA_RELAY_PEER_URL:?Set LANORA_RELAY_PEER_URL in .env}
       LANORA_ALLOWED_ORIGINS: ${LANORA_ALLOWED_ORIGINS:-tauri://localhost,http://tauri.localhost,https://tauri.localhost,http://localhost:1420,http://localhost:1421,https://kavianpcx.github.io}
     volumes:
       - lanora_data:/data
@@ -19,7 +20,7 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add: [NET_ADMIN]
-    command: ["-i", "10.250.0.1", "--network-name", "lanora-relay-control", "--network-secret", "${LANORA_RELAY_SECRET:?Set LANORA_RELAY_SECRET in .env}", "--listeners", "tcp://0.0.0.0:11010", "udp://0.0.0.0:11010"]
+    command: ["--network-name", "lanora-relay-control", "--network-secret", "${LANORA_RELAY_SECRET:?Set LANORA_RELAY_SECRET in .env}", "--listeners", "tcp://0.0.0.0:11010", "udp://0.0.0.0:11010", "--relay-network-whitelist", "lanora-*"]
     ports:
       - "11010:11010/tcp"
       - "11010:11010/udp"
