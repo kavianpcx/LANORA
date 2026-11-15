@@ -1,0 +1,46 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: deploy/docker/api.Dockerfile
+    restart: unless-stopped
+    environment:
+      LANORA_LISTEN_ADDR: ${LANORA_LISTEN_ADDR:-:8080}
+      LANORA_DB_PATH: ${LANORA_DB_PATH:-/data/lanora.db}
+      LANORA_ADMIN_TOKEN: ${LANORA_ADMIN_TOKEN:?Set LANORA_ADMIN_TOKEN in .env}
+      LANORA_ALLOWED_ORIGINS: ${LANORA_ALLOWED_ORIGINS:-tauri://localhost,http://tauri.localhost,https://tauri.localhost,http://localhost:1420,http://localhost:1421,https://kavianpcx.github.io}
+    volumes:
+      - lanora_data:/data
+    expose: ["8080"]
+    networks: [private]
+  easytier:
+    image: ghcr.io/easytier/easytier:v2.6.4@sha256:91d6732ea5ff71542fdb99333d2ee7b168e973443114db84db061e452427d91e
+    restart: unless-stopped
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add: [NET_ADMIN]
+    command: ["-i", "10.250.0.1", "--network-name", "lanora-relay-control", "--network-secret", "${LANORA_RELAY_SECRET:?Set LANORA_RELAY_SECRET in .env}", "--listeners", "tcp://0.0.0.0:11010", "udp://0.0.0.0:11010"]
+    ports:
+      - "11010:11010/tcp"
+      - "11010:11010/udp"
+    networks: [private]
+  caddy:
+    build:
+      context: .
+      dockerfile: deploy/docker/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      LANORA_PUBLIC_HOST: ${LANORA_PUBLIC_HOST:?Set LANORA_PUBLIC_HOST in .env}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    networks: [private]
+volumes:
+  lanora_data:
+  caddy_data:
+  caddy_config:
+networks:
+  private:
+    driver: bridge

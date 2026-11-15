@@ -1,0 +1,14 @@
+.env
+.env.*
+!.env.example
+**/node_modules/
+**/target/
+**/dist/
+**/*.tsbuildinfo
+coverage/
+services/api/data/
+*.db
+*.db-shm
+*.db-wal
+apps/desktop/src-tauri/binaries/
+.codex/
