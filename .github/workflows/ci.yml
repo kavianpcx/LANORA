@@ -18,3 +18,9 @@ jobs:
           cache-dependency-path: services/api/go.mod
       - run: go test -race ./...
         working-directory: services/api
+  compose-config:
+    name: Compose configuration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: cp .env.example .env && docker compose config --quiet

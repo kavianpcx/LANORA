@@ -12,18 +12,15 @@ When a LANORA release redistributes an EasyTier binary, that release must ship t
 
 | Component | Use | License identified by upstream/package metadata |
 |---|---|---|
-| React, React DOM | Web and desktop UI | MIT |
-| React Router | Web routing | MIT |
-| Vite and React plugin | Web build | MIT |
-| Tailwind CSS and Vite plugin | Web styling/build | MIT |
+| React, React DOM | Desktop UI | MIT |
+| Vite and React plugin | Desktop build | MIT |
 | Lucide React | UI icons | ISC |
-| Zustand | Web session/preferences state | MIT |
 | Gorilla WebSocket | API WebSocket events | BSD-2-Clause |
 | modernc SQLite | API database driver | BSD-3-Clause |
 | Tauri 2 and Rust dependencies | Desktop shell | Per-crate licenses; transitive inventory is not yet generated |
 
 This is a direct-dependency summary, not a complete transitive Software Bill of Materials. Before an installer or production container is published, run a license/SBOM inventory over `package-lock.json`, `go.sum`, Rust `Cargo.lock`, and container images, then attach the notices required for that exact artifact. No custom or third-party brand artwork is included; LANORA's SVG marks in `assets/` are original project assets.
 
-## Web lockfile inventory
+## Bundled fonts
 
 The desktop frontend bundles Inter and Vazirmatn font assets from `@fontsource/inter` and `@fontsource/vazirmatn`, under their respective SIL Open Font License 1.1 notices. Package copies of OFL files should be included in binary distribution. The remaining npm and Rust dependencies require an artifact-specific license inventory before a stable release.

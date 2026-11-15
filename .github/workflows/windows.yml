@@ -68,4 +68,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.1.0-alpha.2 installer/*.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'LANORA 0.1.0 alpha (unverified LAN tunnel)' --notes 'Experimental Windows build. EasyTier is bundled, but peer connectivity, Windows elevation, firewall behavior, two-PC gaming, and relay fallback have NOT been verified. Do not treat API reachability or an adapter IP as proof that peers can play. See THIRD_PARTY_LICENSES.md and the bundled EasyTier LGPL-3.0 license.'
+          tag="v0.1.0-alpha.${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" installer/*.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "LANORA $tag (experimental)" --notes 'Experimental Windows build. EasyTier is bundled, but peer connectivity, Windows elevation, firewall behavior, two-PC gaming, and relay fallback have NOT been verified. Do not treat API reachability or an adapter IP as proof that peers can play. See THIRD_PARTY_LICENSES.md and the bundled EasyTier LGPL-3.0 license.'

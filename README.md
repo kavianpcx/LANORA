@@ -48,6 +48,6 @@ The server manages rooms, membership, and relay discovery. EasyTier carries the 
 | `docker-compose.yml` | API, private SQLite storage, TLS proxy, EasyTier shared node |
 | `docs` | [Setup](docs/GETTING_STARTED.md), [network](docs/NETWORKING.md), [API](docs/API.md), [build](docs/BUILDING.md), [security](docs/SECURITY.md) |
 
-Run API tests with `cd services/api && go test ./...`; build the desktop frontend with `cd apps/desktop && npm ci && npm run build`. The Windows installer is built by [GitHub Actions](.github/workflows/windows.yml) only after CI succeeds. See [building](docs/BUILDING.md). Known limitations and next tests are in [ROADMAP](docs/ROADMAP.md). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
+Run API tests with `cd services/api && go test ./...`; build the desktop frontend with `cd apps/desktop && npm ci && npm run build`. The Windows installer is built by [GitHub Actions](.github/workflows/windows.yml) only after the Windows build succeeds. See [building](docs/BUILDING.md). Known limitations and next tests are in [ROADMAP](docs/ROADMAP.md). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 LANORA's own code is [MIT licensed](LICENSE). Bundled EasyTier is separately LGPL-3.0; read [third-party licenses](THIRD_PARTY_LICENSES.md) before redistribution.
