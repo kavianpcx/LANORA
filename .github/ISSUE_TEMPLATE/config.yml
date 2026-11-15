@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/kavianpcx/lanora/security/advisories/new
+    about: Use the private GitHub Security Advisory flow. Do not post exploitable issues publicly.

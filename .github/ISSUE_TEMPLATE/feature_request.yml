@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest a product or engineering improvement.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Web, Desktop, Networking, API, Self-hosting, Accessibility, Documentation]
+  - type: textarea
+    id: considerations
+    attributes:
+      label: Alternatives, compatibility, or security considerations
