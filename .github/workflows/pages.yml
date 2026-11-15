@@ -30,7 +30,7 @@ jobs:
       - name: Build static site
         working-directory: apps/web
         env:
-          VITE_BASE_PATH: /lanora/
+          VITE_BASE_PATH: /LANORA/
         run: npm run build
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
