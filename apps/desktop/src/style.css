@@ -3,3 +3,26 @@
 .dot.bad{background:#e45b59}.dot.checking{background:#d59c33;animation:pulse 1s ease-in-out infinite alternate}@keyframes pulse{to{opacity:.35}}.roompanel{margin-top:40px;background:#fff;border:1px solid #ebece8;border-radius:20px;padding:24px}.roomheading{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.roomtag{display:flex;align-items:center;gap:7px;color:#858b96;font:600 9px Inter,sans-serif;letter-spacing:.08em}.roomtag .dot{width:6px;height:6px}.roomheading h2{font-size:22px;margin:10px 0}.roomstatus{max-width:330px;background:#f8f6ee;color:#806b38;padding:9px 12px;border-radius:10px;font-size:10px;line-height:1.7}.invitebox{display:flex;align-items:center;gap:12px;background:#f8f8f5;border-radius:12px;padding:12px 14px;margin-top:13px;color:#697080;font-size:11px}.invitebox code{font:600 14px Inter,monospace;color:#191c27;letter-spacing:.06em}.invitebox .secondary{height:33px;padding:0 10px;font-size:10px;margin-right:auto}.memberheading{display:flex;justify-content:space-between;align-items:center;margin-top:24px;padding-bottom:10px;border-bottom:1px solid #f0f0ed;color:#697080;font-size:11px}.memberheading>span:first-child{display:flex;align-items:center;gap:7px}.memberrow{min-height:46px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #f4f4f1;font-size:11px}.memberrow .memberstate{margin-right:auto;color:#168a69;font-size:10px}.miniapprove,.minireject{height:26px;border:0;border-radius:7px;padding:0 9px;background:#eef7f3;color:#168a69;font:11px inherit;cursor:pointer}.minireject{background:#fff0ef;color:#c34d4a}.dangerbtn{margin-top:17px;border:1px solid #f1d6d5;background:#fff;color:#c34d4a;border-radius:9px;height:36px;padding:0 13px;font:11px inherit;cursor:pointer}.notice,.errorline{font-size:11px;color:#168a69;margin:12px 2px}.errorline{color:#c34d4a}
 .dialog label.checkrow{display:flex;align-items:center;gap:8px}.dialog label.checkrow input{width:16px;height:16px;accent-color:#4355db}
 @media(prefers-reduced-motion:reduce){.dot.checking{animation:none}}
+/* LANORA desktop polish: readable Persian typography and consistent controls. */
+:root{font-family:"Vazirmatn","Segoe UI Variable","Segoe UI",Tahoma,Arial,sans-serif;font-size:14px;line-height:1.7;font-synthesis:none;text-rendering:optimizeLegibility}
+body,button,input,select,textarea{font-family:inherit}
+button,input,select,textarea{font-size:14px;line-height:1.55}
+h1{font-size:clamp(34px,4vw,42px);line-height:1.45;letter-spacing:-.7px}
+.lead{font-size:15px;line-height:1.9}
+.primary,.secondary{min-height:46px;font:600 14px/1.4 "Vazirmatn","Segoe UI Variable","Segoe UI",Tahoma,Arial,sans-serif;border-radius:12px}
+.dialog label{font-size:13px;line-height:1.7;gap:7px}
+.dialog input,.dialog select{height:43px;font:14px/1.5 "Vazirmatn","Segoe UI Variable","Segoe UI",Tahoma,Arial,sans-serif}
+.dialognote{font-size:12px;line-height:1.9}
+.server-config{display:grid;gap:4px;min-width:290px}
+.server-config label{font-size:12px;font-weight:600;color:#50586b}
+.server-config small{font-size:11px;line-height:1.7;color:#858b96}
+.serverinput{height:36px;border-radius:9px;padding-inline:9px}
+.serverinput input{width:260px;font:13px/1.5 "Segoe UI Variable","Segoe UI",Tahoma,Arial,sans-serif}
+.version{font-size:11px}
+.roomstatus,.invitebox,.memberheading,.memberrow{font-size:13px;line-height:1.8}
+.roomtag{font-size:11px}
+.miniapprove,.minireject,.dangerbtn{font:600 12px/1.4 "Vazirmatn","Segoe UI Variable","Segoe UI",Tahoma,Arial,sans-serif}
+.quickhead{font-size:13px}.quicktext{font-size:12px;line-height:1.9}
+.setup-hint{margin:4px 0 0;color:#697080;font-size:12px;line-height:1.8}
+@media(max-width:850px){footer{align-items:flex-start;flex-wrap:wrap}.server-config{min-width:100%}.serverinput input{width:min(65vw,380px)}.version{margin-right:0}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
