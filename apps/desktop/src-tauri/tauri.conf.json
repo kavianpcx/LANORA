@@ -33,7 +33,7 @@
       "icons/icon.png"
     ],
     "shortDescription": "Self-hosted virtual LAN gaming",
-    "category": "Network",
+    "category": "Utility",
     "resources": [
       "resources/easytier/*",
       "resources/licenses/*"

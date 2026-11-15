@@ -1,62 +1,23 @@
-# Self-hosting LANORA
+# Self-hosting on Linux
 
-This deployment builds and runs the static web app, Go API, SQLite, Caddy TLS proxy, and pinned EasyTier shared node. Caddy serves the web app and forwards `/api/*` to the API. Approved room members can request credentials and the configured relay address from the API. Real peer connectivity and game traffic across this deployment are not yet verified.
-
-## Requirements
-
-- Linux VPS with Docker Engine and the Compose plugin
-- Public DNS `A`/`AAAA` record pointed to the VPS
-- TCP 80 and 443 inbound; UDP 443 is optional for HTTP/3
-- TCP/UDP 11010 if you expose the configured EasyTier listeners
-- A host firewall allowing only required inbound ports
-
-## Configure
-
-From the repository root:
+LANORA needs Docker Engine and the Compose plugin, a VPS with public IPv4, and a domain pointing to it. Open inbound TCP 80/443 and TCP/UDP 11010. The Windows app is downloaded from GitHub Releases; the VPS serves only API and EasyTier traffic.
 
 ```sh
+git clone https://github.com/kavianpcx/LANORA.git
+cd LANORA
 cp .env.example .env
 openssl rand -hex 32
+openssl rand -hex 32
+nano .env
 ```
 
-Edit `.env`:
-
-- `LANORA_PUBLIC_HOST`: your public DNS name.
-- `LANORA_ADMIN_TOKEN`: a unique long random bearer secret.
-- `LANORA_RELAY_SECRET`: a distinct long random secret for the isolated node.
-- `LANORA_RELAY_PEER_URL`: a public address such as `tcp://lan.example.org:11010` that Windows clients can reach. This is separate from HTTPS port 443.
-- `LANORA_ALLOWED_ORIGINS`: exact comma-separated app origins, for example `https://kavianpcx.github.io,https://app.example.net,tauri://localhost`.
-- Keep `LANORA_LISTEN_ADDR=:8080` and `LANORA_DB_PATH=/data/lanora.db` unless your deployment requires otherwise.
-
-Never commit `.env` or expose its secrets in support logs.
-
-## Start and verify
+Set `LANORA_PUBLIC_HOST` to the domain; set `LANORA_RELAY_PEER_URL=tcp://YOUR_DOMAIN:11010`; give `LANORA_ADMIN_TOKEN` and `LANORA_RELAY_SECRET` different random values from the two `openssl` commands. Keep `.env` private. Caddy obtains a TLS certificate when DNS and ports work.
 
 ```sh
 docker compose config
 docker compose up -d --build
 docker compose ps
-docker compose logs --tail=100 api caddy
-curl --fail https://YOUR_HOST/api/v1/health
+curl -f https://YOUR_DOMAIN/api/v1/health
 ```
 
-Caddy serves the frontend and obtains/renews certificates when DNS points to this VPS and HTTP/HTTPS are reachable. Open `https://YOUR_HOST`, then set API Base URL to `https://YOUR_HOST` in Settings. SQLite is stored in the named `lanora_data` volume. Back it up using a SQLite-consistent backup procedure; do not copy the active database file without accounting for WAL state.
-
-## Admin endpoint
-
-`GET https://YOUR_HOST/api/v1/admin/summary` accepts `Authorization: Bearer $LANORA_ADMIN_TOKEN` and returns room and approved-member counts. This endpoint is protected by a separate token. There is no admin web dashboard, resource/bandwidth telemetry, or relay-health interface in this snapshot.
-
-## Firewall and ports
-
-- `80/tcp`, `443/tcp`: Caddy web, API proxy and TLS.
-- `443/udp`: optional HTTP/3.
-- `11010/tcp` and `11010/udp`: EasyTier node listeners from Compose, only if you intend to expose this groundwork.
-- The API port 8080 is exposed only to the Compose network; do not publish it directly.
-
-The shared node is scoped to LANORA network names, but two-client P2P and relay fallback have not been verified. Do not disable host firewall rules or forward a Windows client's default route through LANORA.
-
-## Upgrade and backup
-
-Pull reviewed source changes, inspect the changelog and Compose diff, validate with `docker compose config`, then rebuild. Preserve the `lanora_data` volume across upgrades. Back up `.env` securely outside the Git repository and protect it as a credential file.
-
-See [Configuration](CONFIGURATION.md), [Deployment](DEPLOYMENT.md), and [Security](SECURITY.md).
+Share `https://YOUR_DOMAIN` with players. It is the control server address. The game host's virtual IP is a different address, assigned by EasyTier in the desktop app. `lanora_data` stores SQLite. Back it up with a SQLite-consistent method accounting for WAL. `docker compose logs --tail=100 api caddy easytier` shows service errors. `docker compose down` stops services; do not use `-v` unless you intend to delete the database and TLS state. Peer connectivity has not been validated on two Windows PCs.

@@ -1,18 +1,15 @@
 # Configuration
 
-## API variables
+Copy `.env.example` to `.env` and edit it on the VPS. Never commit `.env`.
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `LANORA_LISTEN_ADDR` | `:8080` | HTTP listen address |
-| `LANORA_DB_PATH` | `data/lanora.db` | SQLite path |
-| `LANORA_ADMIN_TOKEN` | empty | Separate bearer token for limited admin summary |
-| `LANORA_ALLOWED_ORIGINS` | local/Tauri plus current Pages origin | Exact comma-separated CORS/WebSocket origins |
+| Variable | Meaning |
+|---|---|
+| `LANORA_PUBLIC_HOST` | DNS host used by Caddy for HTTPS |
+| `LANORA_LISTEN_ADDR` | API address inside Docker, default `:8080` |
+| `LANORA_DB_PATH` | SQLite path in persistent volume |
+| `LANORA_ADMIN_TOKEN` | Independent secret for minimal admin summary |
+| `LANORA_RELAY_SECRET` | EasyTier shared node control-network secret, distinct from room secrets |
+| `LANORA_RELAY_PEER_URL` | Public `tcp://HOST:11010` or `udp://HOST:11010` endpoint sent to approved members |
+| `LANORA_ALLOWED_ORIGINS` | Exact allowed Tauri/development origins |
 
-## Docker Compose
-
-Copy `.env.example` to `.env`, then set `LANORA_PUBLIC_HOST`, `LANORA_ADMIN_TOKEN`, `LANORA_RELAY_SECRET`, and exact `LANORA_ALLOWED_ORIGINS` values. Generate secrets with `openssl rand -hex 32`. The relay secret currently configures an isolated EasyTier node; it does not create per-room client networks. Never commit `.env`.
-
-## Web
-
-Set API Base URL in Settings; it is stored in browser local storage. Use the HTTPS API origin without `/api/v1`, e.g. `https://lan.example.org`. `VITE_BASE_PATH` controls Vite's output path; Pages uses `/lanora/`.
+In the Windows app, enter the server's HTTPS address, including `:PORT` if nonstandard. The app remembers only the address, chosen display name, language, and theme. Public HTTP is refused; loopback HTTP is allowed for local development. Changes to `.env` require `docker compose up -d --build`.

@@ -1,40 +1,11 @@
 # Troubleshooting
 
-## Web app cannot reach the API
+**Server check fails:** confirm DNS, Caddy TLS, and `curl -f https://YOUR_DOMAIN/api/v1/health` on a separate network. Use HTTPS with a valid certificate; check ports 80/443 and `docker compose logs --tail=100 caddy api`.
 
-1. Open Settings and enter the API origin, e.g. `https://lan.example.org`, without `/api/v1`.
-2. Check `GET https://YOUR_HOST/api/v1/health` from a terminal.
-3. For local development, start the API from `services/api` and use `http://localhost:8080`.
+**No public rooms:** refresh; private rooms need invite codes. Check the room's visibility and acceptance setting.
 
-## Browser CORS error
+**Join fails:** check the invite code, password, capacity, approval status, and per-IP rate limit. The host may need to approve the pending member.
 
-Set `LANORA_ALLOWED_ORIGINS` to the exact origin shown by the browser, including scheme and port, then restart the API. GitHub Pages project URL paths are not part of the origin: for `https://kavianpcx.github.io/lanora/`, allow `https://kavianpcx.github.io`.
+**No virtual IP:** check EasyTier process, adapter permissions, Windows firewall rules, and reachability of `LANORA_RELAY_PEER_URL` on TCP/UDP 11010. Do not disable the entire firewall. The UI should display unknown rather than invent a value.
 
-## VPS health check fails
-
-```sh
-docker compose ps
-docker compose logs --tail=100 api caddy
-```
-
-Confirm DNS A/AAAA records, inbound TCP 80/443, `LANORA_PUBLIC_HOST`, and that secrets in `.env` are set. Caddy cannot issue TLS if public DNS/firewall does not reach it.
-
-## Invite code or password rejected
-
-Invite codes are case-normalized, but copied whitespace may cause mistakes. Invite rotation invalidates the old code. Check the room password and capacity. A closed room or disabled new memberships cannot accept joins.
-
-## Join remains pending
-
-The host must approve the member if the room requires approval. The web client polls the API for status. If rejected or the room was closed, rejoin with a current invite code.
-
-## Room endpoint returns unauthorized
-
-Room endpoints use the distinct room-scoped token returned during room creation/join, not the account login token. In the current web client, room membership is stored for the browser session; closing that session may require joining again.
-
-## No IP, ping, P2P, or relay state
-
-Expected: EasyTier is not integrated into a working Windows tunnel. No virtual IP, peer ping, packet loss, or direct/relay status is available. Do not disable Windows Firewall or apply broad route changes. See [Networking](NETWORKING.md).
-
-## Compose validation or Go tests fail locally
-
-Install Docker Engine with the Compose plugin and Go 1.27+. Run `docker compose config` and `cd services/api && go test ./...`. The development container used for this repository work lacked a usable Go toolchain and Docker; those checks remain unverified here.
+**Game cannot connect:** the target is the host player's virtual IP. Test direct connectivity separately; an assigned IP is insufficient. Some games require broadcast discovery, which is unverified. See [Networking](NETWORKING.md).

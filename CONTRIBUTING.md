@@ -1,6 +1,6 @@
 # Contributing to LANORA
 
-Thanks for helping improve LANORA. The current project is a control-plane/web MVP; the Windows virtual network is not complete. Please keep issue descriptions, screenshots and release notes honest about what has actually been implemented and tested.
+Thanks for helping improve LANORA. The current project is a experimental desktop/server project; two-PC networking is not verified. Please keep issue descriptions, screenshots and release notes honest about what has actually been implemented and tested.
 
 ## Before opening a change
 
@@ -12,7 +12,7 @@ Thanks for helping improve LANORA. The current project is a control-plane/web MV
 ## Local checks
 
 ```sh
-cd apps/web
+cd apps/desktop
 npm ci
 npm run build
 ```
@@ -29,11 +29,11 @@ For deployment changes, also validate `docker compose config`. Hardware/network 
 
 ## Design and security expectations
 
-- Keep the Persian web experience RTL and keyboard accessible.
+- Keep the desktop English and Persian experiences accessible and the Persian layout RTL and keyboard accessible.
 - Do not fabricate tunnel, IP, ping, packet loss, peer or NAT values.
 - Keep control-plane and data-plane responsibilities separate.
 - Do not add backend-controlled command execution or broad firewall/route changes.
-- Add/update tests and docs when changing API contracts or authentication.
+- Add/update tests and docs when changing API contracts or room membership.
 - Preserve third-party licenses and update `THIRD_PARTY_LICENSES.md` when dependencies change.
 
 ## Pull requests

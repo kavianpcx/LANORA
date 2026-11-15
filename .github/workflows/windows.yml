@@ -15,8 +15,8 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -41,6 +41,11 @@ jobs:
       - name: Install desktop dependencies
         working-directory: apps/desktop
         run: npm ci
+      - name: Bundle font license notices
+        shell: pwsh
+        run: |
+          Copy-Item apps/desktop/node_modules/@fontsource/inter/LICENSE apps/desktop/src-tauri/resources/licenses/Inter-OFL.txt
+          Copy-Item apps/desktop/node_modules/@fontsource/vazirmatn/LICENSE apps/desktop/src-tauri/resources/licenses/Vazirmatn-OFL.txt
       - name: Build Windows installer
         working-directory: apps/desktop
         run: npm run tauri build -- --bundles nsis
@@ -63,4 +68,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.1.0-alpha.1 installer/*.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'LANORA 0.1.0 alpha (unverified LAN tunnel)' --notes 'Experimental Windows build. EasyTier is bundled, but peer connectivity, Windows elevation, firewall behavior, two-PC gaming, and relay fallback have NOT been verified. Do not treat API reachability or an adapter IP as proof that peers can play. See THIRD_PARTY_LICENSES.md and the bundled EasyTier LGPL-3.0 license.'
+          gh release create v0.1.0-alpha.2 installer/*.exe --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title 'LANORA 0.1.0 alpha (unverified LAN tunnel)' --notes 'Experimental Windows build. EasyTier is bundled, but peer connectivity, Windows elevation, firewall behavior, two-PC gaming, and relay fallback have NOT been verified. Do not treat API reachability or an adapter IP as proof that peers can play. See THIRD_PARTY_LICENSES.md and the bundled EasyTier LGPL-3.0 license.'

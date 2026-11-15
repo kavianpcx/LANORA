@@ -4,7 +4,7 @@
 
 ## Validation
 
-- [ ] `cd apps/web && npm ci && npm run build`
+- [ ] `cd apps/desktop && npm ci && npm run build`
 - [ ] `cd services/api && go test ./...` (Go 1.27+)
 - [ ] `docker compose config` (if deployment files changed)
 - [ ] Network/hardware test details included where relevant

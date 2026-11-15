@@ -1,28 +1,12 @@
-# Roadmap
+# Roadmap and status
 
-Status reflects this source snapshot.
+- [x] Self-hosted Go/SQLite API, public/private rooms, invite code, capacity, optional password/approval, host controls.
+- [x] Tauri/React desktop flow without account login, language/theme settings, server health, public discovery, room management.
+- [x] Native Rust process supervision and EasyTier v2.6.4 packaging workflow source.
+- [ ] Verify installer execution and Windows adapter privileges on a real PC.
+- [ ] Verify two PCs on separate networks, virtual IP assignment, TCP/UDP transfer, Direct IP gaming, reconnect, P2P and relay fallback.
+- [ ] Measure peer reachability, associate EasyTier peer IPs to room members, and improve live presence.
+- [ ] Broadcast/multicast compatibility tests for supported games.
+- [ ] Security review, abuse control for anonymous room creation, release signing and source/notices audit.
 
-## Implemented in the MVP
-
-- [x] Go API/SQLite room and membership operations.
-- [x] Account register/login/profile/logout.
-- [x] Host approval, invite rotation, close, kick and accepting-members APIs.
-- [x] React web account and room flows using the configured API.
-- [x] Compose API/Caddy/EasyTier infrastructure scaffold.
-- [x] Pages build/deploy workflow source.
-
-## Remaining
-
-- [ ] Run Go tests on a supported Go 1.27 environment.
-- [ ] Add complete English localization and locale switching to the Persian-first web interface.
-- [ ] Complete authorization/session management and distributed rate limiting.
-- [ ] Package pinned EasyTier with required LGPL notices.
-- [ ] Implement least-privilege Windows adapter/service lifecycle and structured config.
-- [ ] Provision isolated room networks; verify secret delivery/rotation.
-- [ ] Report real peer state, virtual IP, latency and direct/relay telemetry.
-- [ ] Test two Windows PCs across different NATs, TCP/UDP, reconnect and relay fallback.
-- [ ] Test game discovery and document per-game Direct IP/broadcast constraints.
-- [ ] Produce signed Windows installer and full SBOM/license inventory.
-- [ ] Build authenticated admin web UI and operational metrics.
-
-Use `0.x` prereleases while contracts and packaging are unstable. Do not target stable 1.0 before tunnel/interoperability tests.
+See [network test matrix](../tests/NETWORK_TEST_MATRIX.md). An adapter IP or API membership is not proof of a working game connection.

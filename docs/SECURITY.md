@@ -1,32 +1,7 @@
-# Security and privacy
+# Security
 
-LANORA is under active development and has not received an independent security audit. The controls below describe the current implementation, not a production certification.
+Caddy terminates TLS for the API. Public IP-based HTTPS requires a trusted certificate; LANORA refuses insecure remote HTTP. The room invite code is separate from its random EasyTier secret. Invite codes are hashed in SQLite, room passwords use salted PBKDF2-SHA256, and room access tokens are stored as hashes. Approved members can obtain room network credentials; pending members cannot. The API rate limits anonymous create/join attempts per IP in-process.
 
-## Implemented baseline
+The app does not require a login: display names are unverified and can be impersonated. Whoever possesses a room token can act as that member, and the host token grants host powers. Tokens are held in application memory for the session; closing/restarting the app may lose access to the room. Keep `.env` and SQLite backups private. No room or network secrets should appear in logs or support reports. The Windows EasyTier TOML with network secret is written to local app data and deleted on explicit leave, but a crash can leave it on disk; protected storage and cleanup need improvement before stable release.
 
-- HTTPS termination via Caddy in the supplied deployment.
-- Cryptographically random bearer tokens and invite codes; the API stores token and invite hashes.
-- PBKDF2-SHA256 password hashes with random salts for account and optional room passwords.
-- Request body size limits and strict JSON decoding that rejects unknown fields.
-- Process-local rate limits for registration, login and room join.
-- Room-scoped tokens and host checks on room management endpoints.
-- Native process launch uses a fixed executable path and argument structure; no backend-supplied arbitrary command is executed.
-
-## Known risks and gaps
-
-- Account tokens last 30 days; refresh rotation, email verification, account recovery and session management UI are absent.
-- Web bearer tokens are held in `sessionStorage`; review XSS defenses, Content Security Policy and browser storage before production deployment.
-- Account identity is stored on room membership, but there is no account-to-room history or session management UI; room operations use distinct room-scoped tokens.
-- Rate limits are in-memory and key off observed remote address; distributed deployments need a shared limiter and trusted proxy handling.
-- WebSocket event subscriptions are process-local and not authenticated through a browser-friendly secure session mechanism.
-- A room network secret is stored in SQLite and is not yet consumed by the native engine; secret distribution/rotation/least-privilege need further review.
-- Windows service privileges, adapter route ownership, firewall rule lifecycle, signing and teardown are not implemented/verified.
-- Full transitive SBOM/license audit, fuzzing, penetration testing and production backup/restore exercise are outstanding.
-
-## Deployment rules
-
-Use HTTPS, unique high-entropy admin/relay secrets, strict CORS, least-privilege execution, protected backups, and firewall allowlists. Do not expose SQLite, Docker socket, API port directly, or administrator tokens. Do not automatically disable Windows Firewall. Do not place account tokens, room passwords, network secrets, or personal data in logs or bug reports.
-
-## Vulnerability reporting
-
-Do not open a public issue for an exploitable vulnerability. Use GitHub **Security → Advisories → Report a vulnerability** to send a private report. Include affected commit/version, impact and a minimal reproduction, and omit live credentials. The repository root [SECURITY.md](../SECURITY.md) links to the private advisory flow.
+Known gaps: anonymous abuse controls are process-local; live presence is not measured; Windows elevation, firewall lifecycle, peer identity, release signing and two-PC transport have not been validated. Do not disable Windows Firewall or change the default route as a repair step. See [network test matrix](../tests/NETWORK_TEST_MATRIX.md).
