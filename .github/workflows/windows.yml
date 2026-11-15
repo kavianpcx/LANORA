@@ -50,7 +50,7 @@ jobs:
         working-directory: apps/desktop
         run: npm run tauri build -- --bundles nsis
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lanora-windows-x64-prerelease
           path: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
@@ -96,7 +96,7 @@ jobs:
           test -n "$deb"
           dpkg-deb -c "$deb" | grep -q 'easytier-core'
           dpkg-deb --ctrl-tarfile "$deb" | tar -tf - | grep -q postinst
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: lanora-linux-x64-prerelease
           path: apps/desktop/src-tauri/target/release/bundle/deb/*.deb
