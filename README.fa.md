@@ -7,12 +7,17 @@
 
 **نسخهٔ آزمایشی:** `0.2.0-alpha.1` فعلاً نامزد بررسی است و منتشر نشده. دسترسی به API، عضویت روم، اجرای EasyTier، آی‌پی گزارش‌شده و ارتباط واقعی با دوستتان مراحل جدا هستند. داشتن آی‌پی به‌تنهایی اتصال به بازیکن دیگر را ثابت نمی‌کند. آزمایش بازی ویندوز روی دو اینترنت متفاوت هنوز **تأیید نشده**. [گزارش بررسی و تست‌ها](docs/AUDIT_0.2.0.md).
 
+## نمای برنامه در اجرای نخست
+
+![صفحهٔ انتخاب نام و آواتار LANORA از بستهٔ نصب‌شدهٔ لینوکس در CI؛ هنوز سرور یا رومی وصل نیست.](docs/screenshots/linux-first-launch.png)
+
+
 ## ۱. صاحب VPS: سرور را راه‌اندازی کنید
 
 ابتدا [Docker Engine و Compose](https://docs.docker.com/engine/install/)، ابزار Git و OpenSSL را نصب کنید. رکورد DNS دامنه را به VPS وصل کنید. پورت‌های **TCP 80/443 و TCP/UDP 11010** باید در فایروال VPS باز باشند. در ترمینال SSH بنویسید:
 
 ```sh
-git clone https://github.com/kavianpcx/LANORA.git
+git clone --branch audit/0.2.0-alpha.1 https://github.com/kavianpcx/LANORA.git
 cd LANORA
 bash scripts/setup-server.sh
 ```
@@ -39,17 +44,16 @@ bash scripts/server.sh update
 
 ## ۲. بازیکن‌ها: برنامه را نصب کنید
 
-آخرین نسخهٔ منتشرشده **v0.1.0-alpha.5** است. اصلاحات این شاخه را ندارد و یک VPN بازی تأییدشده محسوب نمی‌شود. فایل‌های نامزد `0.2.0-alpha.1` فقط خروجی آزمایش GitHub Actions در [PR شمارهٔ ۱۳](https://github.com/kavianpcx/LANORA/pull/13) هستند؛ Release عمومی نیستند.
+فایل‌های نامزد `0.2.0-alpha.1` در بخش **Artifacts** این [اجرای Build دسکتاپ](https://github.com/kavianpcx/LANORA/actions/runs/43897576940) و از طریق [PR شمارهٔ ۱۳](https://github.com/kavianpcx/LANORA/pull/13) در دسترس‌اند. برای دانلود باید وارد GitHub شده باشید. فایل ZIP مناسب سیستم خودتان را دانلود و باز کنید:
 
-- ویندوز ۱۰/۱۱ x64: [دانلود EXE آزمایشی منتشرشده](https://github.com/kavianpcx/LANORA/releases/download/v0.1.0-alpha.5/LANORA_0.1.0_x64-setup.exe).
-- Debian/Ubuntu x64: [دانلود DEB آزمایشی منتشرشده](https://github.com/kavianpcx/LANORA/releases/download/v0.1.0-alpha.5/LANORA_0.1.0_amd64.deb).
-
-دستور نصب نسخهٔ منتشرشده روی لینوکس:
+- **ویندوز x64:** فایل `lanora-windows-x64-prerelease`. نصب‌کنندهٔ `.exe` داخل آن را اجرا کنید.
+- **Ubuntu 24.04 x64:** فایل `lanora-linux-x64-prerelease`. در پوشهٔ بستهٔ استخراج‌شده بنویسید:
 
 ```sh
-curl --fail --location --output LANORA.deb https://github.com/kavianpcx/LANORA/releases/download/v0.1.0-alpha.5/LANORA_0.1.0_amd64.deb
-sudo apt install ./LANORA.deb
+sudo apt install ./LANORA_0.2.0-alpha.1_amd64.deb
 ```
+
+این فایل‌ها خروجی موقت CI هستند و **Release عمومی نیستند**. نتیجهٔ دقیق آزمایش‌ها در [گزارش بررسی](docs/AUDIT_0.2.0.md) است. [نسخهٔ قدیمی v0.1.0-alpha.5](https://github.com/kavianpcx/LANORA/releases/tag/v0.1.0-alpha.5) اصلاحات جدید را ندارد و نسخهٔ پیشنهادی برای این بررسی نیست.
 
 نصب بستهٔ لینوکس دسترسی شبکه به فایل EasyTier می‌دهد؛ [محدودیت دسترسی‌ها](docs/SECURITY.md) را بخوانید. ساخت آداپتور و مجوزهای ویندوز هنوز نیازمند تست روی ویندوز تمیز هستند. برای رفع خطا فایروال را خاموش نکنید.
 

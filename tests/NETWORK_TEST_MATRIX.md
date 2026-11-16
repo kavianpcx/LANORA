@@ -10,8 +10,8 @@ Results are scoped to their environment. A namespace test uses real EasyTier, re
 | Distinct real adapter IPv4 addresses | Passed locally in Linux namespaces | `tests/network_smoke.py` in desktop CI |
 | TCP and UDP payload round trips through shared foreign-network relay | Passed locally in Linux namespaces | P2P deliberately disabled; separate relay network identity |
 | Real internet NAT/P2P and relay fallback | Not verified | Needs two PCs on separate connections |
-| Control API offline while tunnel active | Follow-up test configured; see final audit results | Socket payloads after stopping the API process |
-| Underlay disconnect/reconnect | Follow-up test configured; see final audit results | Linux namespace link down/up; not WAN loss on Windows |
+| Control API offline while tunnel active | Passed in Linux namespaces | Socket payloads after stopping the API process |
+| Underlay disconnect/reconnect | Passed in Linux namespaces | Linux namespace link down/up; not WAN loss on Windows |
 | Docker fresh installation, restart and SQLite persistence | Passed in CI | `tests/compose_smoke.sh`; local HTTPS proxy process, no public DNS/TLS verification |
 | Native EXE and DEB builds; Rust regressions | Passed in CI | Candidate `0.2.0-alpha.1` build artifacts |
 | Install/open/close actual desktop packages | See final audit results | Separate CI steps, never inferred from build success |
@@ -19,4 +19,4 @@ Results are scoped to their environment. A namespace test uses real EasyTier, re
 | LAN game Direct IP, broadcast/multicast discovery | Not verified | Record each tested game/version and topology |
 | Fullscreen, maximize/restore, dragging and RTL on physical desktops | Not verified | Custom controls implemented; needs interactive cross-platform validation |
 
-See [audit](../docs/AUDIT_0.2.0.md) for exact run links, failures and final results. No test claims universal game compatibility.
+See [audit](../docs/AUDIT_0.2.0.md) for exact run links, earlier harness failures and final results. No test claims universal game compatibility.

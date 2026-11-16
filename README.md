@@ -9,12 +9,17 @@ Play a LAN game with friends who are somewhere else. One friend runs the server 
 
 [![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![Desktop builds](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE)
 
+## First launch
+
+![LANORA first-run profile screen from the installed Linux package in CI. No server or room is connected.](docs/screenshots/linux-first-launch.png)
+
+
 ## 1. Server owner: run these commands on your VPS
 
 First install [Docker Engine with Compose](https://docs.docker.com/engine/install/). You also need Git and OpenSSL. Point a domain's DNS record at the VPS. Allow inbound **TCP 80/443 and TCP/UDP 11010** in your VPS firewall.
 
 ```sh
-git clone https://github.com/kavianpcx/LANORA.git
+git clone --branch audit/0.2.0-alpha.1 https://github.com/kavianpcx/LANORA.git
 cd LANORA
 bash scripts/setup-server.sh
 ```
@@ -41,17 +46,16 @@ The VPS manages rooms and relays traffic. App downloads come from GitHub, not yo
 
 ## 2. Players: install the desktop app
 
-The last published build is **v0.1.0-alpha.5**. It predates the reliability fixes in this branch and is not recommended as a verified gaming VPN. The `0.2.0-alpha.1` candidate installers are CI artifacts linked from [PR #13](https://github.com/kavianpcx/LANORA/pull/13); they are not a public release yet.
+The `0.2.0-alpha.1` candidate is available as review artifacts in [this desktop build](https://github.com/kavianpcx/LANORA/actions/runs/43897576940), linked from [PR #13](https://github.com/kavianpcx/LANORA/pull/13). Open **Artifacts** (GitHub sign-in required), download the package for your system and extract the ZIP:
 
-- Windows 10/11 x64: [published experimental EXE](https://github.com/kavianpcx/LANORA/releases/download/v0.1.0-alpha.5/LANORA_0.1.0_x64-setup.exe).
-- Debian/Ubuntu x64: [published experimental DEB](https://github.com/kavianpcx/LANORA/releases/download/v0.1.0-alpha.5/LANORA_0.1.0_amd64.deb).
-
-For the published Linux package:
+- **Windows x64:** `lanora-windows-x64-prerelease`. Run the extracted `.exe` installer.
+- **Ubuntu 24.04 x64:** `lanora-linux-x64-prerelease`. In the folder containing the extracted package, run:
 
 ```sh
-curl --fail --location --output LANORA.deb https://github.com/kavianpcx/LANORA/releases/download/v0.1.0-alpha.5/LANORA_0.1.0_amd64.deb
-sudo apt install ./LANORA.deb
+sudo apt install ./LANORA_0.2.0-alpha.1_amd64.deb
 ```
+
+These are temporary CI artifacts, **not a published release**. Check the [audit](docs/AUDIT_0.2.0.md) for exactly what was tested. The [previous v0.1.0-alpha.5 release](https://github.com/kavianpcx/LANORA/releases/tag/v0.1.0-alpha.5) predates these fixes and is not the recommended candidate.
 
 Linux package installation grants network capabilities to the bundled EasyTier executable. Read the [privilege limitations](docs/SECURITY.md). Windows adapter creation and elevation still need clean-machine validation; do not disable your firewall to work around an error.
 

@@ -39,7 +39,7 @@ The EasyTier integration was checked against the [pinned CLI](https://github.com
 - Integrated resizable titlebar with native minimize/maximize/restore/close, built-in drag region and double-click behavior; window permissions explicitly scoped to the main window.
 - Real request skeletons, server connection progress and retry; no artificial waiting period.
 - Keyboard-contained dialogs, visible focus and reduced-motion support. Existing palette, fonts and language/theme options retained.
-- Extracted API client, connection hook, translations, titlebar, avatars, modal and profile controls. Expanded compact CSS/React for maintenance.
+- Extracted API client, connection hook, types, translations, titlebar, avatars, modal, profile controls and active-room view. Expanded compact CSS/React for maintenance.
 - Removed unused `zustand` and `thiserror` dependencies; removed unused social-preview artwork. Database migrations and third-party notices retained for compatibility.
 - Added `scripts/server.sh` with safe start/status/logs/restart/stop/update commands. No volume deletion. No raw relay logs or environment dumps.
 
@@ -51,11 +51,19 @@ The EasyTier integration was checked against the [pinned CLI](https://github.com
 - Local `TMPDIR="$PWD" python3 tests/server_commands_test.py`: passed; this uses a Docker stub, not real containers.
 - [First candidate CI](https://github.com/kavianpcx/LANORA/actions/runs/43842805032): Go `go test -race ./...` passed; real Docker build failed on missing checksums, which triggered a follow-up fix.
 - [First candidate desktop validation](https://github.com/kavianpcx/LANORA/actions/runs/43842805073): Rust tests passed on Windows and Linux. Real Linux namespace test passed: distinct OS adapter IPs and actual TCP/UDP round trips with P2P disabled, through the separate foreign-network relay.
-- Follow-up build, Docker and installation results are recorded below after execution; do not infer success from a configured workflow.
+- Follow-up [CI](https://github.com/kavianpcx/LANORA/actions/runs/43892306845) passed formatting, checked Go module checksums, read-only dependency API race tests, repository/link checks and fresh Docker deployment with persistence. The [namespace run](https://github.com/kavianpcx/LANORA/actions/runs/43892306916) additionally passed real TCP/UDP with the API offline and after a local underlay link down/up. That Linux job stopped later on an unformatted `build.rs`; formatting was corrected in the next commit. Windows installation, window startup and normal close passed in the [previous package run](https://github.com/kavianpcx/LANORA/actions/runs/43844228213). Its Linux install succeeded but screenshot capture selected an unmapped helper window; the harness now uses a visible window with Openbox. Final installed-package validation is recorded below.
+
+## Final installed-package validation
+
+The latest source build is [desktop run 43897576940](https://github.com/kavianpcx/LANORA/actions/runs/43897576940) on candidate commit `d23d5e8811a3ac58d3f04950d4621ac2a5f898e4`. Both Windows and Linux jobs passed all their steps. Windows created the `LANORA_0.2.0-alpha.1_x64-setup.exe`, silently installed it, launched the installed app, verified EasyTier `2.6.4-8428a89d`, and closed the native window with a clean process exit. Linux built and installed the Debian package, verified its EasyTier capability, opened the real first-launch window, entered and left fullscreen using F11, restored it, and closed normally. The screenshot in `../docs/screenshots/linux-first-launch.png` is from that installed package in Ubuntu 24.04 CI under Xvfb/Openbox; the empty-server state is intentional and shows no simulated connection.
+
+The [matching CI run](https://github.com/kavianpcx/LANORA/actions/runs/43897576992) passed Go race tests, formatting, dependency checks, repository/link checks and a fresh Docker deployment with room persistence across restart. This later run also includes the fixed Linux desktop harness and event-loop cleanup. Headless graphics testing needed a session bus and a software compositing path; that workaround is limited to the test job, not forced on Linux users.
+
+Earlier package runs caught a black headless window and a process that occasionally remained alive after close. Both issues were corrected in the harness/close lifecycle and the final installed-package run passed. The later local extension of Docker-stub failure tests for Compose, daemon, invalid config and API health also passed locally; that extension is included in this PR for CI review.
 
 ## Still not verified / remaining risks
 
-Two independent internet connections, real Windows LAN games, NAT hole punching, live peer identity mapping, automatic LAN discovery, Windows firewall/elevation, Linux desktop environments beyond CI, fullscreen/RTL window behavior on physical desktops, app crash recovery and trusted public VPS TLS remain unverified unless explicitly recorded in the final validation section.
+Two independent internet connections, real Windows LAN games, NAT hole punching, live peer identity mapping, automatic LAN discovery, Windows adapter/firewall/elevation on a clean player PC, Linux desktop environments beyond Ubuntu 24.04 CI, fullscreen/RTL behavior on physical desktops, app crash recovery and trusted public VPS TLS remain unverified. The Linux namespace relay test is not a substitute for two PCs on different ISPs.
 
 Former members can retain disclosed network credentials. The relay whitelist is not database-backed admission control. The official app stops on confirmed control-plane revocation, but malicious clients need cryptographic revocation. Memory-only room tokens and absent membership TTL can leave stale room entries after exit. Forced process termination can leave plaintext local config. Linux file capabilities are broad for a multiuser machine. These are alpha release risks, not completed features. See [Security](SECURITY.md).
 
