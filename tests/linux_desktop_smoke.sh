@@ -7,6 +7,11 @@ export WEBKIT_DISABLE_COMPOSITING_MODE=1
 export LIBGL_ALWAYS_SOFTWARE=1
 openbox --sm-disable >/dev/null 2>&1 &
 wm_pid=$!
+# Do not race window creation against the window manager's startup.
+for _ in $(seq 1 20); do
+  xprop -root _NET_SUPPORTING_WM_CHECK | grep -q 'window id' && break
+  sleep 1
+done
 lanora-desktop &
 app_pid=$!
 trap 'kill "$app_pid" "$wm_pid" 2>/dev/null || true' EXIT
@@ -18,13 +23,16 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 [[ -n "$window" ]] || { echo 'Native window did not appear'; exit 1; }
+xdotool windowmap --sync "$window"
+xdotool windowactivate --sync "$window"
 # Allow WebKit to paint before capturing this real native window.
-sleep 3
+sleep 5
+xwininfo -id "$window"
+xprop -id "$window" _NET_WM_PID _NET_WM_STATE WM_CLASS
 import -window root native-startup.png
 echo NATIVE_SCREENSHOT_START
 base64 -w 1000 native-startup.png
 echo NATIVE_SCREENSHOT_END
-xdotool windowactivate --sync "$window"
 xdotool key Escape
 # Exercise the custom frontend fullscreen key path, then restore.
 xdotool key F11
