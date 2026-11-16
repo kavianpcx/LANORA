@@ -237,7 +237,9 @@ fn main() {
                 let window = window.clone();
                 tauri::async_runtime::spawn(async move {
                     if engine_stop(window.state::<Engine>()).await.is_ok() {
-                        let _ = window.destroy();
+                        // This is a single-window app. Destroying only the webview
+                        // can leave the platform event loop alive after close.
+                        window.app_handle().exit(0);
                     }
                 });
             }
