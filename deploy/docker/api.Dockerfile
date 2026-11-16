@@ -1,12 +1,11 @@
 FROM golang:1.27.4-alpine AS build
 WORKDIR /src
-COPY services/api/go.mod ./services/api/go.mod
+COPY services/api/go.mod services/api/go.sum ./services/api/
 WORKDIR /src/services/api
-RUN go mod download all
+RUN go mod download
 COPY services/api/ .
-RUN go mod tidy
 RUN mkdir -p /out/data
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/lanora-api ./cmd/lanora-api
+RUN CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags="-s -w" -o /out/lanora-api ./cmd/lanora-api
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /out/lanora-api /lanora-api

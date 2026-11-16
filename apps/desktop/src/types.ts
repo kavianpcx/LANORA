@@ -1,0 +1,36 @@
+export type Lang = "en" | "fa";
+export type EngineStatus = {
+  running: boolean;
+  virtualIp: string | null;
+  state: string;
+  error: string | null;
+};
+export type Member = {
+  userId: string;
+  username: string;
+  role: string;
+  status: string;
+};
+export type ListedRoom = {
+  id: string;
+  name: string;
+  gameName: string;
+  memberCount: number;
+  maxPlayers: number;
+  requireApproval: boolean;
+  acceptingMembers: boolean;
+};
+export type ActiveRoom = {
+  roomId: string;
+  name: string;
+  accessToken: string;
+  inviteCode?: string;
+  role: "host" | "member";
+  status: string;
+  members?: Member[];
+};
+export type Network = {
+  networkName: string;
+  networkSecret: string;
+  peerUrl: string;
+};

@@ -86,7 +86,7 @@ jobs:
       - name: Install Tauri Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libcap2-bin xvfb xdotool imagemagick
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libcap2-bin xvfb xdotool imagemagick openbox x11-utils
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
@@ -123,14 +123,9 @@ jobs:
           go build -o ../../lanora-api-test ./cmd/lanora-api
           cd ../..
           sudo python3 tests/network_smoke.py apps/desktop/src-tauri/resources/easytier/easytier-core apps/desktop/src-tauri/resources/easytier/easytier-cli ./lanora-api-test
-      - name: Format native source for review
+      - name: Check native formatting
         working-directory: apps/desktop/src-tauri
-        run: |
-          cargo fmt
-          echo FORMAT_RUST_START
-          base64 -w0 src/main.rs
-          echo
-          echo FORMAT_RUST_END
+        run: cargo fmt --check
       - name: Native regression tests
         working-directory: apps/desktop/src-tauri
         run: cargo test

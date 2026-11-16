@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix='lanora-test-') as directory:
             run('ip','link','set',host,'master',bridge);run('ip','link','set',host,'up')
             run('ip','-n',ns,'link','set','lo','up');run('ip','-n',ns,'link','set','eth0','up')
             run('ip','-n',ns,'addr','add',f'192.0.2.{index+2}/24','dev','eth0')
-        launch([api_binary],env={**os.environ,'LANORA_LISTEN_ADDR':'127.0.0.1:18080',
+        api_process=launch([api_binary],env={**os.environ,'LANORA_LISTEN_ADDR':'127.0.0.1:18080',
             'LANORA_DB_PATH':str(root/'api.db'),'LANORA_RELAY_PEER_URL':'tcp://192.0.2.1:11010'})
         until(lambda:request('/health'),10)
         host=request('/rooms',{'name':'Network test','username':'Host','maxPlayers':4})
@@ -99,8 +99,6 @@ def receive_udp():
 thread=threading.Thread(target=receive_udp);thread.start();pathlib.Path(ready).touch()
 connection,_=tcp.accept();connection.settimeout(10);data=connection.recv(1024);connection.sendall(data);connection.close();thread.join()
 """
-        receiver_process=launch(['ip','netns','exec',namespaces[0],sys.executable,'-c',receiver,ips[0],str(ready)])
-        until(ready.exists,10)
         sender="""
 import socket,sys
 ip=sys.argv[1];payload=b'LANORA-real-network-test'
@@ -109,9 +107,23 @@ with socket.create_connection((ip,24862),timeout=15) as tcp:
 with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as udp:
  udp.settimeout(15);udp.sendto(payload,(ip,24862));assert udp.recvfrom(1024)[0]==payload
 """
-        run('ip','netns','exec',namespaces[1],sys.executable,'-c',sender,ips[0])
-        assert receiver_process.wait(timeout=10)==0
+        def exchange():
+            ready.unlink(missing_ok=True)
+            receiver_process=launch(['ip','netns','exec',namespaces[0],sys.executable,'-c',receiver,ips[0],str(ready)])
+            until(ready.exists,10)
+            run('ip','netns','exec',namespaces[1],sys.executable,'-c',sender,ips[0])
+            assert receiver_process.wait(timeout=10)==0
+        exchange()
         print('PASS: real TCP and UDP round trips through a foreign-network relay (P2P disabled)',flush=True)
+        api_process.terminate();api_process.wait(timeout=5)
+        exchange()
+        print('PASS: existing TCP/UDP data plane works while control API is offline',flush=True)
+        run('ip','-n',namespaces[1],'link','set','eth0','down')
+        time.sleep(3)
+        run('ip','-n',namespaces[1],'link','set','eth0','up')
+        until(lambda: run('ip','netns','exec',namespaces[1],'ping','-c','1','-W','1',ips[0]))
+        exchange()
+        print('PASS: TCP/UDP resumed after local underlay link down/up',flush=True)
     finally:
         for process in reversed(processes):
             process.terminate()

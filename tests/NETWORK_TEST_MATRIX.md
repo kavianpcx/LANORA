@@ -1,16 +1,22 @@
-# Network verification matrix
+# Network and installation verification matrix
 
-No cross-machine network tests have been run in this development container. None of the following are passed.
+Results are scoped to their environment. A namespace test uses real EasyTier, real adapters and real socket traffic on one Linux runner; it is not two PCs on independent ISPs.
 
-| Scenario | Status | Needed evidence |
+| Scenario | Actual result | Evidence / boundary |
 |---|---|---|
-| Create room and second client join | Passed in GitHub CI #38; two-client test not run | Run `cd services/api && go test ./...` |
-| Unique virtual IPs | Not verified | Two packaged Windows clients and EasyTier adapter inspection |
-| TCP and UDP between virtual IPs | Not verified | Bidirectional socket tests across different internet connections |
-| Different NATs / P2P path | Not verified | Capture peer state on both Windows clients |
-| Relay fallback | Not verified | Force direct path failure and confirm relay peer state/traffic |
-| Reconnect after internet loss | Not verified | Disconnect/reconnect WAN while observing engine state |
-| Password, invite, capacity and approval | Passed in GitHub CI #38 | Run test suite against SQLite driver |
-| Windows firewall/adapter cleanup | Not verified | Install/uninstall on clean Windows 10/11 x64 VMs |
-| LAN broadcast/multicast discovery | Not verified | Per-game integration tests; use Direct IP where discovery is unsupported |
-| API offline while data plane active | Not verified | Disconnect control plane after tunnel setup and test game traffic |
+| Create/join, password, capacity, approval, public/private discovery | Passed | Go SQLite integration tests in GitHub Actions |
+| Pending network access denied, cross-room denial, revoked token denial | Passed | Go authorization regressions |
+| Pending membership cancellation frees capacity | Passed | Go regression in follow-up CI |
+| Distinct real adapter IPv4 addresses | Passed locally in Linux namespaces | `tests/network_smoke.py` in desktop CI |
+| TCP and UDP payload round trips through shared foreign-network relay | Passed locally in Linux namespaces | P2P deliberately disabled; separate relay network identity |
+| Real internet NAT/P2P and relay fallback | Not verified | Needs two PCs on separate connections |
+| Control API offline while tunnel active | Follow-up test configured; see final audit results | Socket payloads after stopping the API process |
+| Underlay disconnect/reconnect | Follow-up test configured; see final audit results | Linux namespace link down/up; not WAN loss on Windows |
+| Docker fresh installation, restart and SQLite persistence | Passed in CI | `tests/compose_smoke.sh`; local HTTPS proxy process, no public DNS/TLS verification |
+| Native EXE and DEB builds; Rust regressions | Passed in CI | Candidate `0.2.0-alpha.1` build artifacts |
+| Install/open/close actual desktop packages | See final audit results | Separate CI steps, never inferred from build success |
+| Windows firewall, adapter permissions and driver cleanup | Not verified | Requires clean Windows 10/11 PCs/VMs and real adapter tests |
+| LAN game Direct IP, broadcast/multicast discovery | Not verified | Record each tested game/version and topology |
+| Fullscreen, maximize/restore, dragging and RTL on physical desktops | Not verified | Custom controls implemented; needs interactive cross-platform validation |
+
+See [audit](../docs/AUDIT_0.2.0.md) for exact run links, failures and final results. No test claims universal game compatibility.

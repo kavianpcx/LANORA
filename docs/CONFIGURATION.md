@@ -12,4 +12,6 @@ Copy `.env.example` to `.env` and edit it on the VPS. Never commit `.env`.
 | `LANORA_RELAY_PEER_URL` | Public `tcp://HOST:11010` or `udp://HOST:11010` endpoint sent to approved members |
 | `LANORA_ALLOWED_ORIGINS` | Exact allowed Tauri/development origins |
 
-In the Windows app, enter the server's HTTPS address, including `:PORT` if nonstandard. The app remembers only the address, chosen display name, language, and theme. Public HTTP is refused; loopback HTTP is allowed for local development. Changes to `.env` require `docker compose up -d --build`.
+In the Windows app, enter the server's HTTPS address, including `:PORT` if nonstandard. The app remembers only the address, chosen display name, avatar, language, and theme. Public HTTP is refused; loopback HTTP is allowed for local development. Changes to `.env` require `docker compose up -d --build`.
+
+Keep the internal API listen address at `:8080` for the supplied Caddy/health configuration, and the database path under `/data` for persistence. The public API and relay ports are separate. Do not paste tokens or shell commands into the server address field.

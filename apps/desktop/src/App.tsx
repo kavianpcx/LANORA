@@ -4,20 +4,14 @@ import {
   Activity,
   ArrowRight,
   Check,
-  Copy,
   Gamepad2,
-  Globe2,
   Link2,
   LockKeyhole,
-  Moon,
   Plus,
   RefreshCw,
   Server,
   Settings2,
   ShieldCheck,
-  Sun,
-  Users,
-  Wifi,
   X,
 } from "lucide-react";
 import brand from "./brand.svg";
@@ -28,40 +22,17 @@ import { ProfileFields } from "./components/ProfileFields";
 import { Modal } from "./components/Modal";
 import { TitleBar } from "./components/TitleBar";
 import { useServer } from "./hooks/useServer";
+import type {
+  Lang,
+  EngineStatus,
+  Member,
+  ListedRoom,
+  ActiveRoom,
+  Network,
+} from "./types";
+import { RoomView } from "./components/RoomView";
 import "./style.css";
 
-type Lang = "en" | "fa";
-type EngineStatus = {
-  running: boolean;
-  virtualIp: string | null;
-  state: string;
-  error: string | null;
-};
-type Member = {
-  userId: string;
-  username: string;
-  role: string;
-  status: string;
-};
-type ListedRoom = {
-  id: string;
-  name: string;
-  gameName: string;
-  memberCount: number;
-  maxPlayers: number;
-  requireApproval: boolean;
-  acceptingMembers: boolean;
-};
-type ActiveRoom = {
-  roomId: string;
-  name: string;
-  accessToken: string;
-  inviteCode?: string;
-  role: "host" | "member";
-  status: string;
-  members?: Member[];
-};
-type Network = { networkName: string; networkSecret: string; peerUrl: string };
 export default function App() {
   const [lang, setLang] = useState<Lang>(() =>
     localStorage.getItem("lanora.language") === "fa" ? "fa" : "en",
@@ -92,6 +63,8 @@ export default function App() {
     failure,
   } = useServer();
   const tunnelBusy = useRef(false);
+  const roomsBusy = useRef(false);
+  const roomsVersion = useRef(0);
   const [publicRooms, setPublicRooms] = useState<ListedRoom[]>([]);
   const [room, setRoom] = useState<ActiveRoom | null>(null);
   const [tunnel, setTunnel] = useState<EngineStatus>({
@@ -142,11 +115,15 @@ export default function App() {
     if (failure) setError(friendlyError(failure, lang));
   }, [failure, lang]);
   async function loadRooms(url = server) {
+    if (roomsBusy.current) return;
+    roomsBusy.current = true;
+    const generation = roomsVersion.current;
     setRoomsLoading(true);
     try {
       const result = await api<{ rooms: ListedRoom[] }>(url, "/api/v1/rooms");
-      setPublicRooms(result.rooms);
+      if (generation === roomsVersion.current) setPublicRooms(result.rooms);
     } finally {
+      roomsBusy.current = false;
       setRoomsLoading(false);
     }
   }
@@ -160,12 +137,19 @@ export default function App() {
   useEffect(() => {
     if (!room || room.status !== "approved" || !server) return;
     let active = true;
+    let inFlight = false;
+    const controller = new AbortController();
     const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const current = await api<{ members: Member[] }>(
           server,
           `/api/v1/rooms/${room.roomId}`,
           room.accessToken,
+          undefined,
+          undefined,
+          { signal: controller.signal },
         );
         if (active)
           setRoom((old) => (old ? { ...old, members: current.members } : null));
@@ -192,24 +176,34 @@ export default function App() {
             }
           }
         }
+      } finally {
+        inFlight = false;
       }
     };
     void refresh();
     const timer = window.setInterval(refresh, 5000);
     return () => {
       active = false;
+      controller.abort();
       window.clearInterval(timer);
     };
   }, [room?.roomId, room?.accessToken, room?.status, server]);
   useEffect(() => {
     if (!room || room.status !== "pending" || !server) return;
     let active = true;
+    let inFlight = false;
+    const controller = new AbortController();
     const poll = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const status = await api<{ status: string }>(
           server,
           `/api/v1/rooms/${room.roomId}/membership`,
           room.accessToken,
+          undefined,
+          undefined,
+          { signal: controller.signal },
         );
         if (!active) return;
         if (status.status === "approved") {
@@ -225,23 +219,38 @@ export default function App() {
         }
       } catch (e) {
         if (active) setError(friendlyError(e, lang));
+      } finally {
+        inFlight = false;
       }
     };
     const timer = window.setInterval(poll, 3000);
     return () => {
       active = false;
+      controller.abort();
       window.clearInterval(timer);
     };
   }, [room?.roomId, room?.status, server]);
   useEffect(() => {
     if (!room || !tunnel.running) return;
     let active = true;
+    let inFlight = false;
     const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const status = await invoke<EngineStatus>("engine_status");
         if (active) setTunnel(status);
       } catch (e) {
-        if (active) setError(friendlyError(e, lang));
+        if (active) {
+          setTunnel((old) => ({
+            ...old,
+            virtualIp: null,
+            state: "status_unknown",
+          }));
+          setError(friendlyError(e, lang));
+        }
+      } finally {
+        inFlight = false;
       }
     };
     void refresh();
@@ -431,7 +440,7 @@ export default function App() {
   };
   return (
     <>
-      <TitleBar />
+      <TitleBar lang={lang} />
       <div className="lanora-app" dir={lang === "fa" ? "rtl" : "ltr"}>
         <aside className="app-sidebar">
           <div className="side-brand">
@@ -558,6 +567,8 @@ export default function App() {
                   onChange={(e) => {
                     setServerInput(e.target.value);
                     clearServer();
+                    roomsVersion.current++;
+                    setPublicRooms([]);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") void connect();
@@ -664,143 +675,31 @@ export default function App() {
               </>
             )}
             {room && (
-              <section className="app-room">
-                <div className="app-room-top">
-                  <div>
-                    <span className="app-eyebrow">YOUR ROOM</span>
-                    <h2>{room.name}</h2>
-                    <p>{room.status === "pending" ? t.pending : t.joined}</p>
-                  </div>
-                  <span className="app-room-state">
-                    <Activity size={16} />
-                    {room.status === "pending"
-                      ? t.pending
-                      : tunnel.state === "tunnel_ready"
-                        ? t.ready
-                        : tunnel.state === "connecting"
-                          ? t.starting
-                          : tunnel.state === "failed"
-                            ? lang === "fa"
-                              ? "راه‌اندازی شبکه ناموفق بود"
-                              : "Network initialization failed"
-                            : t.stopped}
-                  </span>
-                </div>
-                {room.inviteCode && (
-                  <div className="app-invite">
-                    <span>{t.invite}</span>
-                    <code dir="ltr">{room.inviteCode}</code>
-                    <button
-                      className="app-icon"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(room.inviteCode!);
-                        setNotice(t.copied);
-                      }}
-                      aria-label={t.copy}
-                    >
-                      <Copy size={16} />
-                    </button>
-                  </div>
-                )}
-                <div className="app-ip-grid">
-                  <div>
-                    <span className="app-card-icon">
-                      <Wifi size={20} />
-                    </span>
-                    <small>{t.localIp}</small>
-                    <div className="app-ip-value">
-                      <strong dir="ltr">{tunnel.virtualIp || "—"}</strong>
-                      {tunnel.virtualIp && (
-                        <button
-                          className="app-icon"
-                          title={t.copy}
-                          onClick={() => {
-                            void navigator.clipboard.writeText(
-                              tunnel.virtualIp!,
-                            );
-                            setNotice(t.copied);
-                          }}
-                        >
-                          <Copy size={15} />
-                        </button>
-                      )}
-                    </div>
-                    <p>{tunnel.virtualIp ? t.peerCaution : t.waitingIp}</p>
-                  </div>
-                  <div>
-                    <span className="app-card-icon">
-                      <Link2 size={20} />
-                    </span>
-                    <small>DIRECT IP</small>
-                    <p>{t.directIp}</p>
-                  </div>
-                </div>
-                <div className="app-members-head">
-                  <h3>
-                    <Users size={17} />
-                    {t.members} <span>{room.members?.length ?? "—"}</span>
-                  </h3>
-                  {tunnel.state === "failed" && (
-                    <button
-                      className="app-button subtle"
-                      onClick={() =>
-                        void invoke("engine_stop")
-                          .then(() =>
-                            startTunnel(room.roomId, room.accessToken),
-                          )
-                          .catch((e) => setError(friendlyError(e, lang)))
-                      }
-                    >
-                      {t.retry}
-                    </button>
-                  )}
-                </div>
-                <div className="app-members">
-                  {!room.members ? (
-                    <div className="skeleton" role="status">
-                      {lang === "fa" ? "دریافت اعضا…" : "Loading players…"}
-                    </div>
-                  ) : (
-                    room.members.map((m) => (
-                      <div className="app-member" key={m.userId}>
-                        <span className="app-avatar">
-                          {m.username.slice(0, 1).toUpperCase()}
-                        </span>
-                        <b>{m.username}</b>
-                        <small>
-                          {m.status === "pending"
-                            ? t.pending
-                            : (m.role === "host" ? "Host · " : "") +
-                              (lang === "fa"
-                                ? "ارتباط همتا نامشخص"
-                                : "Peer connection unknown")}
-                        </small>
-                        {room.role === "host" && m.status === "pending" && (
-                          <>
-                            <button
-                              onClick={() => void approve(m.userId, true)}
-                            >
-                              {t.approve}
-                            </button>
-                            <button
-                              onClick={() => void approve(m.userId, false)}
-                            >
-                              {t.reject}
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-                <button
-                  className="app-button danger"
-                  disabled={busy || tunnelBusy.current}
-                  onClick={() => void leave()}
-                >
-                  {room.role === "host" ? t.close : t.leave}
-                </button>
-              </section>
+              <RoomView
+                room={room}
+                tunnel={tunnel}
+                lang={lang}
+                busy={busy || tunnelBusy.current}
+                onCopy={(value) =>
+                  void navigator.clipboard
+                    .writeText(value)
+                    .then(() => setNotice(t.copied))
+                    .catch(() =>
+                      setError(
+                        lang === "fa"
+                          ? "کپی انجام نشد؛ آدرس را دستی انتخاب کنید."
+                          : "Copy failed. Select the address manually.",
+                      ),
+                    )
+                }
+                onRetry={() =>
+                  void invoke("engine_stop")
+                    .then(() => startTunnel(room.roomId, room.accessToken))
+                    .catch((e) => setError(friendlyError(e, lang)))
+                }
+                onLeave={() => void leave()}
+                onApprove={(id, approved) => void approve(id, approved)}
+              />
             )}
             {!server && (
               <div className="app-onboarding">

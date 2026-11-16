@@ -23,6 +23,8 @@ case "${1:-status}" in
       printf '%-10s ' "$service"
       state=$(docker inspect --format '{{.State.Status}}' "$id")
       [[ "$state" == running ]] || failed=1
+      health_state=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$id")
+      [[ "$health_state" != unhealthy ]] || failed=1
       docker inspect --format '{{.State.Status}}; health={{if .State.Health}}{{.State.Health.Status}}{{else}}not configured{{end}}' "$id"
     done
     if docker compose exec -T caddy wget -q -T 5 -O /dev/null http://api:8080/api/v1/health; then echo 'Local API: responds successfully'; else echo 'Local API: FAILED. Run server.sh logs and check api container.'; failed=1; fi

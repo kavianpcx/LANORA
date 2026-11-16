@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+**/node_modules
+**/target
+**/dist
+**/.test-build
+**/__pycache__
+**/*.db
+**/*.db-shm
+**/*.db-wal
+.audit-*
