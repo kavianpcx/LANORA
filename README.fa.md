@@ -7,6 +7,9 @@
 
 **نسخهٔ آزمایشی:** [دانلود نسخهٔ `0.2.0-alpha.2`](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.2). دسترسی به API، عضویت روم، اجرای EasyTier، آی‌پی گزارش‌شده و ارتباط واقعی با دوستتان مراحل جدا هستند. داشتن آی‌پی به‌تنهایی اتصال به بازیکن دیگر را ثابت نمی‌کند. آزمایش بازی ویندوز روی دو اینترنت متفاوت هنوز **تأیید نشده**. [گزارش بررسی و تست‌ها](docs/AUDIT_0.2.0.md) و [راهنمای طراحی رابط دسکتاپ](docs/DESIGN_SYSTEM.md).
 
+<p align="center"><img src="docs/screenshots/linux-first-launch.png" alt="صفحهٔ انتخاب نام و آواتار در برنامهٔ نصب‌شدهٔ LANORA" width="900"></p>
+<p align="center"><sub>تصویر واقعی از اجرای بستهٔ نصب‌شدهٔ Ubuntu در GitHub Actions، نه پیش‌نمایش وب.</sub></p>
+
 ## ۱. صاحب VPS: سرور را راه‌اندازی کنید
 
 ابتدا [Docker Engine و Compose](https://docs.docker.com/engine/install/)، ابزار Git و OpenSSL را نصب کنید. رکورد DNS دامنه را به VPS وصل کنید. پورت‌های **TCP 80/443 و TCP/UDP 11010** باید در فایروال VPS باز باشند. در ترمینال SSH بنویسید:

@@ -16,6 +16,11 @@ on:
       - 'tests/linux_desktop_smoke.sh'
       - '.github/workflows/windows.yml'
       - 'THIRD_PARTY_LICENSES.md'
+      - 'README.md'
+      - 'README.fa.md'
+      - 'CHANGELOG.md'
+      - 'docs/**'
+      - 'tests/NETWORK_TEST_MATRIX.md'
   workflow_dispatch:
 permissions:
   contents: read

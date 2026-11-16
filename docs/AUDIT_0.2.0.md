@@ -39,11 +39,19 @@ The EasyTier CLI/configuration was checked against the pinned [v2.6.4 source](ht
 - Add transparent LANORA PNG/SVG/ICO and Tauri icon sizes, branded NSIS header/sidebar art, Farsi and English installer language selection, current-user install mode and the MIT license file. The workflow also emits SHA-256 sidecars. Windows Build CI must confirm the installer compiles and installs with these settings.
 - Record layout, typography, color, feedback and accessibility choices in `docs/DESIGN_SYSTEM.md`.
 
-## Previous verified candidate tests
+## Alpha 2 validation
 
-Before the `0.2.0-alpha.2` security and installer changes, commit `c120b467af9ad36502ab667a8dbbcdd3684339fa` passed [desktop workflow 43946935337](https://github.com/kavianpcx/LANORA/actions/runs/43946935337) and [server/API CI 43946935255](https://github.com/kavianpcx/LANORA/actions/runs/43946935255). Windows built, silently installed, launched and normally closed the NSIS package. Ubuntu 24.04 built and installed the `.deb`, opened the installed native UI, tested fullscreen restore/close and captured the committed screenshot. The Linux namespace test sent real TCP and UDP payloads between different EasyTier adapter IPs through the self-hosted relay, including with the API stopped and after a local underlay link down/up. Docker checks passed with SQLite data surviving restart.
+The tested source is commit `a30df623c1fb4042285f24bf3168c7c6258a709d` on the review branch. Both required workflows passed on that same source commit: [CI run 43959957097](https://github.com/kavianpcx/LANORA/actions/runs/43959957097) and [Desktop validation run 43959957135](https://github.com/kavianpcx/LANORA/actions/runs/43959957135).
 
-That is Linux namespace evidence, not a two-computer internet test. Alpha 2 needs its own successful Actions runs because it changes the membership response, NSIS assets and package metadata. The exact alpha 2 run links and results belong here once those runs finish.
+An earlier candidate run failed the repository check after the installer sidebar bitmap was truncated during upload; the next commit restored and verified the complete bitmap. A separate early cleanup failure was fixed by supplying harmless Compose variables to the always-run cleanup step. Neither failure is from the tested `a30df623` source.
+
+- Go API tests, including race detection and authorization regressions, passed. Repository checks, server command tests, fresh Docker deployment, restart and SQLite persistence passed in CI.
+- Frontend regression tests and Rust native tests passed on Windows and Ubuntu runners.
+- Windows Server 2025 CI built the branded NSIS installer, installed it silently, checked that the bundled EasyTier binary exists and reports its version, launched LANORA, and closed the app normally. This is an installer smoke test, not a clean Windows 10/11 hardware or virtual-adapter test.
+- Ubuntu 24.04 CI built and installed the `.deb`, checked its EasyTier network capability, launched the installed application, exercised fullscreen restore and close, and captured the screenshot used in the README.
+- The Linux namespace test used the real pinned EasyTier v2.6.4 binary and real TCP/UDP sockets between different virtual-adapter IPs through the self-hosted relay. It also exercised traffic while the API was stopped and after a local underlay link was taken down and restored.
+
+This is useful local integration evidence, not proof of two-computer internet gaming. The CI source is the tested alpha candidate; any later source commit requires a new matching build before its binaries can be released.
 
 ## Not verified and remaining risks
 
@@ -57,4 +65,4 @@ These are alpha limitations. Do not describe the product as stable or universall
 
 ## Release state
 
-Target version: `0.2.0-alpha.2` across npm, Cargo and Tauri. Publish only packages from a successful desktop workflow run for the same source commit. Keep the GitHub release marked prerelease; do not replace or move an existing tag. Stable release remains blocked on the real Windows and independent-network tests above.
+Version: `0.2.0-alpha.2` is synchronized across npm, Cargo and Tauri. Windows and Linux packages may be published only from the matching successful desktop workflow run. Keep the GitHub release marked prerelease. Stable release remains blocked on the real Windows adapter/firewall and independent-network/game tests above.

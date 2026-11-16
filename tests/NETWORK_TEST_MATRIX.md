@@ -13,10 +13,10 @@ Results are scoped to their environment. A namespace test uses real EasyTier, re
 | Control API offline while tunnel active | Passed in Linux namespaces | Socket payloads after stopping the API process |
 | Underlay disconnect/reconnect | Passed in Linux namespaces | Linux namespace link down/up; not WAN loss on Windows |
 | Docker fresh installation, restart and SQLite persistence | Passed in CI | `tests/compose_smoke.sh`; local HTTPS proxy process, no public DNS/TLS verification |
-| Native EXE and DEB builds; Rust regressions | Passed on the earlier candidate; alpha.2 rerun pending | Previous CI artifacts are not evidence for the new installer artwork or package metadata |
-| Install/open/close actual desktop packages | See final audit results | Separate CI steps, never inferred from build success |
+| Alpha.2 Windows x64 EXE build and installer smoke test | Passed | [Desktop CI run 43959957135](https://github.com/kavianpcx/LANORA/actions/runs/43959957135): built NSIS, installed silently, checked bundled EasyTier version, launched and closed the installed app on Windows Server 2025 CI |
+| Alpha.2 Ubuntu 24.04 x64 DEB build and install smoke test | Passed | [Desktop CI run 43959957135](https://github.com/kavianpcx/LANORA/actions/runs/43959957135): built and installed package, checked packaged EasyTier capability, launched app and exercised fullscreen restore/close in Xvfb |
 | Windows firewall, adapter permissions and driver cleanup | Not verified | Requires clean Windows 10/11 PCs/VMs and real adapter tests |
 | LAN game Direct IP, broadcast/multicast discovery | Not verified | Record each tested game/version and topology |
 | Fullscreen, maximize/restore, dragging and RTL on physical desktops | Not verified | Custom controls implemented; needs interactive cross-platform validation |
 
-See [audit](../docs/AUDIT_0.2.0.md) for exact run links, earlier harness failures and final results. No test claims universal game compatibility.
+See [audit](../docs/AUDIT_0.2.0.md) for the matching source commit, run links, and limits. No test claims universal game compatibility.

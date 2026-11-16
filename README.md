@@ -9,6 +9,9 @@ Play a LAN game with friends who are somewhere else. One friend runs the server 
 
 [![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![Desktop builds](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE)
 
+<p align="center"><img src="docs/screenshots/linux-first-launch.png" alt="LANORA first-launch profile setup, captured from the installed desktop package" width="900"></p>
+<p align="center"><sub>Real screenshot from the installed Ubuntu package in GitHub Actions, not a web mockup.</sub></p>
+
 ## 1. Server owner: run these commands on your VPS
 
 First install [Docker Engine with Compose](https://docs.docker.com/engine/install/). You also need Git and OpenSSL. Point a domain's DNS record at the VPS. Allow inbound **TCP 80/443 and TCP/UDP 11010** in your VPS firewall.
