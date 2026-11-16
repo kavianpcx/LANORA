@@ -11,6 +11,14 @@ export function normalize(raw: string) {
     const url = new URL(
       /^https?:\/\//i.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`,
     );
+    const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    const ipv4Parts = hostname.split(".");
+    const ipv4Loopback =
+      ipv4Parts.length === 4 &&
+      ipv4Parts[0] === "127" &&
+      ipv4Parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+    const loopback =
+      hostname === "localhost" || hostname === "::1" || ipv4Loopback;
     if (
       !url.hostname ||
       url.username ||
@@ -19,10 +27,7 @@ export function normalize(raw: string) {
       url.search ||
       url.pathname !== "/" ||
       (url.protocol !== "https:" &&
-        !(
-          url.protocol === "http:" &&
-          ["localhost", "127.0.0.1"].includes(url.hostname)
-        ))
+        !(url.protocol === "http:" && loopback))
     )
       throw new Error();
     return url.origin;
@@ -77,8 +82,8 @@ export function friendlyError(error: unknown, lang: "en" | "fa") {
   const code = error instanceof RequestError ? error.code : "native";
   const messages: Record<string, [string, string]> = {
     address: [
-      "Enter an HTTPS domain or IP with a valid certificate.",
-      "نشانی HTTPS دامنه یا آی‌پی با گواهی معتبر وارد کنید.",
+      "Use HTTPS for public servers. HTTP is allowed only for localhost.",
+      "برای سرور عمومی HTTPS لازم است. HTTP فقط برای localhost مجاز است.",
     ],
     timeout: [
       "The server took too long to respond. Check VPS status and retry.",
@@ -87,6 +92,18 @@ export function friendlyError(error: unknown, lang: "en" | "fa") {
     network: [
       "Couldn’t reach the server. Check the address, internet, VPS and HTTPS certificate.",
       "سرور در دسترس نیست. نشانی، اینترنت، VPS و گواهی HTTPS را بررسی کنید.",
+    ],
+    network_code_invalid: [
+      "That access code does not match this server. Check it and try again.",
+      "این کد دسترسی برای این سرور نیست. کد را بررسی و دوباره تلاش کنید.",
+    ],
+    shared_network_unconfigured: [
+      "Shared access is not set up on this server yet. Ask its owner to run the latest server setup command.",
+      "دسترسی شبکهٔ مشترک هنوز روی این سرور راه‌اندازی نشده است. از صاحب سرور بخواهید دستور راه‌اندازی جدید را اجرا کند.",
+    ],
+    relay_unconfigured: [
+      "The server relay is not configured. Ask the server owner to check the VPS setup.",
+      "رلهٔ سرور تنظیم نشده است. از صاحب سرور بخواهید تنظیم VPS را بررسی کند.",
     ],
     room_full: [
       "This room is full. Choose another room.",

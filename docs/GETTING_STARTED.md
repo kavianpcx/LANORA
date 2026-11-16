@@ -1,8 +1,20 @@
 # Getting started
 
-1. Server owner: follow [Self-hosting](SELF_HOSTING.md), then share the HTTPS address.
-2. Every player: get the experimental Windows EXE or Linux DEB from [GitHub Releases](https://github.com/kavianpcx/LANORA/releases) only after the matching platform build is published. The current candidate status and download links are in the [README](../README.md). Choose a local nickname and avatar on first launch; there is no login.
-3. Enter the same HTTPS server address and connect. Create a public room or enter a private invite code. A host may require a password and approval.
-4. The game host shares the virtual IP reported by EasyTier. Other players use the game's Direct IP option with that player IP, not the VPS IP. Verify actual connectivity; an adapter address alone is insufficient.
+## Server operator
 
-The server owner can check API health with `curl -f https://YOUR_DOMAIN/api/v1/health`. Games and Windows network behavior need a real two-PC test.
+Install Docker Engine with Compose, Git, and OpenSSL on a Linux VPS. Point a domain at the VPS and allow inbound TCP 80/443 and TCP/UDP 11010. Then run:
+
+~~~sh
+git clone --branch release/0.2.x https://github.com/kavianpcx/LANORA.git
+cd LANORA
+bash scripts/setup-server.sh
+bash scripts/server.sh status
+~~~
+
+The setup script asks for the domain, starts the services, and prints a private access code. Share the configured HTTPS address and access code with players. Verify external reachability using curl from a different network. Full instructions are in [Self-hosting](SELF_HOSTING.md).
+
+## Player
+
+Install LANORA from the [alpha release](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.3). Enter the server's HTTPS address, the access code, and your display name. Connect, wait for the EasyTier virtual IP, then give the game host's IP to the other players. Use Direct IP if the game does not discover LAN games automatically.
+
+The app online label reflects API heartbeat; EasyTier peer status is shown separately.

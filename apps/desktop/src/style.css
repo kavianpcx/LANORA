@@ -55,10 +55,49 @@ select {
     "Segoe UI",
     sans-serif;
 }
-.lanora-app[dir="rtl"] {
+.lanora-app[data-lang="fa"] {
   font-family: Vazirmatn, "Segoe UI", sans-serif;
 }
-.lanora-app[dir="rtl"] :is(.side-label, .app-eyebrow) {
+.lanora-app[data-lang="fa"] :is(
+  .side-label,
+  .side-step b,
+  .side-step small,
+  .side-tip b,
+  .side-tip p,
+  .app-hero h1,
+  .app-hero p,
+  .app-section-title h2,
+  .app-section-title p,
+  .app-toolbar h2,
+  .app-room-meta h3,
+  .app-room-meta p,
+  .app-empty p,
+  .app-room-top h2,
+  .app-room-top p,
+  .app-ip-grid small,
+  .app-ip-grid p,
+  .app-member-copy b,
+  .app-member-copy small,
+  .app-dialog h2,
+  .onboarding-copy,
+  .app-pref > span,
+  .app-help-panel p,
+  .app-no-players
+) {
+  direction: rtl;
+  text-align: right;
+}
+.lanora-app[data-lang="fa"] .app-form label:not(.app-check) {
+  direction: rtl;
+  text-align: right;
+}
+.lanora-app[data-lang="fa"] .app-form label.app-check {
+  text-align: right;
+}
+.lanora-app[data-lang="fa"] .app-help-toggle {
+  text-align: right;
+}
+ .lanora-app[data-lang="fa"] :is(.side-label, .app-eyebrow, .side-brand small) {
   font-family: Vazirmatn, "Segoe UI", sans-serif;
   letter-spacing: normal;
 }
@@ -132,7 +171,7 @@ select {
   margin: 10px 0 8px;
   font-weight: 750;
 }
-.lanora-app[dir="rtl"] .app-hero h1 {
+.lanora-app[data-lang="fa"] .app-hero h1 {
   letter-spacing: 0;
 }
 .app-hero p {
@@ -178,6 +217,15 @@ select {
 }
 .app-server-form {
   margin-top: 21px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.7fr) auto;
+  gap: 10px;
+}
+.app-server-form .app-server-code {
+  flex: initial;
+  min-width: 0;
+  font: 650 13px ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: 0.04em;
 }
 .app-server-form input,
 .app-form input,
@@ -191,7 +239,6 @@ select {
   outline: none;
 }
 .app-server-form input {
-  flex: 1;
   min-width: 0;
   text-align: left;
 }
@@ -418,6 +465,29 @@ select {
 .app-member {
   padding: 11px 0;
   border-bottom: 1px solid var(--line);
+}
+.app-member-copy {
+  min-width: 0;
+  flex: 1;
+}
+.app-member-copy b,
+.app-member-copy small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.app-member code {
+  flex: none;
+  color: var(--ink);
+  font: 600 12px ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.app-member-copy-ip {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+.app-no-players {
+  margin: 12px 0;
+  color: var(--muted);
 }
 .app-member small {
   color: var(--muted);
@@ -660,8 +730,12 @@ select {
     flex-wrap: wrap;
   }
   .app-server-form {
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
     align-items: stretch;
+  }
+  .app-server-form > * {
+    grid-column: 1;
   }
   .app-ip-grid {
     grid-template-columns: 1fr;
@@ -983,6 +1057,9 @@ select {
   border-radius: 50%;
   background: #78859a;
 }
+ .titlebar-status.server i {
+  background: var(--accent);
+}
 .titlebar-status.connected i {
   background: var(--success);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 16%, transparent);
@@ -1057,11 +1134,12 @@ select {
   min-height: calc(100vh - 56px);
 }
 .avatar-picker {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  justify-items: center;
 }
-.avatar-picker button {
+ .avatar-picker button {
   padding: 4px;
   border: 2px solid transparent;
   border-radius: 16px;
@@ -1109,4 +1187,29 @@ dialog.app-overlay::backdrop {
 button:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
+}
+
+.app-connection-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+  font-size: 12px;
+  margin: 12px 0 0;
+}
+.app-advanced {
+  margin-top: 28px;
+  border-top: 1px solid var(--line);
+  padding-top: 13px;
+}
+.app-advanced summary {
+  width: fit-content;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.app-advanced[open] summary {
+  color: var(--accent);
+  margin-bottom: 14px;
 }

@@ -28,6 +28,60 @@ struct EngineStatus {
     error: Option<String>,
 }
 
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct PeerStatus {
+    virtual_ip: String,
+    latency_ms: Option<f64>,
+}
+
+fn collect_peer_statuses(value: &Value, output: &mut Vec<PeerStatus>) {
+    match value {
+        Value::Array(items) => {
+            for item in items {
+                collect_peer_statuses(item, output);
+            }
+        }
+        Value::Object(fields) => {
+            let cost = fields.get("cost").and_then(Value::as_str);
+            if cost.is_some_and(|value| value != "Local") {
+                let raw_ip = fields
+                    .get("ipv4")
+                    .or_else(|| fields.get("cidr"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .split('/')
+                    .next()
+                    .unwrap_or_default();
+                if let Ok(ip) = raw_ip.parse::<std::net::Ipv4Addr>() {
+                    if !ip.is_unspecified() && !ip.is_loopback() && !ip.is_multicast() && !ip.is_broadcast() {
+                        let latency = fields
+                            .get("lat_ms")
+                            .and_then(|value| value.as_f64().or_else(|| value.as_str()?.parse::<f64>().ok()))
+                            .filter(|value| value.is_finite() && *value > 0.0);
+                        if !output.iter().any(|peer| peer.virtual_ip == ip.to_string()) {
+                            output.push(PeerStatus {
+                                virtual_ip: ip.to_string(),
+                                latency_ms: latency,
+                            });
+                        }
+                    }
+                }
+            }
+            for value in fields.values() {
+                collect_peer_statuses(value, output);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn parse_peer_statuses(value: &Value) -> Vec<PeerStatus> {
+    let mut output = Vec::new();
+    collect_peer_statuses(value, &mut output);
+    output
+}
+
 fn valid_config(cfg: &EngineConfig) -> bool {
     let name = cfg.network_name.strip_prefix("lanora-");
     if name.is_none_or(|s| s.len() != 32 || !s.bytes().all(|c| c.is_ascii_hexdigit())) {
@@ -205,6 +259,40 @@ async fn engine_status(
 }
 
 #[tauri::command]
+async fn engine_peers(
+    state: State<'_, Engine>,
+    app: tauri::AppHandle,
+) -> Result<Vec<PeerStatus>, String> {
+    if state.child.lock().await.is_none() {
+        return Ok(Vec::new());
+    }
+    let portal = format!("127.0.0.1:{}", *state.rpc_port.lock().await);
+    #[cfg(windows)]
+    let binary = "easytier-cli.exe";
+    #[cfg(not(windows))]
+    let binary = "easytier-cli";
+    let mut command = tokio::process::Command::new(core_dir(&app)?.join(binary));
+    #[cfg(windows)]
+    command.creation_flags(0x08000000);
+    let output = tokio::time::timeout(
+        std::time::Duration::from_secs(4),
+        command
+            .args(["-p", &portal, "-n", "lanora-room", "-o", "json", "peer"])
+            .stdin(Stdio::null())
+            .kill_on_drop(true)
+            .output(),
+    )
+    .await;
+    match output {
+        Ok(Ok(result)) if result.status.success() => {
+            let value = serde_json::from_slice::<Value>(&result.stdout).unwrap_or(Value::Null);
+            Ok(parse_peer_statuses(&value))
+        }
+        _ => Ok(Vec::new()),
+    }
+}
+
+#[tauri::command]
 async fn engine_stop(state: State<'_, Engine>) -> Result<(), String> {
     let mut guard = state.child.lock().await;
     if let Some(child) = guard.as_mut() {
@@ -229,6 +317,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             engine_start,
             engine_status,
+            engine_peers,
             engine_stop
         ])
         .on_window_event(|window, event| {
@@ -267,6 +356,29 @@ mod tests {
             None
         );
     }
+    #[test]
+    fn parses_real_easy_tier_peer_rows_and_keeps_unknown_latency_unknown() {
+        let peers = parse_peer_statuses(&serde_json::json!([
+            {"ipv4":"10.126.0.1","cost":"Local","lat_ms":"0.00"},
+            {"ipv4":"10.126.0.2","cost":"Direct","lat_ms":"24.50"},
+            {"cidr":"10.126.0.3/24","cost":"Relay","lat_ms":"0.00"},
+            {"ipv4":"127.0.0.1","cost":"Direct","lat_ms":"1.00"}
+        ]));
+        assert_eq!(
+            peers,
+            vec![
+                PeerStatus {
+                    virtual_ip: "10.126.0.2".into(),
+                    latency_ms: Some(24.5),
+                },
+                PeerStatus {
+                    virtual_ip: "10.126.0.3".into(),
+                    latency_ms: None,
+                },
+            ]
+        );
+    }
+
     #[test]
     fn refuses_commands_and_untrusted_network_names() {
         let mut c = EngineConfig {

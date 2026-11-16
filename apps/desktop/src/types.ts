@@ -10,6 +10,13 @@ export type Member = {
   username: string;
   role: string;
   status: string;
+  virtualIp?: string;
+  online?: boolean;
+  peerStatus?: "unknown" | string;
+};
+export type PeerStatus = {
+  virtualIp: string;
+  latencyMs: number | null;
 };
 export type ListedRoom = {
   id: string;

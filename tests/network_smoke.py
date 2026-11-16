@@ -56,19 +56,24 @@ with tempfile.TemporaryDirectory(prefix='lanora-test-') as directory:
             run('ip','link','set',host,'master',bridge);run('ip','link','set',host,'up')
             run('ip','-n',ns,'link','set','lo','up');run('ip','-n',ns,'link','set','eth0','up')
             run('ip','-n',ns,'addr','add',f'192.0.2.{index+2}/24','dev','eth0')
+            run('ip','-n',ns,'route','add','default','via','192.0.2.1')
+        shared_code='8f30b8dca26e48dd29c1967a'
         api_process=launch([api_binary],env={**os.environ,'LANORA_LISTEN_ADDR':'127.0.0.1:18080',
-            'LANORA_DB_PATH':str(root/'api.db'),'LANORA_RELAY_PEER_URL':'tcp://192.0.2.1:11010'})
+            'LANORA_DB_PATH':str(root/'api.db'),'LANORA_RELAY_PEER_URL':'tcp://192.0.2.1:11010',
+            'LANORA_SHARED_NETWORK_CODE':shared_code})
         until(lambda:request('/health'),10)
-        host=request('/rooms',{'name':'Network test','username':'Host','maxPlayers':4})
-        guest=request('/rooms/join',{'inviteCode':host['inviteCode'],'username':'Guest'})
-        configs=[request(f"/rooms/{m['roomId']}/network",token=m['accessToken']) for m in [host,guest]]
-        assert configs[0]==configs[1], 'Approved peers received different networks'
+        host=request('/network/join',{'code':shared_code,'deviceId':secrets.token_hex(16),'username':'Host'})
+        guest=request('/network/join',{'code':shared_code,'deviceId':secrets.token_hex(16),'username':'Guest'})
+        configs=[host['network'],guest['network']]
+        assert configs[0]==configs[1], 'Authorized players received different shared networks'
+        assert request('/network/config',token=host['accessToken'])==configs[0], 'Authorized config did not match join response'
         relay=root/'relay.toml'
         relay.write_text('listeners = ["tcp://0.0.0.0:11010"]\nstun_servers = []\nstun_servers_v6 = []\n'
             '[network_identity]\nnetwork_name="lanora-relay-control"\nnetwork_secret="'+secrets.token_hex(32)+'"\n'
             '[flags]\nno_tun=true\nrelay_network_whitelist="lanora-*"\n')
         relay.chmod(0o600)
         launch([core,'--config-file',str(relay),'--disable-env-parsing'])
+        default_routes=[run('ip','-n',ns,'route','show','default') for ns in namespaces]
         for ns,cfg in zip(namespaces,configs):
             path=root/(ns+'.toml')
             path.write_text('instance_name="lanora-room"\ndhcp=true\nrpc_portal="127.0.0.1:15888"\n'
@@ -87,7 +92,12 @@ with tempfile.TemporaryDirectory(prefix='lanora-test-') as directory:
                 result.append(address)
             return result if len(set(result))==2 else None
         ips=until(assigned)
-        print('PASS: API created room; approved clients have distinct real adapter IPv4 addresses',flush=True)
+        assert [run('ip','-n',ns,'route','show','default') for ns in namespaces]==default_routes, 'EasyTier changed a client default route'
+        print('PASS: EasyTier left both client default routes unchanged',flush=True)
+        for entry, address in zip([host,guest], ips):
+            result=request('/network/heartbeat',{'virtualIp':address},entry['accessToken'])
+        assert len(result['members']) == 2 and all(m['online'] and m['virtualIp'] for m in result['members']), 'heartbeat presence or virtual IP missing'
+        print('PASS: shared access code authorized both clients; API reports their assigned virtual IPs',flush=True)
         ready=root/'ready'
         receiver="""
 import socket,sys,threading,pathlib
@@ -114,7 +124,7 @@ with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as udp:
             run('ip','netns','exec',namespaces[1],sys.executable,'-c',sender,ips[0])
             assert receiver_process.wait(timeout=10)==0
         exchange()
-        print('PASS: real TCP and UDP round trips through a foreign-network relay (P2P disabled)',flush=True)
+        print('PASS: shared-network TCP and UDP round trips through the relay (P2P disabled)',flush=True)
         api_process.terminate();api_process.wait(timeout=5)
         exchange()
         print('PASS: existing TCP/UDP data plane works while control API is offline',flush=True)

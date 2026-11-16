@@ -11,7 +11,7 @@ class Commands(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp);(root/'scripts').mkdir();(root/'bin').mkdir()
             shutil.copy('scripts/server.sh',root/'scripts/server.sh')
-            (root/'.env').write_text('LANORA_PUBLIC_HOST=games.example.org\nLANORA_ADMIN_TOKEN=DO_NOT_PRINT_ADMIN\nLANORA_RELAY_SECRET=DO_NOT_PRINT_RELAY\n')
+            (root/'.env').write_text('LANORA_PUBLIC_HOST=games.example.org\nLANORA_ADMIN_TOKEN=DO_NOT_PRINT_ADMIN\nLANORA_RELAY_SECRET=DO_NOT_PRINT_RELAY\nLANORA_SHARED_NETWORK_CODE=code-that-is-not-shown\n')
             stub=root/'bin/docker'
             stub.write_text('''#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$CALLS"
@@ -31,6 +31,9 @@ esac
                 result=subprocess.run(['bash',str(root/'scripts/server.sh'),command],env=env,capture_output=True,text=True)
                 self.assertEqual(result.returncode,0,result.stderr+result.stdout)
                 self.assertNotIn('DO_NOT_PRINT',result.stdout+result.stderr)
+            code_result=subprocess.run(['bash',str(root/'scripts/server.sh'),'code'],env=env,capture_output=True,text=True)
+            self.assertEqual(code_result.returncode,0,code_result.stderr+code_result.stdout)
+            self.assertIn('code-that-is-not-shown',code_result.stdout)
             calls=(root/'calls').read_text()
             self.assertNotIn('down',calls);self.assertNotIn('--volumes',calls)
             self.assertIn('compose logs --tail=100 api',calls)

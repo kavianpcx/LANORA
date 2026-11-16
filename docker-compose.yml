@@ -9,6 +9,7 @@ services:
       LANORA_DB_PATH: ${LANORA_DB_PATH:-/data/lanora.db}
       LANORA_ADMIN_TOKEN: ${LANORA_ADMIN_TOKEN:?Set LANORA_ADMIN_TOKEN in .env}
       LANORA_RELAY_PEER_URL: ${LANORA_RELAY_PEER_URL:?Set LANORA_RELAY_PEER_URL in .env}
+      LANORA_SHARED_NETWORK_CODE: ${LANORA_SHARED_NETWORK_CODE:-}
       LANORA_ALLOWED_ORIGINS: ${LANORA_ALLOWED_ORIGINS:-tauri://localhost,http://tauri.localhost,https://tauri.localhost,http://localhost:1420,http://127.0.0.1:1420}
     volumes:
       - lanora_data:/data

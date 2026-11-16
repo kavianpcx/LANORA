@@ -14,8 +14,8 @@ export function TitleBar({
   onSettings,
 }: {
   lang: "en" | "fa";
-  status: "idle" | "checking" | "connected" | "failed";
-  statusLabels: Record<"idle" | "checking" | "connected" | "failed", string>;
+  status: "idle" | "checking" | "server" | "connected" | "failed";
+  statusLabels: Record<"idle" | "checking" | "server" | "connected" | "failed", string>;
   name: string;
   avatar: AvatarKind;
   settingsLabel: string;
@@ -85,7 +85,7 @@ export function TitleBar({
       >
         <img src={brand} alt="" data-tauri-drag-region />
         <b data-tauri-drag-region>LANORA</b>
-        <span data-tauri-drag-region>0.2.0-alpha.2</span>
+        <span data-tauri-drag-region>0.2.0-alpha.3</span>
       </div>
       <div
         className="titlebar-drag-fill"
@@ -95,7 +95,7 @@ export function TitleBar({
       <div className="titlebar-tools">
         <span className={`titlebar-status ${status}`} role="status" aria-live="polite">
           <i />
-          {statusLabels[status]}
+          <span dir={lang === "fa" ? "rtl" : "ltr"}>{statusLabels[status]}</span>
         </span>
         <button
           className="titlebar-profile"
@@ -104,7 +104,7 @@ export function TitleBar({
           onClick={onSettings}
         >
           <Avatar kind={avatar} />
-          <span>{name || settingsLabel}</span>
+          <span dir="auto">{name || settingsLabel}</span>
           <Settings2 size={16} />
         </button>
       </div>

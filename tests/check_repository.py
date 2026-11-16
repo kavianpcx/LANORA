@@ -7,12 +7,13 @@ from urllib.parse import unquote
 root=Path(__file__).resolve().parents[1]
 package=json.loads((root/'apps/desktop/package.json').read_text())
 version=package['version']
-assert version=='0.2.0-alpha.2'
+assert version=='0.2.0-alpha.3'
 tauri=json.loads((root/'apps/desktop/src-tauri/tauri.conf.json').read_text())
 assert tauri['version']==version
 nsis=tauri['bundle']['windows']['nsis']
 assert nsis['installMode']=='currentUser'
 assert nsis['displayLanguageSelector'] is True
+assert 'icons/icon.ico' in tauri['bundle']['icon']
 assert {'English','Farsi'} <= set(nsis['languages'])
 for key, size in [('headerImage',(150,57)),('sidebarImage',(164,314))]:
     image=(root/'apps/desktop/src-tauri'/nsis[key]).read_bytes()
@@ -30,6 +31,15 @@ assert version in (root/'README.md').read_text()
 assert version in (root/'README.fa.md').read_text()
 assert version in (root/'apps/desktop/src/components/TitleBar.tsx').read_text()
 assert "release/0.2.x" in (root/'README.md').read_text()
+app_source=(root/'apps/desktop/src/App.tsx').read_text()
+assert 'document.documentElement.dir = "ltr"' in app_source
+assert '<div className="lanora-app" dir="ltr"' in app_source
+assert 'dir={lang === "fa" ? "rtl" : "ltr"}' not in app_source.split('<div className="lanora-app"')[0]
+css_source=(root/'apps/desktop/src/style.css').read_text()
+fa_rules=re.findall(r'\.lanora-app\[data-lang="fa"\][^{]*\{([^}]+)\}',css_source,re.S)
+assert fa_rules, 'Persian text styles must be scoped to translated components'
+for rule in fa_rules:
+    assert not re.search(r'\b(flex-direction|grid-template|order|position|left|right)\s*:',rule), 'Persian styles must not rearrange the application shell'
 design_system=(root/'docs/DESIGN_SYSTEM.md').read_text()
 for section in ['Color tokens','Typography','Layout and spacing','Shape and elevation','Iconography','Buttons and forms','Dialogs and feedback','Motion and accessibility']:
     assert section in design_system, f'missing design system section: {section}'

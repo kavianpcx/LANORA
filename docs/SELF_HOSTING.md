@@ -1,57 +1,73 @@
-# Run LANORA on your VPS
+# Run LANORA on a Linux VPS
 
-The server runs three Docker containers: Go API, Caddy HTTPS proxy, and EasyTier shared relay. SQLite and TLS certificates live in named volumes. No website or account service is required.
+LANORA's control API, SQLite database, HTTPS proxy, and EasyTier relay run in Docker Compose. Players need only the desktop app, the server address, and the private shared-network code.
 
-## First installation
+## Before you start
 
-You need a Linux VPS, Git, OpenSSL, Docker Engine with the Compose plugin, and permission to use Docker. Install Docker using [its distribution-specific instructions](https://docs.docker.com/engine/install/); the LANORA script does not run an opaque root installer for you.
+You need a Linux VPS, a domain whose DNS A record points to it, Git, OpenSSL, Docker Engine, and the Docker Compose plugin. Open inbound TCP 80 and 443 and TCP/UDP 11010 in both the VPS firewall and the VPS provider firewall. Leave API port 8080 private; do not expose it directly.
 
-Create a DNS A record such as `games.example.com` pointing at your VPS. If you publish an AAAA record, IPv6 must work too. Allow inbound TCP 80/443 and TCP/UDP 11010 in the VPS provider's firewall and operating-system firewall. Do not disable either firewall wholesale. The API's internal port 8080 must not be exposed publicly.
+Install Docker using its official instructions: https://docs.docker.com/engine/install/
 
-```sh
+## Install
+
+Copy these commands into the VPS terminal:
+
+~~~sh
 git clone --branch release/0.2.x https://github.com/kavianpcx/LANORA.git
 cd LANORA
 bash scripts/setup-server.sh
-bash scripts/server.sh status
-```
+~~~
 
-Enter your domain when asked. Setup writes `.env` with private permissions and two independently random secrets, validates Compose quietly and starts the containers. It refuses to replace an existing `.env`. For an existing installation use `server.sh start` instead. If Docker access is denied, fix the Docker installation/permissions; Docker group membership is effectively root access.
+Enter the DNS name when asked, for example games.example.com. The setup script creates a restricted .env file with separate random administrator, relay, and shared-network secrets, then builds and starts the services. It prints the configured player address and shared-network access code. Send both privately to the players.
 
-From another machine, replace the domain below with yours:
+If HTTPS is not ready when the script finishes, check DNS and ports 80/443, then wait for Caddy to obtain its certificate. From a different network, verify the public API:
 
-```sh
+~~~sh
 curl --fail https://games.example.com/api/v1/health
-```
+~~~
 
-Expect JSON with `service: lanora-api` and `status: ok`. Do not add `-k`: a certificate failure must be fixed, not bypassed. Share `https://games.example.com` with players only after this succeeds. A raw VPS IP is not interchangeable with a domain certificate.
+The response should include status "ok". Do not bypass TLS checks with -k.
 
-## Day-to-day commands
+## Check and manage
 
-Run these from the checkout:
+Run these commands from the LANORA checkout:
 
-```sh
+~~~sh
 bash scripts/server.sh status
+bash scripts/server.sh code
 bash scripts/server.sh logs
 bash scripts/server.sh restart
 bash scripts/server.sh stop
 bash scripts/server.sh start
 bash scripts/server.sh update
-```
+~~~
 
-`status` displays container state, API health, local port mappings/listening sockets and the public connection address. It returns nonzero for detected missing/stopped services or failed API checks. Local checks cannot prove internet reachability, a trusted certificate, or a working player-to-player relay path. Docker can publish ports through NAT without a corresponding `ss` listening socket.
+The status command shows container state, local API health, configured address, and port mappings. These are checks from inside the VPS; they do not prove that the address is reachable from a player's network. Test public HTTPS with curl from another network. Status and logs do not print the access code, administrator token, or relay secret. The explicit code command reveals only the shared access code to the local operator.
 
-`logs` shows the last 100 API lines. Raw EasyTier logs can include network information, so they are not printed automatically. Never post `.env`, membership tokens, network configuration files, `docker inspect` output or unredacted relay logs in an issue.
+Update pulls the current branch and rebuilds services without deleting Docker volumes. Do not run docker compose down --volumes if you want to keep the database and certificates.
 
-`update` uses `git pull --ff-only` and rebuilds containers on the current branch. It stops on a Git conflict and never resets local source changes. Stop game sessions and back up first. No command above deletes volumes, databases or certificates. Do not run `docker compose down -v` unless you explicitly intend to erase them.
+## Change or recover the access code
 
-## Backup
+The code is stored in .env with mode 0600. If you need to show the existing code, run:
 
-Stop the API before copying SQLite files so the database and its WAL remain consistent. Keep backups private because they contain room network secrets. Find the actual volume name with `docker volume ls` (Compose prefixes it with the project name). Back up the complete `lanora_data` volume using your Docker/host backup tooling while services are stopped, then run `server.sh start`. Keep the checkout's `.env` in a separate private backup. Test restoration on an isolated server.
+~~~sh
+bash scripts/server.sh code
+~~~
 
-## Common failures
+To rotate it, edit LANORA_SHARED_NETWORK_CODE in .env to a new random value of 16–128 characters and restart:
 
-- Missing Docker/Compose/OpenSSL: install the missing prerequisite, then rerun setup.
-- Existing `.env`: preserve it; run `server.sh start`. Setup intentionally will not overwrite keys.
-- API database permission denied: the image creates `/data` owned by UID 65532. Existing root-owned volumes may need an operator-managed ownership repair after a backup; no automatic recursive permission rewrite is performed.
-- HTTPS fails: check DNS, public ports 80/443, provider firewall, and certificate issuance. Container health alone is insufficient.
-- API succeeds but game fails: check TCP/UDP 11010, client adapter permissions and the game host's virtual IP. See [Troubleshooting](TROUBLESHOOTING.md).
+~~~sh
+docker compose up -d --build
+~~~
+
+The API rotates the EasyTier network name and secret and revokes existing shared-network tokens when it starts with the new code. Standard LANORA clients disconnect on their next rejected heartbeat and must reconnect. Keep the old code private; this does not forcibly stop a modified client that deliberately keeps an old EasyTier process running. Keep a backup of .env in a protected place; it contains the server's private configuration.
+
+## Ports and data
+
+- TCP 80: Caddy certificate challenge and redirect.
+- TCP 443: HTTPS API.
+- TCP and UDP 11010: EasyTier relay.
+- SQLite: persistent lanora_data Docker volume.
+- Caddy certificates: persistent caddy_data and caddy_config volumes.
+
+LANORA does not provide a public website or hosted service. Each server owner operates their own instance.

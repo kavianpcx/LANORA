@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {api, health, normalize, friendlyError} from '../.test-build/api.js';
-test('addresses require HTTPS and contain no embedded credentials or paths',()=>{
+test('addresses require HTTPS except local loopback and reject embedded credentials or paths',()=>{
  assert.equal(normalize('games.example.org:443'),'https://games.example.org');
  assert.equal(normalize('http://localhost:8080'),'http://localhost:8080');
- for(const value of ['', 'http://example.org','https://user:secret@example.org','https://example.org/path','https://example.org?token=secret','file:///tmp']) assert.throws(()=>normalize(value));
+ assert.equal(normalize('http://127.0.0.1:8080'),'http://127.0.0.1:8080');
+ assert.equal(normalize('http://127.42.0.7:8080'),'http://127.42.0.7:8080');
+ assert.equal(normalize('http://[::1]:8080'),'http://[::1]:8080');
+ for(const value of ['', 'http://example.org','http://192.168.1.2:8080','https://user:secret@example.org','https://example.org/path','https://example.org?token=secret','file:///tmp']) assert.throws(()=>normalize(value));
 });
 test('server errors are translated without exposing remote error text',async()=>{
  const original=global.fetch;

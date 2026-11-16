@@ -1,7 +1,21 @@
 # Installation
 
-For the server, follow [Self-hosting](SELF_HOSTING.md). For players, use the explicit published EXE/DEB links and candidate-build status in the [README](../README.md); do not guess a release URL.
+## Windows
 
-Windows 10/11 x64 uses an NSIS installer. The bundle includes EasyTier v2.6.4 and its notices. Windows adapter privileges and firewall behavior still require validation on clean player machines. Linux x64 Debian/Ubuntu uses a DEB; installation grants network capabilities to EasyTier and needs administrator permission. This capability model is unsuitable for untrusted multiuser systems without additional restriction; see [Security](SECURITY.md).
+Download the LANORA NSIS installer from [GitHub Releases](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.3), check its adjacent SHA-256 file, and run it. The installer is per-user. Start LANORA from the Start menu. The current alpha build has been installed and launched by GitHub Actions on a Windows runner; a real Windows virtual-network session is not verified.
 
-Open the installed application, choose a local nickname/avatar, then enter the server owner's HTTPS address. There is no browser app or account registration. First-run and real package-installation evidence are recorded in the [audit](AUDIT_0.2.0.md). For source builds, use [Building](BUILDING.md).
+## Linux
+
+Download the Debian package from the same release and verify its SHA-256 file. Install it with:
+
+~~~sh
+sudo apt install ./LANORA_VERSION_amd64.deb
+~~~
+
+If the file manager saved it under a different name, replace the example filename. Launch LANORA from the app menu. The package configures the required EasyTier network capability.
+
+## Connect
+
+Enter the server HTTPS address and the private access code from the server owner. Choose a display name, click Connect, and wait until EasyTier reports your virtual IP. Share the game host's virtual IP with other players. No account is required.
+
+Public servers must use a valid HTTPS certificate. HTTP is only allowed for loopback development servers.

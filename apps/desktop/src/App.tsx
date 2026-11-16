@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import brand from "./brand.svg";
 import { labels } from "./labels";
-import { api, friendlyError, RequestError } from "./api";
+import { api, friendlyError, normalize, RequestError } from "./api";
 import { avatars, type AvatarKind } from "./components/Avatar";
 import { ProfileFields } from "./components/ProfileFields";
 import { Modal } from "./components/Modal";
@@ -28,9 +28,20 @@ import type {
   ListedRoom,
   ActiveRoom,
   Network,
+  PeerStatus,
 } from "./types";
 import { RoomView } from "./components/RoomView";
 import "./style.css";
+
+function localDeviceId() {
+  const key = "lanora.deviceId";
+  const saved = localStorage.getItem(key);
+  if (saved && /^[a-f0-9]{32}$/.test(saved)) return saved;
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const id = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  localStorage.setItem(key, id);
+  return id;
+}
 
 export default function App() {
   const [lang, setLang] = useState<Lang>(() =>
@@ -53,6 +64,13 @@ export default function App() {
   const [serverInput, setServerInput] = useState(
     () => localStorage.getItem("lanora.desktopServer") || "",
   );
+  const [accessCode, setAccessCode] = useState(
+    () => localStorage.getItem("lanora.sharedCode") || "",
+  );
+  const [connectionStage, setConnectionStage] = useState<
+    "idle" | "server" | "authenticating" | "tunnel" | "failed"
+  >("idle");
+  const [peerStatuses, setPeerStatuses] = useState<PeerStatus[]>([]);
   const {
     server,
     reachable: serverReachable,
@@ -63,6 +81,7 @@ export default function App() {
     failure,
   } = useServer();
   const tunnelBusy = useRef(false);
+  const connectionBusy = useRef(false);
   const roomsBusy = useRef(false);
   const roomsVersion = useRef(0);
   const [publicRooms, setPublicRooms] = useState<ListedRoom[]>([]);
@@ -97,11 +116,29 @@ export default function App() {
     }
     setMode(null);
   }
+  function updateServerAddress(raw: string) {
+    setServerInput(raw);
+    let sameServer = false;
+    try {
+      sameServer = normalize(raw) === localStorage.getItem("lanora.desktopServer");
+    } catch {
+      sameServer = false;
+    }
+    if (!sameServer) {
+      localStorage.removeItem("lanora.sharedCode");
+      setAccessCode("");
+    }
+  }
   useEffect(() => {
     let active = true;
     // Defer to the microtask queue so StrictMode's discarded mount cannot start a request.
     void Promise.resolve().then(() => {
-      if (active && serverInput && localStorage.getItem("lanora.playerName"))
+      if (
+        active &&
+        serverInput &&
+        accessCode &&
+        localStorage.getItem("lanora.playerName")
+      )
         void connect();
     });
     return () => {
@@ -110,7 +147,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     document.documentElement.lang = lang;
-    document.documentElement.dir = lang === "fa" ? "rtl" : "ltr";
+    document.documentElement.dir = "ltr";
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("lanora.language", lang);
     localStorage.setItem("lanora.theme", theme);
@@ -145,7 +182,7 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [server, room]);
   useEffect(() => {
-    if (!room || room.status !== "approved" || !server) return;
+    if (!room || room.roomId === "shared" || room.status !== "approved" || !server) return;
     let active = true;
     let inFlight = false;
     const controller = new AbortController();
@@ -202,7 +239,7 @@ export default function App() {
     };
   }, [room?.roomId, room?.accessToken, room?.status, server]);
   useEffect(() => {
-    if (!room || room.status !== "pending" || !server) return;
+    if (!room || room.roomId === "shared" || room.status !== "pending" || !server) return;
     let active = true;
     let inFlight = false;
     const controller = new AbortController();
@@ -274,6 +311,92 @@ export default function App() {
     };
   }, [room?.roomId, tunnel.running, tunnel.state]);
   useEffect(() => {
+    if (!room || room.roomId !== "shared" || !server) return;
+    let active = true;
+    let inFlight = false;
+    const heartbeat = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const current = await api<{ members: Member[] }>(
+          server,
+          "/api/v1/network/heartbeat",
+          room.accessToken,
+          { virtualIp: tunnel.virtualIp || "" },
+        );
+        if (active)
+          setRoom((old) => (old ? { ...old, members: current.members } : null));
+      } catch (e) {
+        if (
+          active &&
+          e instanceof RequestError &&
+          [401, 403].includes(e.status ?? 0)
+        ) {
+          await invoke("engine_stop").catch(() => {});
+          if (active) {
+            setTunnel({
+              running: false,
+              virtualIp: null,
+              state: "stopped",
+              error: null,
+            });
+            setRoom(null);
+            localStorage.removeItem("lanora.sharedCode");
+            setAccessCode("");
+            setError(friendlyError(e, lang));
+          }
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+    void heartbeat();
+    const timer = window.setInterval(heartbeat, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [room?.roomId, room?.accessToken, server, tunnel.virtualIp, lang]);
+  useEffect(() => {
+    if (!room || !tunnel.running || tunnel.state === "failed") {
+      setPeerStatuses([]);
+      return;
+    }
+    let active = true;
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const peers = await invoke<PeerStatus[]>("engine_peers");
+        if (active) setPeerStatuses(peers);
+      } catch {
+        if (active) setPeerStatuses([]);
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [room?.roomId, tunnel.running, tunnel.state]);
+  useEffect(() => {
+    if (!room || room.roomId !== "shared") return;
+    if (tunnel.state === "tunnel_ready" && tunnel.virtualIp) {
+      setConnectionStage("connected");
+      setNotice(labels[lang].connected);
+      const timer = window.setTimeout(() => {
+        setNotice("");
+        setConnectionStage("idle");
+      }, 1600);
+      return () => window.clearTimeout(timer);
+    }
+    if (tunnel.state === "failed") setConnectionStage("failed");
+  }, [room?.roomId, tunnel.state, tunnel.virtualIp, lang]);
+  useEffect(() => {
     if (
       !room ||
       room.status !== "approved" ||
@@ -323,15 +446,66 @@ export default function App() {
     };
   }, [room?.roomId, room?.status, tunnel.running, tunnel.state, lang]);
   async function connect() {
-    if (checking || room) return;
+    if (connectionBusy.current || checking || busy || room) return;
+    connectionBusy.current = true;
+    setBusy(true);
     setError("");
-    const url = await connectServer(serverInput);
-    if (url) {
+    setConnectionStage("server");
+    try {
+      const url = await connectServer(serverInput);
+      if (!url) {
+        setConnectionStage("failed");
+        return;
+      }
       localStorage.setItem("lanora.desktopServer", url);
-      void loadRooms(url).catch((e) => setError(friendlyError(e, lang)));
+      if (!accessCode.trim()) {
+        setError(t.accessCodeRequired);
+        setConnectionStage("failed");
+        return;
+      }
+      await joinSharedNetwork(url, accessCode);
+    } catch (e) {
+      setError(friendlyError(e, lang));
+      setConnectionStage("failed");
+    } finally {
+      connectionBusy.current = false;
+      setBusy(false);
     }
   }
-  async function startTunnel(id: string, token: string) {
+  async function joinSharedNetwork(url: string, rawCode: string) {
+    const code = rawCode.trim();
+    setConnectionStage("authenticating");
+    const joined = await api<{
+      userId: string;
+      accessToken: string;
+      status: string;
+      network: Network;
+      members: Member[];
+    }>(url, "/api/v1/network/join", undefined, {
+      code,
+      deviceId: localDeviceId(),
+      username: name.trim(),
+    });
+    localStorage.setItem("lanora.sharedCode", code);
+    setAccessCode(code);
+    const active: ActiveRoom = {
+      roomId: "shared",
+      name: labels[lang].sharedNetwork,
+      accessToken: joined.accessToken,
+      role: "member",
+      status: "approved",
+      members: joined.members,
+    };
+    setRoom(active);
+    setConnectionStage("tunnel");
+    await startTunnel("shared", active.accessToken, url, joined.network);
+  }
+  async function startTunnel(
+    id: string,
+    token: string,
+    serverUrl = server,
+    configuredNetwork?: Network,
+  ) {
     if (tunnelBusy.current) return;
     tunnelBusy.current = true;
     setTunnel({
@@ -341,11 +515,15 @@ export default function App() {
       error: null,
     });
     try {
-      const cfg = await api<Network>(
-        server,
-        `/api/v1/rooms/${id}/network`,
-        token,
-      );
+      const cfg =
+        configuredNetwork ??
+        (await api<Network>(
+          serverUrl,
+          id === "shared"
+            ? "/api/v1/network/config"
+            : `/api/v1/rooms/${id}/network`,
+          token,
+        ));
       await invoke("engine_start", { cfg });
       setTunnel({
         running: true,
@@ -384,7 +562,9 @@ export default function App() {
         }
         if (onboarding && onboardingStep === "server") {
           const address = String(data.get("serverAddress") || "").trim();
+          const code = String(data.get("accessCode") || "").trim();
           setServerInput(address);
+          setAccessCode(code);
           if (!address) {
             setOnboarding(false);
             setMode(null);
@@ -393,11 +573,13 @@ export default function App() {
           const url = await connectServer(address);
           if (url) {
             localStorage.setItem("lanora.desktopServer", url);
+            if (code) {
+              await joinSharedNetwork(url, code);
+            } else {
+              setError(t.accessCodeRequired);
+            }
             setOnboarding(false);
             setMode(null);
-            void loadRooms(url).catch((e) =>
-              setError(friendlyError(e, lang)),
-            );
           }
           return;
         }
@@ -479,23 +661,42 @@ export default function App() {
         state: "stopped",
         error: null,
       });
+      let revokeWarning = false;
       try {
         await api(
           server,
-          `/api/v1/rooms/${room.roomId}${room.role === "host" ? "" : "/leave"}`,
+          room.roomId === "shared"
+            ? "/api/v1/network/leave"
+            : `/api/v1/rooms/${room.roomId}${room.role === "host" ? "" : "/leave"}`,
           room.accessToken,
-          undefined,
-          room.role === "host" ? "DELETE" : "POST",
+          room.roomId === "shared" ? {} : undefined,
+          room.roomId === "shared"
+            ? "POST"
+            : room.role === "host"
+              ? "DELETE"
+              : "POST",
         );
       } catch (e) {
         if (
           !(e instanceof RequestError && [401, 404].includes(e.status ?? 0))
         ) {
-          setError(friendlyError(e, lang));
-          return;
+          revokeWarning = true;
         }
       }
+      if (room.roomId === "shared") {
+        localStorage.removeItem("lanora.sharedCode");
+        setAccessCode("");
+      }
       setRoom(null);
+      setConnectionStage("idle");
+      setPeerStatuses([]);
+      if (revokeWarning) {
+        setError(
+          lang === "fa"
+            ? "این دستگاه قطع شد، اما سرور خروج را تأیید نکرد. حضور شما پس از پایان مهلت Heartbeat منقضی می‌شود."
+            : "This device disconnected, but the server could not confirm removal. Your online presence will expire after its heartbeat timeout.",
+        );
+      }
       void loadRooms().catch(() => {});
     } catch (e) {
       setError(friendlyError(e, lang));
@@ -532,26 +733,29 @@ export default function App() {
       <TitleBar
         lang={lang}
         status={
-          checking
+          checking || busy || tunnel.state === "connecting"
             ? "checking"
-            : serverReachable
+            : room && tunnel.running && tunnel.state === "tunnel_ready" && tunnel.virtualIp
               ? "connected"
-              : phase === "failed" || Boolean(server)
+              : tunnel.state === "failed" || phase === "failed" || (server && !serverReachable)
                 ? "failed"
-                : "idle"
+                : serverReachable
+                  ? "server"
+                  : "idle"
         }
         statusLabels={{
           idle: t.disconnected,
           checking: t.checking,
+          server: t.serverReachable,
           connected: t.connected,
-          failed: lang === "fa" ? "سرور پاسخ نمی‌دهد" : "Server unreachable",
+          failed: lang === "fa" ? "اتصال شبکه ناموفق بود" : "Network connection failed",
         }}
         name={name}
         avatar={avatar}
         settingsLabel={t.settings}
         onSettings={() => setMode("settings")}
       />
-      <div className="lanora-app" dir={lang === "fa" ? "rtl" : "ltr"}>
+      <div className="lanora-app" dir="ltr" data-lang={lang}>
         <aside className="app-sidebar">
           <div className="side-brand">
             <img src={brand} alt="" />
@@ -589,15 +793,17 @@ export default function App() {
           >
             <span>02</span>
             <div>
-              <b>{lang === "fa" ? "روم" : "Room"}</b>
+              <b>{lang === "fa" ? "شبکه" : "Network"}</b>
               <small>
                 {room
                   ? room.status === "pending"
                     ? `${room.name} · ${t.pending}`
-                    : room.name
+                    : room.roomId === "shared"
+                      ? t.sharedNetwork
+                      : room.name
                   : lang === "fa"
-                    ? "بسازید یا وارد شوید"
-                    : "Create or join"}
+                    ? "کد دسترسی را وارد کنید"
+                    : "Enter the access code"}
               </small>
             </div>
             {room?.status === "approved" && <Check size={15} />}
@@ -652,7 +858,7 @@ export default function App() {
                 {serverReachable && (
                   <span className="app-verified">
                     <Check size={14} />
-                    {t.connected}
+                    <span dir={lang === "fa" ? "rtl" : "ltr"}>{t.serverReachable}</span>
                   </span>
                 )}
               </div>
@@ -662,9 +868,9 @@ export default function App() {
                   aria-label={t.server}
                   placeholder="https://games.example.com:443"
                   value={serverInput}
-                  disabled={Boolean(room) || checking}
+                  disabled={Boolean(room) || checking || busy}
                   onChange={(e) => {
-                    setServerInput(e.target.value);
+                    updateServerAddress(e.target.value);
                     clearServer();
                     roomsVersion.current++;
                     setPublicRooms([]);
@@ -673,32 +879,70 @@ export default function App() {
                     if (e.key === "Enter") void connect();
                   }}
                 />
+                <input
+                  className="app-server-code"
+                  type="password"
+                  dir="ltr"
+                  aria-label={t.accessCode}
+                  autoComplete="off"
+                  value={accessCode}
+                  placeholder={t.accessCodePlaceholder}
+                  disabled={Boolean(room) || checking || busy}
+                  onChange={(e) => {
+                    setAccessCode(e.target.value);
+                    setError("");
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void connect();
+                  }}
+                />
                 <button
                   className="app-button primary"
                   onClick={() => void connect()}
-                  disabled={checking || Boolean(room)}
+                  disabled={checking || busy || Boolean(room)}
                 >
-                  {checking ? (
+                  {checking || busy ? (
                     <RefreshCw size={17} className="spin" />
                   ) : (
                     <ArrowRight size={17} />
                   )}{" "}
                   {checking
                     ? phase === "connecting"
-                      ? lang === "fa"
-                        ? "اتصال به سرور…"
-                        : "Connecting…"
+                      ? t.checking
                       : t.checking
-                    : t.connect}
+                    : busy
+                      ? connectionStage === "authenticating"
+                        ? t.authenticating
+                        : t.connectingNetwork
+                      : t.connect}
                 </button>
               </div>
               <p className="app-hint">
                 <ShieldCheck size={15} />
-                {t.backendOnly}
+                <span dir={lang === "fa" ? "rtl" : "ltr"}>{t.backendOnly}</span>
               </p>
+              {connectionStage !== "idle" && connectionStage !== "failed" && !room && (
+                <p className="app-connection-progress" role="status" aria-live="polite">
+                  <RefreshCw size={15} className="spin" />
+                  <span dir={lang === "fa" ? "rtl" : "ltr"}>
+                    {connectionStage === "server"
+                      ? t.checking
+                      : connectionStage === "authenticating"
+                        ? t.authenticating
+                        : t.connectingNetwork}
+                  </span>
+                </p>
+              )}
             </section>
             {!room && server && (
-              <>
+              <details
+                className="app-advanced"
+                onToggle={(event) => {
+                  if (event.currentTarget.open)
+                    void loadRooms().catch((e) => setError(friendlyError(e, lang)));
+                }}
+              >
+                <summary>{t.advancedRooms}</summary>
                 <div className="app-toolbar">
                   <div>
                     <span className="app-eyebrow">
@@ -785,12 +1029,13 @@ export default function App() {
                     </div>
                   )}
                 </div>
-              </>
+              </details>
             )}
             {room && (
               <RoomView
                 room={room}
                 tunnel={tunnel}
+                peerStatuses={peerStatuses}
                 lang={lang}
                 busy={busy || tunnelBusy.current}
                 onCopy={(value) =>
@@ -817,27 +1062,31 @@ export default function App() {
             {!server && (
               <div className="app-onboarding">
                 <span>01</span>
-                {t.serverPrompt}
+                <div dir={lang === "fa" ? "rtl" : "ltr"}>{t.serverPrompt}</div>
                 <span>02</span>
-                {lang === "fa"
-                  ? "نام نمایشی خود را در تنظیمات وارد کنید."
-                  : "Set your display name in Settings."}
+                <div dir={lang === "fa" ? "rtl" : "ltr"}>
+                  {lang === "fa"
+                    ? "نام نمایشی خود را در تنظیمات وارد کنید."
+                    : "Set your display name in Settings."}
+                </div>
                 <span>03</span>
-                {lang === "fa"
-                  ? "روم بسازید یا به روم دوستانتان وارد شوید."
-                  : "Create a room or join your friends."}
+                <div dir={lang === "fa" ? "rtl" : "ltr"}>
+                  {lang === "fa"
+                    ? "کد دسترسی را وارد کنید تا خودکار به شبکه وصل شوید."
+                    : "Enter the access code to join the shared network."}
+                </div>
               </div>
             )}
             {error && (
               <div className="app-error" role="alert">
                 <Activity size={16} />
-                {error}
+                <span dir={lang === "fa" ? "rtl" : "ltr"}>{error}</span>
               </div>
             )}
-            {notice && <p className="app-notice">{notice}</p>}
+            {notice && <p className="app-notice" dir={lang === "fa" ? "rtl" : "ltr"}>{notice}</p>}
             <footer className="app-footer">
               <LockKeyhole size={14} />
-              {t.dev}
+              <span dir={lang === "fa" ? "rtl" : "ltr"}>{t.dev}</span>
             </footer>
           </main>
           {mode && (
@@ -960,12 +1209,25 @@ export default function App() {
                             inputMode="url"
                             autoComplete="url"
                             value={serverInput}
-                            disabled={checking}
+                            disabled={checking || busy}
                             onChange={(event) =>
-                              setServerInput(event.target.value)
+                              updateServerAddress(event.target.value)
                             }
                             placeholder="https://games.example.com"
                             autoFocus
+                          />
+                        </label>
+                        <label>
+                          {t.accessCode}
+                          <input
+                            name="accessCode"
+                            type="password"
+                            dir="ltr"
+                            autoComplete="off"
+                            value={accessCode}
+                            disabled={checking || busy}
+                            onChange={(event) => setAccessCode(event.target.value)}
+                            placeholder={t.accessCodePlaceholder}
                           />
                         </label>
                         <button

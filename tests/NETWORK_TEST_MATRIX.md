@@ -1,22 +1,21 @@
-# Network and installation verification matrix
+# Network test matrix
 
-Results are scoped to their environment. A namespace test uses real EasyTier, real adapters and real socket traffic on one Linux runner; it is not two PCs on independent ISPs.
+This matrix records executed automation only. A package build or UI screenshot is not proof of multiplayer connectivity.
 
-| Scenario | Actual result | Evidence / boundary |
+| Scenario | Status | Evidence / limit |
 |---|---|---|
-| Create/join, password, capacity, approval, public/private discovery | Passed | Go SQLite integration tests in GitHub Actions |
-| Pending network access denied, cross-room denial, revoked token denial | Passed | Go authorization regressions |
-| Pending membership cancellation frees capacity | Passed | Go regression in follow-up CI |
-| Distinct real adapter IPv4 addresses | Passed locally in Linux namespaces | `tests/network_smoke.py` in desktop CI |
-| TCP and UDP payload round trips through shared foreign-network relay | Passed locally in Linux namespaces | P2P deliberately disabled; separate relay network identity |
-| Real internet NAT/P2P and relay fallback | Not verified | Needs two PCs on separate connections |
-| Control API offline while tunnel active | Passed in Linux namespaces | Socket payloads after stopping the API process |
-| Underlay disconnect/reconnect | Passed in Linux namespaces | Linux namespace link down/up; not WAN loss on Windows |
-| Docker fresh installation, restart and SQLite persistence | Passed in CI | `tests/compose_smoke.sh`; local HTTPS proxy process, no public DNS/TLS verification |
-| Alpha.2 Windows x64 EXE build and installer smoke test | Passed | [Desktop CI run 43959957135](https://github.com/kavianpcx/LANORA/actions/runs/43959957135): built NSIS, installed silently, checked bundled EasyTier version, launched and closed the installed app on Windows Server 2025 CI |
-| Alpha.2 Ubuntu 24.04 x64 DEB build and install smoke test | Passed | [Desktop CI run 43959957135](https://github.com/kavianpcx/LANORA/actions/runs/43959957135): built and installed package, checked packaged EasyTier capability, launched app and exercised fullscreen restore/close in Xvfb |
-| Windows firewall, adapter permissions and driver cleanup | Not verified | Requires clean Windows 10/11 PCs/VMs and real adapter tests |
-| LAN game Direct IP, broadcast/multicast discovery | Not verified | Record each tested game/version and topology |
-| Fullscreen, maximize/restore, dragging and RTL on physical desktops | Not verified | Custom controls implemented; needs interactive cross-platform validation |
+| Shared access-code authorization and per-device tokens | Automated test | Go API test covers invalid code, same network configuration, bearer authorization, heartbeat, reported IP, and leave revocation |
+| Two clients join the shared network API | Automated Linux integration test | Two independent device IDs join a real local API |
+| Distinct EasyTier virtual IPv4 addresses | Automated Linux integration test | Two network namespaces and actual bundled EasyTier core |
+| TCP and UDP game-like payloads via relay | Automated Linux integration test | Self-hosted EasyTier relay; P2P explicitly disabled |
+| Default route unchanged | Automated Linux integration test | Captures each client's route before and after EasyTier |
+| Client traffic after API stops | Automated Linux integration test | Already joined data plane continues passing TCP and UDP |
+| Linux package installation and desktop launch | GitHub Actions | Debian package installed and app launched under Xvfb |
+| Windows package install and app startup | GitHub Actions | NSIS package installed and native window closed normally |
+| Windows EasyTier tunnel and game traffic | Not verified | No separate Windows test machines available |
+| Two public internet links | Not verified | Local network namespaces are not separate ISPs |
+| Direct P2P/NAT traversal | Not verified | Integration test forces relay transport |
+| Relay through an external VPS and real firewall | Not verified | Local relay test only |
+| Game-specific discovery, broadcast, or multicast | Not verified | Direct IP path is documented; no game matrix run |
+| Public TLS reachability | Not verified here | Must be checked from a network outside the VPS |
 
-See [audit](../docs/AUDIT_0.2.0.md) for the matching source commit, run links, and limits. No test claims universal game compatibility.

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"lanora/services/api/internal/store"
@@ -247,5 +248,139 @@ func TestRejectedMembershipIsNotAnActivePlayer(t *testing.T) {
 	_, loaded := call(t, h, "GET", "/api/v1/rooms/"+id, token, nil)
 	if len(loaded["members"].([]any)) != 1 {
 		t.Fatal("rejected request appears in player list")
+	}
+}
+
+func TestSharedNetworkAuthorizationPresenceAndCleanup(t *testing.T) {
+	t.Setenv("LANORA_SHARED_NETWORK_CODE", "c7a0c4d9b071ec35f8bc1d2a")
+	t.Setenv("LANORA_RELAY_PEER_URL", "tcp://relay.example.org:11010")
+	h := testAPI(t)
+
+	invalidStatus, _ := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"code": "000000000000000000000000",
+		"deviceId": strings.Repeat("a", 32),
+		"username": "Player A",
+	})
+	if invalidStatus != 401 {
+		t.Fatalf("invalid shared code status=%d", invalidStatus)
+	}
+
+	status, first := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"code": "c7a0c4d9b071ec35f8bc1d2a",
+		"deviceId": strings.Repeat("a", 32),
+		"username": "Player A",
+	})
+	if status != 200 {
+		t.Fatalf("shared join status=%d body=%v", status, first)
+	}
+	firstToken := first["accessToken"].(string)
+	firstNetwork := first["network"].(map[string]any)
+	if !strings.HasPrefix(firstNetwork["networkName"].(string), "lanora-") {
+		t.Fatalf("invalid shared network name: %v", firstNetwork)
+	}
+	if len(firstNetwork["networkSecret"].(string)) != 64 {
+		t.Fatal("shared network secret was not created")
+	}
+
+	status, config := call(t, h, "GET", "/api/v1/network/config", firstToken, nil)
+	if status != 200 || config["networkSecret"] != firstNetwork["networkSecret"] {
+		t.Fatalf("authorized shared config status=%d body=%v", status, config)
+	}
+	status, _ = call(t, h, "GET", "/api/v1/network/config", "", nil)
+	if status != 401 {
+		t.Fatalf("unauthorized shared config status=%d", status)
+	}
+
+	status, second := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"code": "c7a0c4d9b071ec35f8bc1d2a",
+		"deviceId": strings.Repeat("b", 32),
+		"username": "Player B",
+	})
+	if status != 200 {
+		t.Fatalf("second shared join status=%d body=%v", status, second)
+	}
+	secondNetwork := second["network"].(map[string]any)
+	if secondNetwork["networkName"] != firstNetwork["networkName"] ||
+		secondNetwork["networkSecret"] != firstNetwork["networkSecret"] {
+		t.Fatal("server clients did not receive the same shared network")
+	}
+
+	status, heartbeat := call(t, h, "POST", "/api/v1/network/heartbeat", firstToken, map[string]any{
+		"virtualIp": "10.126.0.1",
+	})
+	if status != 200 {
+		t.Fatalf("heartbeat status=%d body=%v", status, heartbeat)
+	}
+	members := heartbeat["members"].([]any)
+	if len(members) != 2 {
+		t.Fatalf("active shared members=%d", len(members))
+	}
+	foundIP := false
+	for _, raw := range members {
+		member := raw.(map[string]any)
+		if member["userId"] == first["userId"] {
+			foundIP = member["virtualIp"] == "10.126.0.1" &&
+				member["online"] == true &&
+				member["peerStatus"] == "unknown"
+		}
+	}
+	if !foundIP {
+		t.Fatalf("heartbeat IP or peer status was not represented accurately: %v", members)
+	}
+
+	status, _ = call(t, h, "POST", "/api/v1/network/heartbeat", firstToken, map[string]any{
+		"virtualIp": "127.0.0.1",
+	})
+	if status != 400 {
+		t.Fatalf("loopback virtual IP was accepted: %d", status)
+	}
+	status, _ = call(t, h, "POST", "/api/v1/network/leave", second["accessToken"].(string), nil)
+	if status != 200 {
+		t.Fatalf("shared leave status=%d", status)
+	}
+	status, _ = call(t, h, "POST", "/api/v1/network/heartbeat", second["accessToken"].(string), map[string]any{})
+	if status != 401 {
+		t.Fatalf("departed shared member remained authorized: %d", status)
+	}
+}
+
+
+func TestSharedCodeRotationRevokesExistingTokens(t *testing.T) {
+	t.Setenv("LANORA_SHARED_NETWORK_CODE", "old-code-0123456789abcdef")
+	t.Setenv("LANORA_RELAY_PEER_URL", "tcp://relay.example.org:11010")
+	db, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	before := New(db, logger, "admin-test-token")
+	status, joined := call(t, before, "POST", "/api/v1/network/join", "", map[string]any{
+		"code": "old-code-0123456789abcdef",
+		"deviceId": strings.Repeat("c", 32),
+		"username": "Player C",
+	})
+	if status != 200 {
+		t.Fatalf("join before rotation=%d body=%v", status, joined)
+	}
+
+	t.Setenv("LANORA_SHARED_NETWORK_CODE", "new-code-fedcba9876543210")
+	after := New(db, logger, "admin-test-token")
+	status, _ = call(t, after, "GET", "/api/v1/network/config", joined["accessToken"].(string), nil)
+	if status != 401 {
+		t.Fatalf("old token remained authorized after code rotation: %d", status)
+	}
+	status, rejoined := call(t, after, "POST", "/api/v1/network/join", "", map[string]any{
+		"code": "new-code-fedcba9876543210",
+		"deviceId": strings.Repeat("c", 32),
+		"username": "Player C",
+	})
+	if status != 200 {
+		t.Fatalf("join after code rotation=%d", status)
+	}
+	oldNetwork := joined["network"].(map[string]any)
+	newNetwork := rejoined["network"].(map[string]any)
+	if oldNetwork["networkName"] == newNetwork["networkName"] || oldNetwork["networkSecret"] == newNetwork["networkSecret"] {
+		t.Fatal("code rotation did not rotate the data-plane identity")
 	}
 }

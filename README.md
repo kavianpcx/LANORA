@@ -3,91 +3,78 @@
 
 # LANORA
 
-Play a LAN game with friends who are somewhere else. One friend runs the server on a Linux VPS. Everyone installs the desktop app, enters that server's HTTPS address, picks a name, and creates or joins a room. **No account, login, website, or subscription.**
+**Connect to a private game network, copy the host’s virtual IP, and play.**
 
-**Experimental alpha:** [Download `0.2.0-alpha.2`](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.2). API access, room membership, the EasyTier process, its reported virtual IP, and actual peer reachability are separate states. LANORA never treats a room member or an IP alone as proof of a working game connection. Two independent internet connections and Windows game traffic remain **not verified**. See the [audit and test results](docs/AUDIT_0.2.0.md) and the [desktop design system](docs/DESIGN_SYSTEM.md).
+LANORA is an open-source virtual LAN app for friends who want to play LAN-supported games over the internet. One person runs the server on a Linux VPS. Players install LANORA, enter the server address and its private access code, then connect. No account or website is needed.
 
-[![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![Desktop builds](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE)
+[![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![Desktop builds](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE) [![Pre-release](https://img.shields.io/github/v/release/kavianpcx/LANORA?include_prereleases&label=alpha)](https://github.com/kavianpcx/LANORA/releases)
 
-<p align="center"><img src="docs/screenshots/linux-first-launch.png" alt="LANORA first-launch profile setup, captured from the installed desktop package" width="900"></p>
-<p align="center"><sub>Real screenshot from the installed Ubuntu package in GitHub Actions, not a web mockup.</sub></p>
+## Set up the server
 
-## 1. Server owner: run these commands on your VPS
+You need a Linux VPS with a domain pointed at it, Docker Engine with the Compose plugin, Git, and OpenSSL. Allow inbound TCP ports 80 and 443, plus TCP and UDP port 11010, in both the VPS firewall and the provider firewall.
 
-First install [Docker Engine with Compose](https://docs.docker.com/engine/install/). You also need Git and OpenSSL. Point a domain's DNS record at the VPS. Allow inbound **TCP 80/443 and TCP/UDP 11010** in your VPS firewall.
+Copy these commands into the VPS terminal:
 
-```sh
+~~~sh
 git clone --branch release/0.2.x https://github.com/kavianpcx/LANORA.git
 cd LANORA
 bash scripts/setup-server.sh
-```
+~~~
 
-Enter your domain when asked, for example `games.example.com`. The script creates private secrets and starts the containers. It does not overwrite an existing `.env`.
+Enter your domain when asked. The script creates private secrets, starts the services, and prints a **network access code**. Share the server address and this code privately with players. Check the local service status with:
 
-```sh
+~~~sh
 bash scripts/server.sh status
-curl --fail https://games.example.com/api/v1/health
-```
+~~~
 
-Replace `games.example.com` with **your** domain. Once the HTTPS check succeeds, share `https://games.example.com` with the players. A local healthy container does not prove that the VPS is reachable from the internet.
+The status output hides secrets. To reveal the shared access code later, use 'bash scripts/server.sh code'. From a different internet connection, verify the public API with 'curl -f https://YOUR_DOMAIN/api/v1/health'. Do not use '-k' to bypass a certificate error.
 
-Everyday commands, from the `LANORA` folder:
+## Connect as a player
 
-```sh
-bash scripts/server.sh logs       # recent API logs, without relay credentials
-bash scripts/server.sh restart    # restart services
-bash scripts/server.sh stop       # keep database and certificates
-bash scripts/server.sh update     # fast-forward source and rebuild; keep volumes
-```
+1. Install the Windows or Linux package from [GitHub Releases](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.3).
+2. Open LANORA, choose a display name, and enter the server address and access code from the server owner.
+3. Press **Connect**. LANORA checks the server, authorizes the code, starts EasyTier, and waits for its virtual IP.
+4. Once the virtual IP appears, share that IP with the player hosting the game. Other players enter the host’s virtual IP in the game’s **Direct IP** option.
 
-The VPS manages rooms and relays traffic. App downloads come from GitHub, not your VPS. [Full server guide and backups](docs/SELF_HOSTING.md).
+Players on the same server automatically join one shared network. The separate room tools remain under the advanced section for older room-based setups.
 
-## 2. Players: install the desktop app
+## What this alpha verifies
 
-Download a release package from [LANORA Releases](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.2):
+- The API checks the shared access code before granting a per-device network token.
+- Authorized clients receive the same server-specific EasyTier network configuration.
+- Player presence expires if the app stops sending heartbeats. A member listed as app-online is not necessarily reachable inside the tunnel.
+- The desktop reads its virtual IP from EasyTier and reads peer routes and latency from EasyTier when available. Unknown data stays marked unknown.
+- EasyTier runs without an exit node. LANORA does not change the system’s default internet route or proxy.
+- GitHub Actions builds and launches the Windows installer. Its Linux network test connects two isolated clients through a real EasyTier relay and checks assigned IPs plus TCP and UDP traffic.
 
-- **Windows x64:** Download and run the `.exe` installer. It uses LANORA-branded artwork, offers English or Farsi, and installs for the current Windows user by default.
-- **Ubuntu 24.04 x64:** Download and install the `.deb` package:
+## Limits
 
-```sh
-sudo apt install ./LANORA_0.2.0-alpha.2_amd64.deb
-```
+LANORA is an experimental alpha. The automated Linux network test uses two isolated network namespaces and forces relay transport. Two separate computers on public internet connections, Windows game traffic, direct P2P traversal, relay behavior across real VPS providers, and game-specific LAN discovery have not been verified. Some games require **Direct IP**; broadcast or multicast discovery is not guaranteed.
 
-These are experimental prerelease builds. Check the [audit](docs/AUDIT_0.2.0.md) for the exact tests and limits. Windows adapter privileges, firewall behavior and two-PC gaming have not been verified on independent real machines.
+A working HTTPS API only proves that the control server responds. An EasyTier-assigned IP does not by itself prove that another player can reach it. Check the route status beside each player, then test in the game. Report failures with the details in [Troubleshooting](docs/TROUBLESHOOTING.md).
 
-Linux package installation grants network capabilities to the bundled EasyTier executable. Read the [privilege limitations](docs/SECURITY.md). Windows adapter creation and elevation still need clean-machine validation; do not disable your firewall to work around an error.
+## Build from source
 
-## 3. Connect and play
+For desktop build requirements and commands, see [Building](docs/BUILDING.md). For API and self-hosting details, start with [Getting started](docs/GETTING_STARTED.md) and [Self-hosting](docs/SELF_HOSTING.md).
 
-1. Open LANORA. Pick a local nickname and an avatar. You can change the name, avatar, language and light/dark theme in **Settings**.
-2. Enter the **same HTTPS address** provided by the VPS owner, optionally including its port. Click **Connect to server**. A bare domain is interpreted as HTTPS. A raw IP requires a trusted certificate valid for that IP.
-3. Player **A** creates a room. **B** and **C** select that public room or use its invitation code. If approval is enabled, A approves them.
-4. Wait for EasyTier to report a virtual IP. A hosts the game using its LAN option and shares **A's virtual IP**. B and C enter that address in the game's **Direct IP** option. **Do not enter the VPS IP in the game.**
-5. Verify the game connection. Peer reachability is currently displayed as **unknown**. LAN discovery varies by game; games needing broadcast/multicast may require another compatibility approach.
-
-The HTTPS API is the **control plane**: rooms, permissions and configuration. EasyTier v2.6.4 is the **data plane**: a separate encrypted virtual network per room, using direct peers where possible or the self-hosted relay. LANORA does not configure an internet exit node or replace the default route. Default public STUN discovery is disabled in the candidate client; restrictive NATs may depend on the VPS relay.
-
-## Development and documentation
-
-| Folder | Purpose |
-|---|---|
-| `apps/desktop` | Tauri/Rust engine lifecycle; React/TypeScript desktop UI and bundled fonts |
-| `services/api` | Go/SQLite room API; no account system |
-| `deploy/docker`, `docker-compose.yml` | API image, Caddy HTTPS and EasyTier relay |
-| `scripts` | Guided VPS setup and day-to-day management |
-| `tests` | Deployment, command-contract and real local network tests |
-
-```sh
+~~~sh
 cd apps/desktop
 npm ci
 npm test
 npm run build
-cd ../../services/api
-go test -race ./...
-```
+~~~
 
-Native builds need additional tools and pinned EasyTier resources. See [Building](docs/BUILDING.md), [Architecture](docs/ARCHITECTURE.md), [Networking](docs/NETWORKING.md), [API](docs/API.md), [Configuration](docs/CONFIGURATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Roadmap](docs/ROADMAP.md), [FAQ](docs/FAQ.md), and [Contributing](CONTRIBUTING.md).
+The Windows NSIS installer and Linux Debian package are built by GitHub Actions. Releases include SHA-256 files for downloaded packages. Do not install a package whose checksum does not match.
 
-Known alpha gaps include Windows privilege handling, real internet P2P/game validation, live peer-to-member mapping, crash recovery and data-plane revocation of previously disclosed room secrets. Do not use this alpha as a security boundary against untrusted players. See [Security](docs/SECURITY.md).
+## Project
 
-LANORA's own code is [MIT licensed](LICENSE). EasyTier and other third-party code retain their own licenses. Read [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) before redistributing installers.
+- [Network architecture](docs/NETWORKING.md)
+- [API reference](docs/API.md)
+- [Configuration](docs/CONFIGURATION.md)
+- [Security](docs/SECURITY.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Contributing](CONTRIBUTING.md)
+- [Third-party licenses](THIRD_PARTY_LICENSES.md)
+
+LANORA is distributed under the [MIT License](LICENSE). EasyTier is a separately distributed LGPL-3.0 component; see [third-party notices](THIRD_PARTY_LICENSES.md).

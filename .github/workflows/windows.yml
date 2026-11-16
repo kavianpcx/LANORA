@@ -1,7 +1,7 @@
 name: Desktop alpha validation
 on:
   push:
-    branches: [main]
+    branches: [main, release/0.2.x]
     paths:
       - 'apps/desktop/**'
       - 'services/api/**'
@@ -186,3 +186,80 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/deb/*.deb
             apps/desktop/src-tauri/target/release/bundle/deb/*.deb.sha256
           if-no-files-found: error
+
+  server-validation:
+    name: API and VPS command checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.4'
+          cache-dependency-path: services/api/go.sum
+      - name: Verify Go formatting, dependencies and API tests
+        working-directory: services/api
+        run: |
+          test -z "$(gofmt -l cmd internal)"
+          GOWORK=off go mod verify
+          GOWORK=off go test -mod=readonly -race ./...
+      - name: Verify server commands, repository, and Compose
+        run: |
+          bash -n scripts/setup-server.sh scripts/server.sh tests/compose_smoke.sh
+          python3 tests/server_commands_test.py
+          python3 tests/check_repository.py
+          bash tests/compose_smoke.sh
+      - name: Clean up smoke deployment
+        if: always()
+        env:
+          LANORA_PUBLIC_HOST: cleanup.invalid
+          LANORA_ADMIN_TOKEN: cleanup-only-token-not-used-for-services
+          LANORA_RELAY_SECRET: 0000000000000000000000000000000000000000000000000000000000000000
+          LANORA_RELAY_PEER_URL: tcp://127.0.0.1:11010
+        run: docker compose down
+
+  prerelease:
+    name: Publish verified alpha packages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release/0.2.x'
+    needs: [windows, linux, server-validation]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Download Windows installer
+        uses: actions/download-artifact@v4
+        with:
+          name: lanora-windows-x64-prerelease
+          path: dist/windows
+      - name: Download Linux package
+        uses: actions/download-artifact@v4
+        with:
+          name: lanora-linux-x64-prerelease
+          path: dist/linux
+      - name: Verify package checksums and unused tag
+        shell: bash
+        run: |
+          (cd dist/windows && sha256sum --check ./*.sha256)
+          (cd dist/linux && sha256sum --check ./*.sha256)
+          tag=v0.2.0-alpha.3
+          if git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null; then
+            echo "Refusing to overwrite existing tag $tag"
+            exit 1
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing release $tag"
+            exit 1
+          fi
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v0.2.0-alpha.3 \
+            dist/windows/*.exe dist/windows/*.sha256 \
+            dist/linux/*.deb dist/linux/*.sha256 \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "LANORA 0.2.0-alpha.3" \
+            --notes-file docs/releases/0.2.0-alpha.3.md

@@ -28,14 +28,18 @@ import (
 )
 
 type API struct {
-	db         *store.DB
-	log        *slog.Logger
-	adminToken string
-	origins    map[string]bool
-	mu         sync.Mutex
-	joinMu     sync.Mutex
-	attempts   map[string][]time.Time
-	events     map[string]map[chan []byte]bool
+	db                    *store.DB
+	log                   *slog.Logger
+	adminToken            string
+	origins               map[string]bool
+	mu                    sync.Mutex
+	joinMu                sync.Mutex
+	attempts              map[string][]time.Time
+	events                map[string]map[chan []byte]bool
+	sharedNetworkReady    bool
+	sharedNetworkCodeHash string
+	sharedNetworkName     string
+	sharedNetworkSecret   string
 }
 type principal struct {
 	UserID, Username, Role string
@@ -79,8 +83,13 @@ func New(db *store.DB, log *slog.Logger, admin string) http.Handler {
 		}
 	}
 	a := &API{db: db, log: log, adminToken: admin, origins: origins, attempts: map[string][]time.Time{}, events: map[string]map[chan []byte]bool{}}
+	a.configureSharedNetwork(env("LANORA_SHARED_NETWORK_CODE", ""))
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", a.health)
+	mux.HandleFunc("POST /api/v1/network/join", a.joinSharedNetwork)
+	mux.HandleFunc("GET /api/v1/network/config", a.sharedNetworkConfig)
+	mux.HandleFunc("POST /api/v1/network/heartbeat", a.sharedNetworkHeartbeat)
+	mux.HandleFunc("POST /api/v1/network/leave", a.leaveSharedNetwork)
 	mux.HandleFunc("POST /api/v1/rooms", a.createRoom)
 	mux.HandleFunc("GET /api/v1/rooms", a.listRooms)
 	mux.HandleFunc("POST /api/v1/rooms/join", a.joinRoom)
@@ -785,7 +794,7 @@ func inviteCode() (string, error) {
 func rateLimit(a *API, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		limited := r.Method == http.MethodPost && (p == "/api/v1/rooms/join" || p == "/api/v1/rooms")
+		limited := r.Method == http.MethodPost && (p == "/api/v1/rooms/join" || p == "/api/v1/rooms" || p == "/api/v1/network/join")
 		if !limited {
 			next.ServeHTTP(w, r)
 			return
