@@ -83,7 +83,17 @@ export function RoomView({
               </button>
             )}
           </div>
-          <p>{tunnel.virtualIp ? t.peerCaution : t.waitingIp}</p>
+          <p>
+            {tunnel.virtualIp
+              ? t.peerCaution
+              : tunnel.state === "failed"
+                ? lang === "fa"
+                  ? "نصب EasyTier و مجوز آداپتور شبکه را بررسی کنید، سپس دوباره تلاش کنید."
+                  : "Check the EasyTier installation and adapter permissions, then retry."
+                : tunnel.running
+                  ? t.waitingIp
+                  : t.stopped}
+          </p>
         </div>
         <div>
           <span className="app-card-icon">

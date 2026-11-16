@@ -50,6 +50,7 @@ export default function App() {
       : "fox";
   });
   const [roomsLoading, setRoomsLoading] = useState(false);
+  const [roomsFailed, setRoomsFailed] = useState(false);
   const [serverInput, setServerInput] = useState(
     () => localStorage.getItem("lanora.desktopServer") || "",
   );
@@ -121,7 +122,13 @@ export default function App() {
     setRoomsLoading(true);
     try {
       const result = await api<{ rooms: ListedRoom[] }>(url, "/api/v1/rooms");
-      if (generation === roomsVersion.current) setPublicRooms(result.rooms);
+      if (generation === roomsVersion.current) {
+        setPublicRooms(result.rooms);
+        setRoomsFailed(false);
+      }
+    } catch (error) {
+      if (generation === roomsVersion.current) setRoomsFailed(true);
+      throw error;
     } finally {
       roomsBusy.current = false;
       setRoomsLoading(false);
@@ -156,6 +163,9 @@ export default function App() {
       } catch (e) {
         if (active) {
           setError(friendlyError(e, lang));
+          setRoom((old) =>
+            old ? { ...old, members: old.members ?? [] } : null,
+          );
           if (
             e instanceof RequestError &&
             [401, 403, 404].includes(e.status ?? 0)
@@ -403,8 +413,12 @@ export default function App() {
           room.role === "host" ? "DELETE" : "POST",
         );
       } catch (e) {
-        setError(friendlyError(e, lang));
-        return;
+        if (
+          !(e instanceof RequestError && [401, 404].includes(e.status ?? 0))
+        ) {
+          setError(friendlyError(e, lang));
+          return;
+        }
       }
       setRoom(null);
       void loadRooms().catch(() => {});
@@ -634,11 +648,17 @@ export default function App() {
                   </div>
                 </div>
                 <div className="app-room-list">
-                  {roomsLoading ? (
+                  {roomsLoading && publicRooms.length === 0 ? (
                     <div className="skeleton" role="status">
                       {lang === "fa"
                         ? "در حال خواندن روم‌ها…"
                         : "Loading rooms…"}
+                    </div>
+                  ) : roomsFailed && publicRooms.length === 0 ? (
+                    <div className="app-empty" role="alert">
+                      {lang === "fa"
+                        ? "خواندن روم‌ها ناموفق بود؛ تازه‌سازی را بزنید."
+                        : "Could not load rooms. Choose Refresh to retry."}
                     </div>
                   ) : publicRooms.length ? (
                     publicRooms.map((r) => (

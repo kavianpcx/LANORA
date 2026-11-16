@@ -9,6 +9,13 @@ on:
       - '.github/workflows/windows.yml'
       - 'THIRD_PARTY_LICENSES.md'
   pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - 'services/api/**'
+      - 'tests/network_smoke.py'
+      - 'tests/linux_desktop_smoke.sh'
+      - '.github/workflows/windows.yml'
+      - 'THIRD_PARTY_LICENSES.md'
   workflow_dispatch:
 permissions:
   contents: read
