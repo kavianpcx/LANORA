@@ -56,6 +56,23 @@ jobs:
       - name: Build Windows installer
         working-directory: apps/desktop
         run: npm run tauri build -- --bundles nsis
+      - name: Install and launch Windows package
+        shell: pwsh
+        run: |
+          $installer = (Get-ChildItem apps/desktop/src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1).FullName
+          $destination = "$env:RUNNER_TEMP\LANORA"
+          $install = Start-Process $installer -ArgumentList '/S', "/D=$destination" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw 'Installer failed' }
+          $app = Get-ChildItem $destination -Filter 'lanora-desktop.exe' -Recurse | Select-Object -First 1
+          if (!$app) { throw 'Installed application executable is missing' }
+          $core = Get-ChildItem $destination -Filter 'easytier-core.exe' -Recurse | Select-Object -First 1
+          if (!$core) { throw 'Installed EasyTier is missing' }
+          & $core.FullName --version
+          $process = Start-Process $app.FullName -PassThru
+          Start-Sleep -Seconds 5
+          if ($process.HasExited) { throw 'Installed app exited during startup' }
+          if (!$process.CloseMainWindow()) { Stop-Process -Id $process.Id; throw 'No native window available for close test' }
+          if (!$process.WaitForExit(15000)) { Stop-Process -Id $process.Id; throw 'Normal window close did not exit the app' }
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
@@ -69,7 +86,7 @@ jobs:
       - name: Install Tauri Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libcap2-bin
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libcap2-bin xvfb xdotool imagemagick
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
@@ -106,6 +123,14 @@ jobs:
           go build -o ../../lanora-api-test ./cmd/lanora-api
           cd ../..
           sudo python3 tests/network_smoke.py apps/desktop/src-tauri/resources/easytier/easytier-core apps/desktop/src-tauri/resources/easytier/easytier-cli ./lanora-api-test
+      - name: Format native source for review
+        working-directory: apps/desktop/src-tauri
+        run: |
+          cargo fmt
+          echo FORMAT_RUST_START
+          base64 -w0 src/main.rs
+          echo
+          echo FORMAT_RUST_END
       - name: Native regression tests
         working-directory: apps/desktop/src-tauri
         run: cargo test
@@ -118,6 +143,20 @@ jobs:
           test -n "$deb"
           dpkg-deb -c "$deb" | grep -q 'easytier-core'
           dpkg-deb --ctrl-tarfile "$deb" | tar -tf - | grep -q postinst
+      - name: Install and launch Linux package
+        run: |
+          deb=$(find apps/desktop/src-tauri/target/release/bundle/deb -name '*.deb' -print -quit)
+          sudo apt-get install -y "$PWD/$deb"
+          package=$(dpkg-deb -f "$deb" Package)
+          core=$(dpkg -L "$package" | grep '/easytier-core$')
+          getcap "$core" | grep -q cap_net_admin
+          xvfb-run -a -s '-screen 0 1280x900x24' bash tests/linux_desktop_smoke.sh
+      - name: Upload native screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanora-linux-native-screenshot
+          path: native-startup.png
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: lanora-linux-x64-prerelease

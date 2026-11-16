@@ -16,10 +16,27 @@ jobs:
         with:
           go-version: '1.27.4'
           cache-dependency-path: services/api/go.mod
+      - name: Resolve and verify Go dependency checksums
+        working-directory: services/api
+        run: |
+          GOWORK=off go mod tidy
+          gofmt -w cmd internal
+          echo FORMAT_GO_START
+          find cmd internal -name '*.go' -print0 | tar --null -T - -czf - | base64 -w0
+          echo
+          echo FORMAT_GO_END
+          echo LOCK_GO_MOD_START
+          base64 -w0 go.mod
+          echo
+          echo LOCK_GO_MOD_END
+          echo LOCK_GO_SUM_START
+          base64 -w0 go.sum
+          echo
+          echo LOCK_GO_SUM_END
       - run: go test -race ./...
         working-directory: services/api
   compose-config:
-    name: Compose configuration
+    name: Fresh Docker deployment
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

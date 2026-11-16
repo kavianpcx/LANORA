@@ -59,3 +59,13 @@ func TestRejectTrailingJSON(t *testing.T) {
  w:=httptest.NewRecorder();h.ServeHTTP(w,r)
  if w.Code!=400{t.Fatalf("trailing JSON accepted: %d",w.Code)}
 }
+
+func TestPendingMemberCanCancel(t *testing.T) {
+ h:=testAPI(t)
+ _,host:=call(t,h,"POST","/api/v1/rooms","",map[string]any{"name":"Approval","username":"Host","requireApproval":true,"maxPlayers":2})
+ _,guest:=call(t,h,"POST","/api/v1/rooms/join","",map[string]any{"inviteCode":host["inviteCode"],"username":"Guest"})
+ status,_:=call(t,h,"POST","/api/v1/rooms/"+host["roomId"].(string)+"/leave",guest["accessToken"].(string),nil)
+ if status!=200{t.Fatalf("pending cancellation=%d",status)}
+ status,_=call(t,h,"POST","/api/v1/rooms/join","",map[string]any{"inviteCode":host["inviteCode"],"username":"Next"})
+ if status!=200{t.Fatalf("cancel did not free capacity: %d",status)}
+}

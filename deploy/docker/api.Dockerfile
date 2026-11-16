@@ -2,8 +2,9 @@ FROM golang:1.27.4-alpine AS build
 WORKDIR /src
 COPY services/api/go.mod ./services/api/go.mod
 WORKDIR /src/services/api
-RUN go mod download
+RUN go mod download all
 COPY services/api/ .
+RUN go mod tidy
 RUN mkdir -p /out/data
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/lanora-api ./cmd/lanora-api
 

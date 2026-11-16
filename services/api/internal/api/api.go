@@ -96,7 +96,16 @@ func (a *API) networkConfig(w http.ResponseWriter,r *http.Request){
 	writeJSON(w,200,map[string]string{"networkName":"lanora-"+id,"networkSecret":secret,"peerUrl":peer})
 }
 
-func (a *API) leaveRoom(w http.ResponseWriter,r *http.Request){ p,ok:=a.authenticate(w,r); if !ok{return}; id:=r.PathValue("id"); if p.RoomID!=id {writeErr(w,403,"forbidden","دسترسی مجاز نیست");return}; if p.Role=="host" {writeErr(w,409,"host_must_close","مدیر روم باید روم را ببندد");return}; _,e:=a.db.Exec(`DELETE FROM members WHERE room_id=? AND user_id=?`,id,p.UserID); if e!=nil {serverError(w,e);return}; a.publish(id,"member.left",map[string]any{"userId":p.UserID}); writeJSON(w,200,map[string]any{"status":"left"}) }
+func (a *API) leaveRoom(w http.ResponseWriter,r *http.Request){
+ raw:=strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"),"Bearer "))
+ var p principal
+ if raw=="" {writeErr(w,401,"unauthorized","Room token required");return}
+ if e:=a.db.QueryRow(`SELECT user_id,role,room_id FROM members WHERE token_hash=?`,hash(raw)).Scan(&p.UserID,&p.Role,&p.RoomID);e!=nil{writeErr(w,401,"unauthorized","Invalid membership");return}
+ id:=r.PathValue("id");if p.RoomID!=id{writeErr(w,403,"forbidden","Wrong room");return}
+ if p.Role=="host"{writeErr(w,409,"host_must_close","The host must close the room");return}
+ if _,e:=a.db.Exec(`DELETE FROM members WHERE room_id=? AND user_id=?`,id,p.UserID);e!=nil{serverError(w,e);return}
+ a.publish(id,"member.left",map[string]any{"userId":p.UserID});writeJSON(w,200,map[string]string{"status":"left"})
+}
 
 func (a *API) approve(w http.ResponseWriter,r *http.Request){ p,ok:=a.authenticate(w,r); if !ok{return}; id:=r.PathValue("id"); if p.RoomID!=id||p.Role!="host" {writeErr(w,403,"host_required","فقط میزبان می‌تواند درخواست را بررسی کند");return}; var in struct{ UserID string `json:"userId"`; Approve bool `json:"approve"` }; if !decode(w,r,&in){return}; status:="rejected"; if in.Approve {status="approved"}; res,e:=a.db.Exec(`UPDATE members SET status=? WHERE room_id=? AND user_id=? AND status='pending'`,status,id,in.UserID); if e!=nil {serverError(w,e);return}; n,_:=res.RowsAffected(); if n==0 {writeErr(w,404,"pending_member_not_found","درخواست معلق پیدا نشد");return}; a.publish(id,"member.reviewed",map[string]any{"userId":in.UserID,"status":status}); writeJSON(w,200,map[string]string{"status":status}) }
 
