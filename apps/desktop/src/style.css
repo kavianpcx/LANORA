@@ -50,6 +50,10 @@ select {
 .lanora-app[dir="rtl"] {
   font-family: Vazirmatn, "Segoe UI", sans-serif;
 }
+.lanora-app[dir="rtl"] :is(.side-label, .app-breadcrumb, .app-eyebrow) {
+  font-family: Vazirmatn, "Segoe UI", sans-serif;
+  letter-spacing: normal;
+}
 .app-header {
   height: 76px;
   background: var(--surface);
