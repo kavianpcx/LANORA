@@ -32,4 +32,9 @@ jobs:
       - run: python3 tests/check_repository.py
       - run: bash tests/compose_smoke.sh
       - if: always()
+        env:
+          LANORA_PUBLIC_HOST: cleanup.invalid
+          LANORA_ADMIN_TOKEN: cleanup-only-token-not-used-for-services
+          LANORA_RELAY_SECRET: 0000000000000000000000000000000000000000000000000000000000000000
+          LANORA_RELAY_PEER_URL: tcp://127.0.0.1:11010
         run: docker compose down
