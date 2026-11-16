@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 export WEBKIT_DISABLE_DMABUF_RENDERER=1
+# Xvfb has no usable accelerated compositor. Keep this override in the
+# headless test, rather than slowing down every installed Linux client.
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+export LIBGL_ALWAYS_SOFTWARE=1
 openbox --sm-disable >/dev/null 2>&1 &
 wm_pid=$!
 lanora-desktop &
@@ -9,7 +13,7 @@ trap 'kill "$app_pid" "$wm_pid" 2>/dev/null || true' EXIT
 window=''
 for _ in $(seq 1 30); do
   kill -0 "$app_pid"
-  window=$(xdotool search --onlyvisible --pid "$app_pid" --name LANORA 2>/dev/null | head -n 1 || true)
+  window=$(xdotool search --all --onlyvisible --pid "$app_pid" --name LANORA 2>/dev/null | head -n 1 || true)
   [[ -z "$window" ]] || break
   sleep 1
 done
@@ -28,7 +32,9 @@ for _ in $(seq 1 10); do
   if xprop -id "$window" _NET_WM_STATE | grep -q _NET_WM_STATE_FULLSCREEN; then break; fi
   sleep 1
 done
-xprop -id "$window" _NET_WM_STATE | grep -q _NET_WM_STATE_FULLSCREEN
+xprop -id "$window" _NET_WM_STATE | grep -q _NET_WM_STATE_FULLSCREEN || {
+  echo 'Frontend F11 did not enter fullscreen; check screenshot and WebKit startup'; exit 1;
+}
 xdotool key F11
 sleep 1
 if xprop -id "$window" _NET_WM_STATE | grep -q _NET_WM_STATE_FULLSCREEN; then echo 'Fullscreen restore failed';exit 1;fi
