@@ -176,7 +176,9 @@ jobs:
       - name: Generate package SHA-256
         run: |
           deb=$(find apps/desktop/src-tauri/target/release/bundle/deb -name '*.deb' -type f -print -quit)
-          sha256sum "$deb" > "$deb.sha256"
+          deb_dir=$(dirname "$deb")
+          deb_name=$(basename "$deb")
+          (cd "$deb_dir" && sha256sum "$deb_name" > "$deb_name.sha256" && sha256sum --check "$deb_name.sha256")
       - uses: actions/upload-artifact@v4
         with:
           name: lanora-linux-x64-prerelease

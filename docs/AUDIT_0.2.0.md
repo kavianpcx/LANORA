@@ -24,6 +24,7 @@ The client does not configure an exit node or replace the system default route. 
 | WebSocket subscriptions could linger after close/revocation | Bound ping/read lifetimes, reauthorize, and remove subscriptions. |
 | Fresh API image had missing module checksums and unclear volume ownership | Resolve module sums, create the data directory for the non-root API user, add health checks, and test persistence. |
 | VPS setup and status were too opaque | Add simple setup and `server.sh` status/log/restart/stop/update commands without deleting persistent volumes or printing secrets. |
+| Linux SHA-256 sidecar embedded a CI workspace-relative path that failed after download | Generate the sidecar from the package directory using the basename and validate it with `sha256sum --check` before artifact upload. Rebuild both release packages from the corrected workflow. |
 
 The EasyTier CLI/configuration was checked against the pinned [v2.6.4 source](https://github.com/EasyTier/EasyTier/tree/v2.6.4). The installer uses Tauri 2's documented NSIS configuration and bundled license-file path.
 
