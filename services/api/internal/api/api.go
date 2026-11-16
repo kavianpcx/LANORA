@@ -301,7 +301,10 @@ func (a *API) joinRoom(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 403, "room_closed", "ورود به روم بسته است")
 		return
 	}
-	_ = a.db.QueryRow(`SELECT COUNT(*) FROM members WHERE room_id=? AND status IN ('approved','pending')`, rm.ID).Scan(&count)
+	if e = a.db.QueryRow(`SELECT COUNT(*) FROM members WHERE room_id=? AND status IN ('approved','pending')`, rm.ID).Scan(&count); e != nil {
+		serverError(w, e)
+		return
+	}
 	if count >= rm.MaxPlayers {
 		writeErr(w, 409, "room_full", "ظرفیت روم تکمیل است")
 		return
@@ -365,14 +368,10 @@ func (a *API) membership(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 403, "forbidden", "دسترسی مجاز نیست")
 		return
 	}
-	out := map[string]any{"status": status, "userId": p.UserID}
-	if status == "approved" {
-		var secret string
-		if e = a.db.QueryRow(`SELECT network_secret FROM rooms WHERE id=?`, p.RoomID).Scan(&secret); e == nil {
-			out["networkSecret"] = secret
-		}
-	}
-	writeJSON(w, 200, out)
+	// Membership polling is used frequently to observe approval/rejection. Keep
+	// tunnel credentials on the dedicated network endpoint so they are not
+	// copied into routine status responses or client caches.
+	writeJSON(w, 200, map[string]string{"status": status, "userId": p.UserID})
 }
 
 // Only approved room members receive tunnel credentials. The relay is configured

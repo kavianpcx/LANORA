@@ -25,7 +25,9 @@ export function RoomView({
     <section className="app-room">
       <div className="app-room-top">
         <div>
-          <span className="app-eyebrow">YOUR ROOM</span>
+          <span className="app-eyebrow">
+            {lang === "fa" ? "روم شما" : "YOUR ROOM"}
+          </span>
           <h2>{room.name}</h2>
           <p>{room.status === "pending" ? t.pending : t.joined}</p>
         </div>

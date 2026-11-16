@@ -1,30 +1,38 @@
 :root {
   font-family: Inter, "Segoe UI", sans-serif;
-  color: #1d2634;
-  background: #f5f6f2;
+  color: #182135;
+  background: #111725;
   font-synthesis: none;
-  --bg: #f5f6f2;
+  --bg: #f2f4f9;
   --surface: #fff;
-  --ink: #1d2634;
-  --muted: #637082;
-  --line: #e1e6e3;
-  --accent: #3557c7;
-  --accent-soft: #edf1ff;
-  --success: #16785d;
-  --danger: #bf4b52;
-  --shadow: 0 16px 45px #2639580c;
+  --surface-raised: #fff;
+  --surface-quiet: #edf0f7;
+  --ink: #182135;
+  --muted: #5c6578;
+  --line: #d9deea;
+  --accent: #4355db;
+  --accent-soft: #e7eaff;
+  --button-fg: #fff;
+  --lime: #caef5c;
+  --success: #14785b;
+  --danger: #bd484d;
+  --shadow: 0 18px 42px #18213512;
 }
 :root[data-theme="dark"] {
-  --bg: #151c27;
-  --surface: #202b39;
-  --ink: #f3f5f6;
-  --muted: #b7c3cf;
-  --line: #3b495a;
-  --accent: #a2b4ff;
-  --accent-soft: #2d3b56;
-  --success: #78c7aa;
-  --danger: #ffa0a4;
-  --shadow: 0 18px 40px #050a1580;
+  --bg: #111725;
+  --surface: #192234;
+  --surface-raised: #202b40;
+  --surface-quiet: #232f45;
+  --ink: #f1f4fc;
+  --muted: #b4bfd1;
+  --line: #33415c;
+  --accent: #a7b1ff;
+  --accent-soft: #2a3554;
+  --button-fg: #12192b;
+  --lime: #caef5c;
+  --success: #81d2ae;
+  --danger: #ffaaa9;
+  --shadow: 0 18px 42px #05091475;
 }
 * {
   box-sizing: border-box;
@@ -43,28 +51,17 @@ select {
   background: var(--bg);
   color: var(--ink);
   font:
-    14px/1.6 Inter,
+    14px/1.55 Inter,
     "Segoe UI",
     sans-serif;
 }
 .lanora-app[dir="rtl"] {
   font-family: Vazirmatn, "Segoe UI", sans-serif;
 }
-.lanora-app[dir="rtl"] :is(.side-label, .app-breadcrumb, .app-eyebrow) {
+.lanora-app[dir="rtl"] :is(.side-label, .app-eyebrow) {
   font-family: Vazirmatn, "Segoe UI", sans-serif;
   letter-spacing: normal;
 }
-.app-header {
-  height: 76px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
-  padding: 0 clamp(28px, 5vw, 72px);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.app-brand,
-.app-header-actions,
 .app-section-title,
 .app-actions,
 .app-server-form,
@@ -78,12 +75,6 @@ select {
   align-items: center;
   gap: 13px;
 }
-.app-brand b {
-  font:
-    750 16px Inter,
-    sans-serif;
-  letter-spacing: 0.14em;
-}
 .app-logo,
 .app-card-icon,
 .app-game-icon {
@@ -96,14 +87,6 @@ select {
   place-items: center;
   flex: none;
 }
-.app-header-actions {
-  gap: 17px;
-}
-.app-api {
-  font-size: 12px;
-  color: var(--muted);
-}
-.app-api.ready,
 .app-verified {
   color: var(--success);
 }
@@ -133,13 +116,14 @@ select {
   letter-spacing: 0.12em;
   color: var(--accent);
 }
-.app-live-dot {
+.app-brand-dot {
   display: inline-block;
-  background: #b5d46a;
-  width: 7px;
-  height: 7px;
+  background: var(--lime);
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   margin-inline-end: 6px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--lime) 18%, transparent);
 }
 .app-hero h1 {
   font-size: clamp(32px, 4vw, 48px);
@@ -242,11 +226,8 @@ select {
 }
 .app-button.primary {
   background: var(--accent);
-  color: white;
+  color: var(--button-fg);
   box-shadow: 0 5px 13px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-:root[data-theme="dark"] .app-button.primary {
-  color: #152236;
 }
 .app-button.secondary {
   background: var(--surface);
@@ -589,6 +570,73 @@ select {
   margin-inline-start: auto;
   color: var(--muted);
 }
+.onboarding-progress {
+  display: grid;
+  grid-template-columns: 30px minmax(28px, 1fr) 30px auto;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 18px;
+  color: var(--muted);
+}
+.onboarding-progress > span {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+.onboarding-progress > span.active,
+.onboarding-progress > span.done {
+  color: var(--button-fg);
+  background: var(--accent);
+  border-color: transparent;
+}
+.onboarding-progress > i {
+  height: 1px;
+  background: var(--line);
+}
+.onboarding-progress > small {
+  white-space: nowrap;
+}
+.onboarding-copy {
+  color: var(--muted);
+  margin: 0 0 5px;
+  max-width: 42ch;
+}
+.app-help-toggle {
+  min-height: 40px;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  text-align: start;
+  cursor: pointer;
+  font-weight: 600;
+}
+.app-help-panel {
+  padding: 13px;
+  border-radius: 12px;
+  background: var(--surface-quiet);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.app-help-panel p {
+  margin: 0 0 8px;
+}
+.app-help-panel code {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font: 12px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.onboarding-back {
+  justify-self: start;
+}
 .spin {
   animation: spin 1s linear infinite;
 }
@@ -600,9 +648,6 @@ select {
 @media (max-width: 760px) {
   body {
     min-width: 360px;
-  }
-  .app-header {
-    padding: 0 20px;
   }
   .app-main {
     padding: 32px 18px;
@@ -635,32 +680,6 @@ select {
     animation: none !important;
     transition: none !important;
   }
-}
-.app-profile {
-  border: 1px solid var(--line);
-  border-radius: 25px;
-  background: var(--surface);
-  color: var(--ink);
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 4px 10px 4px 5px;
-  cursor: pointer;
-  font-size: 12px;
-  max-width: 230px;
-}
-.app-profile > span {
-  height: 27px;
-  width: 27px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 750;
-}
-.app-profile > svg {
-  color: var(--muted);
 }
 /* The workspace is split from a quiet, always-visible connection guide. */
 .lanora-app {
@@ -740,7 +759,10 @@ select {
   margin-top: 2px;
 }
 .side-step.complete > span {
-  color: #d9f179;
+  color: var(--lime);
+}
+.side-step.pending {
+  color: #f4d17b;
 }
 .side-step > div {
   min-width: 0;
@@ -805,18 +827,6 @@ select {
   background: #d9f179;
   box-shadow: 0 0 0 4px #d9f17924;
 }
-.app-header {
-  height: 70px;
-  padding: 0 clamp(24px, 3vw, 42px);
-  box-shadow: 0 1px 0 #12243c08;
-}
-.app-breadcrumb {
-  color: var(--muted);
-  font:
-    700 10px Inter,
-    sans-serif;
-  letter-spacing: 0.13em;
-}
 .app-main {
   max-width: 980px;
   padding: 39px clamp(24px, 3vw, 42px) 35px;
@@ -860,7 +870,8 @@ select {
 }
 .app-button:focus-visible,
 .app-icon:focus-visible,
-.app-profile:focus-visible {
+.titlebar-profile:focus-visible,
+.app-help-toggle:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--accent) 40%, transparent);
   outline-offset: 2px;
 }
@@ -911,60 +922,139 @@ select {
   .app-sidebar {
     display: none;
   }
-  .app-header {
-    padding-inline: 18px;
-  }
   .app-main {
     padding-inline: 18px;
   }
-  .app-profile {
-    max-width: 145px;
-    overflow: hidden;
-  }
-  .app-breadcrumb {
-    font-size: 9px;
-  }
 }
 .titlebar {
-  height: 34px;
+  height: 56px;
   display: flex;
+  align-items: center;
   background: var(--surface);
   color: var(--ink);
   user-select: none;
   border-bottom: 1px solid var(--line);
 }
-.titlebar > div {
-  flex: 1;
-  padding: 7px 18px;
-  font:
-    600 11px Inter,
-    sans-serif;
+.titlebar-leading {
+  height: 100%;
+  min-width: 245px;
+  padding: 0 18px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: default;
 }
-.titlebar span {
+.titlebar-leading img {
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+}
+.titlebar-leading b {
+  font: 800 13px Inter, sans-serif;
+  letter-spacing: 0.11em;
+}
+.titlebar-leading > span {
   color: var(--muted);
-  margin-left: 8px;
+  font: 11px Inter, sans-serif;
+  padding-inline-start: 3px;
 }
-.titlebar button {
+.titlebar-drag-fill {
+  height: 100%;
+  min-width: 20px;
+  flex: 1;
+}
+.titlebar-tools {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding-inline: 12px;
+}
+.titlebar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.titlebar-status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #78859a;
+}
+.titlebar-status.connected i {
+  background: var(--success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 16%, transparent);
+}
+.titlebar-status.checking i {
+  background: var(--accent);
+  animation: status-pulse 1.2s ease-in-out infinite alternate;
+}
+.titlebar-status.failed i {
+  background: var(--danger);
+}
+@keyframes status-pulse {
+  to {
+    opacity: 0.45;
+  }
+}
+.titlebar-profile {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-quiet);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 5px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.titlebar-profile > svg[role="img"] {
+  width: 27px;
+  height: 27px;
+}
+.titlebar-profile > span:not(.avatar) {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.titlebar-profile > svg:last-child {
+  color: var(--muted);
+}
+.titlebar > button {
   border: 0;
   background: transparent;
   color: inherit;
   width: 44px;
+  height: 100%;
+  flex: none;
   display: grid;
   place-items: center;
   cursor: pointer;
 }
-.titlebar button:hover {
+.titlebar > button:hover {
   background: var(--line);
+}
+.titlebar-profile:hover {
+  background: var(--surface-raised);
+}
+.titlebar button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
 }
 .titlebar .window-close:hover {
   background: #c44b52;
   color: white;
 }
 .titlebar + .lanora-app {
-  min-height: calc(100vh - 34px);
+  min-height: calc(100vh - 56px);
 }
 .titlebar + .lanora-app .app-sidebar {
-  min-height: calc(100vh - 34px);
+  min-height: calc(100vh - 56px);
 }
 .avatar-picker {
   display: flex;
@@ -981,10 +1071,6 @@ select {
 .avatar-picker button[aria-pressed="true"] {
   border-color: var(--accent);
 }
-.app-profile > svg[role="img"] {
-  width: 28px;
-  height: 28px;
-}
 .skeleton {
   padding: 28px;
   border-radius: 14px;
@@ -1000,6 +1086,9 @@ select {
 }
 @media (prefers-reduced-motion: reduce) {
   .skeleton {
+    animation: none;
+  }
+  .titlebar-status.checking i {
     animation: none;
   }
 }

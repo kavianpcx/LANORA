@@ -1,72 +1,60 @@
-# 0.2.0-alpha.1 implementation audit
+# LANORA 0.2.0-alpha.2 audit
 
-Baseline: `d0c7a2d5fbc57e502ba0ebafa63ddfd64780ef91` on `main`.
-Review branch: `audit/0.2.0-alpha.1`, [PR #13](https://github.com/kavianpcx/LANORA/pull/13).
-Status: **Unreleased alpha candidate; review and test evidence below.**
+Baseline: `d0c7a2d5fbc57e502ba0ebafa63ddfd64780ef91` (`main`). The review work is on PR #13, based on `audit/0.2.0-alpha.1`; the package version is `0.2.0-alpha.2`.
 
-## Architecture and evidence
+## What the application actually does
 
-The Go API stores rooms and membership in SQLite. A random invitation grants the ability to request admission; an opaque per-member token authorizes control operations. Only approved members can fetch the room's EasyTier network name, secret and self-hosted relay URL. Pending members cannot fetch tunnel credentials. Display names/avatars are local, unverified profile preferences, not accounts.
+The Go API stores rooms and memberships in SQLite. A random invitation allows a player to request entry; a per-member token authorizes that member's control-plane requests. Approval is required before a member can download tunnel configuration. The webview does not create a tunnel. Rust launches the pinned EasyTier v2.6.4 sidecar and reads its local status; EasyTier creates the virtual adapter and carries encrypted game traffic. The API does not relay game packets. A separately configured EasyTier shared node on the VPS provides a relay path.
 
-React calls the HTTPS API. Rust validates structured network config and launches the bundled EasyTier v2.6.4 process. EasyTier owns the virtual adapter and encrypted data plane; the API never forwards game packets. The VPS's separate shared node accepts foreign networks matching `lanora-*`. The client config does not request an exit node/default route. The application reports API reachability, room membership, process status and EasyTier-reported IPv4 separately. Per-member reachability remains unknown because a trustworthy peer-to-member mapping/probe has not been implemented.
+The client does not configure an exit node or replace the system default route. Server reachability, room membership, sidecar process state, reported overlay IP and peer reachability are separate states. LANORA does not claim that a room record or an IP proves that another player is reachable. Peer-to-member mapping is not implemented, so peer reachability remains unknown.
 
-## Confirmed defects and corrections
+## Confirmed defects fixed on this review branch
 
-| Finding | Relevant implementation | Correction |
-|---|---|---|
-| Bundled binary lookup omitted the preserved `resources` path | `apps/desktop/src-tauri/src/main.rs` | Resolve `resources/easytier` inside the runtime resource directory |
-| CLI output flag order and node-IP field did not match v2.6.4 | same | Global `-o json` before `node`; read only `ipv4_addr`, reject invalid/nonusable IPv4 |
-| Timed-out CLI children could remain alive | same | `kill_on_drop` on bounded CLI execution |
-| Stop failure could be presented as a disconnected tunnel | Rust engine stop and `src/App.tsx` | Retain process handle on stop failure; stop locally before confirming leave |
-| Default RPC port could collide with other EasyTier instances | Rust engine | Select a loopback port and address the same port in CLI queries; tiny bind-to-spawn race remains |
-| Unix secret file could be created with permissive initial mode | Rust engine | Exclusive file creation with 0600 before writing |
-| Server badge stayed successful after outage | `src/hooks/useServer.ts` | Bounded serial health polling with cancellation and cleanup |
-| Any successful HTTP reply could be mistaken for LANORA health | `src/api.ts` | Verify health schema/service identity |
-| Requests had no deadline or understandable categorized failures | `src/api.ts` | Abort timeout, structured errors and EN/FA messages; browser certificate failures honestly grouped with network errors |
-| Pending members incorrectly used an approved-only room route | `src/App.tsx` | Poll membership until approval; fetch members only once approved |
-| Pending users could not cancel admission | `services/api/internal/api/api.go` | Permit their own token to leave without granting network access |
-| Room and host insertion were not atomic | same | One transaction, roll back partial creation |
-| WebSocket disconnects/revocation could leave subscriptions active | same | Read/disconnect loop, bounded pings, reauthorization and subscriber cleanup |
-| Trailing JSON could be accepted | same | Reject a second JSON value/trailing content |
-| Fresh Docker build failed due missing module checksum entries | `deploy/docker/api.Dockerfile`, dependency manifests | Resolve dependency checksums and validate an isolated Docker build |
-| New SQLite volume was not explicitly prepared for nonroot | API Dockerfile | Create `/data` with UID/GID 65532 ownership; add native API health check |
+| Defect | Correction |
+|---|---|
+| EasyTier binary lookup and CLI options/IP field did not match the packaged v2.6.4 layout | Resolve the preserved resource path, pass global JSON flags in the expected order, and read only `ipv4_addr`. |
+| A timed-out status query could leave a child process; close could leave the native event loop alive | Bounded, kill-on-drop CLI calls and orderly stop-before-exit handling. |
+| A failed stop could be shown as a successful leave | Keep the room/tunnel state until local stop succeeds. |
+| Default EasyTier RPC port could conflict with another installation | Choose an available loopback port and use it for queries. A brief bind-to-launch race remains. |
+| Secret config could be briefly created with permissive Unix permissions | Create exclusively with mode `0600` before writing. Normal stop removes it; forced termination can still leave it behind. |
+| Server status could stay green after an outage; any HTTP 200 could count as health | Verify the LANORA health schema and use bounded, serial health polling. |
+| Membership polling unnecessarily returned the room network secret | Return only membership status and user ID; approved members retrieve network settings from the separate `/network` endpoint. |
+| Room insertion could leave partial records; trailing JSON was accepted | Create room and host in one transaction; reject extra JSON values. |
+| Pending users could not cancel and capacity reads ignored database errors | Allow own pending membership cancellation and return a server error if capacity cannot be read. |
+| WebSocket subscriptions could linger after close/revocation | Bound ping/read lifetimes, reauthorize, and remove subscriptions. |
+| Fresh API image had missing module checksums and unclear volume ownership | Resolve module sums, create the data directory for the non-root API user, add health checks, and test persistence. |
+| VPS setup and status were too opaque | Add simple setup and `server.sh` status/log/restart/stop/update commands without deleting persistent volumes or printing secrets. |
 
-The EasyTier integration was checked against the [pinned CLI](https://github.com/EasyTier/EasyTier/blob/v2.6.4/easytier/src/easytier-cli.rs), [configuration source](https://github.com/EasyTier/EasyTier/blob/v2.6.4/easytier/src/common/config.rs) and [core options](https://github.com/EasyTier/EasyTier/blob/v2.6.4/easytier/src/core.rs). Window controls follow [Tauri 2 window customization](https://v2.tauri.app/learn/window-customization/).
+The EasyTier CLI/configuration was checked against the pinned [v2.6.4 source](https://github.com/EasyTier/EasyTier/tree/v2.6.4). The installer uses Tauri 2's documented NSIS configuration and bundled license-file path.
 
-## Focused UX and maintenance changes
+## Desktop and installer changes
 
-- First-launch nickname and original bundled SVG animal avatars; local preferences, editable later, no signup.
-- Integrated resizable titlebar with native minimize/maximize/restore/close, built-in drag region and double-click behavior; window permissions explicitly scoped to the main window.
-- Real request skeletons, server connection progress and retry; no artificial waiting period.
-- Keyboard-contained dialogs, visible focus and reduced-motion support. Existing palette, fonts and language/theme options retained.
-- Extracted API client, connection hook, types, translations, titlebar, avatars, modal, profile controls and active-room view. Expanded compact CSS/React for maintenance.
-- Removed unused `zustand` and `thiserror` dependencies; removed unused social-preview artwork. Database migrations and third-party notices retained for compatibility.
-- Added `scripts/server.sh` with safe start/status/logs/restart/stop/update commands. No volume deletion. No raw relay logs or environment dumps.
+- Keep LANORA's blue/lime identity and connection-guide layout, add an original peer-node mark, and use a dark theme on first launch while retaining the saved light theme option. No signup or account system is introduced.
+- Add a native integrated title bar with minimize, maximize/restore, close, drag and double-click behavior; the window remains resizable.
+- Add profile/language/theme and server setup onboarding, actual request progress, loading skeletons, retry/error explanations, a bounded no-IP timeout and reduced-motion behavior. No artificial success or delay is added.
+- Improve the server health badge, room/member loading and tunnel state copy. A peer still shows unknown unless verified.
+- Keep the connected title-bar state tied to the periodic health check; a running process without an assigned virtual IP fails with a retryable message after 60 seconds.
+- Refactor API calls, translations, profile fields, avatar selection, room view, dialogs and the server health hook into smaller modules.
+- Remove unused Zustand and Rust `thiserror` dependencies. Keep fonts, license notices, database migrations and deployment/test files.
+- Add transparent LANORA PNG/SVG/ICO and Tauri icon sizes, branded NSIS header/sidebar art, Farsi and English installer language selection, current-user install mode and the MIT license file. The workflow also emits SHA-256 sidecars. Windows Build CI must confirm the installer compiles and installs with these settings.
+- Record layout, typography, color, feedback and accessibility choices in `docs/DESIGN_SYSTEM.md`.
 
-## Executed validation
+## Previous verified candidate tests
 
-- Local `npm run build`: passed (TypeScript + Vite).
-- Local `npm test`: 5 request/validation regression tests passed.
-- Local `bash -n scripts/server.sh scripts/setup-server.sh tests/compose_smoke.sh`: passed.
-- Local `TMPDIR="$PWD" python3 tests/server_commands_test.py`: passed; this uses a Docker stub, not real containers.
-- [First candidate CI](https://github.com/kavianpcx/LANORA/actions/runs/43842805032): Go `go test -race ./...` passed; real Docker build failed on missing checksums, which triggered a follow-up fix.
-- [First candidate desktop validation](https://github.com/kavianpcx/LANORA/actions/runs/43842805073): Rust tests passed on Windows and Linux. Real Linux namespace test passed: distinct OS adapter IPs and actual TCP/UDP round trips with P2P disabled, through the separate foreign-network relay.
-- Follow-up [CI](https://github.com/kavianpcx/LANORA/actions/runs/43892306845) passed formatting, checked Go module checksums, read-only dependency API race tests, repository/link checks and fresh Docker deployment with persistence. The [namespace run](https://github.com/kavianpcx/LANORA/actions/runs/43892306916) additionally passed real TCP/UDP with the API offline and after a local underlay link down/up. That Linux job stopped later on an unformatted `build.rs`; formatting was corrected in the next commit. Windows installation, window startup and normal close passed in the [previous package run](https://github.com/kavianpcx/LANORA/actions/runs/43844228213). Its Linux install succeeded but screenshot capture selected an unmapped helper window; the harness now uses a visible window with Openbox. Final installed-package validation is recorded below.
+Before the `0.2.0-alpha.2` security and installer changes, commit `c120b467af9ad36502ab667a8dbbcdd3684339fa` passed [desktop workflow 43946935337](https://github.com/kavianpcx/LANORA/actions/runs/43946935337) and [server/API CI 43946935255](https://github.com/kavianpcx/LANORA/actions/runs/43946935255). Windows built, silently installed, launched and normally closed the NSIS package. Ubuntu 24.04 built and installed the `.deb`, opened the installed native UI, tested fullscreen restore/close and captured the committed screenshot. The Linux namespace test sent real TCP and UDP payloads between different EasyTier adapter IPs through the self-hosted relay, including with the API stopped and after a local underlay link down/up. Docker checks passed with SQLite data surviving restart.
 
-## Final installed-package validation
+That is Linux namespace evidence, not a two-computer internet test. Alpha 2 needs its own successful Actions runs because it changes the membership response, NSIS assets and package metadata. The exact alpha 2 run links and results belong here once those runs finish.
 
-The latest source build is [desktop run 43897576940](https://github.com/kavianpcx/LANORA/actions/runs/43897576940) on candidate commit `d23d5e8811a3ac58d3f04950d4621ac2a5f898e4`. Both Windows and Linux jobs passed all their steps. Windows created the `LANORA_0.2.0-alpha.1_x64-setup.exe`, silently installed it, launched the installed app, verified EasyTier `2.6.4-8428a89d`, and closed the native window with a clean process exit. Linux built and installed the Debian package, verified its EasyTier capability, opened the real first-launch window, entered and left fullscreen using F11, restored it, and closed normally. The screenshot in `../docs/screenshots/linux-first-launch.png` is from that installed package in Ubuntu 24.04 CI under Xvfb/Openbox; the empty-server state is intentional and shows no simulated connection.
+## Not verified and remaining risks
 
-The [matching CI run](https://github.com/kavianpcx/LANORA/actions/runs/43897576992) passed Go race tests, formatting, dependency checks, repository/link checks and a fresh Docker deployment with room persistence across restart. This later run also includes the fixed Linux desktop harness and event-loop cleanup. Headless graphics testing needed a session bus and a software compositing path; that workaround is limited to the test job, not forced on Linux users.
+- Two PCs on independent internet providers, real Windows adapter/driver and firewall behavior, Windows elevation, NAT/P2P, relay fallback on restrictive NAT, and actual game Direct IP/broadcast/multicast compatibility.
+- Peer identity mapping, latency/loss measurement, Windows reconnect after WAN loss, Linux desktops other than Ubuntu 24.04 CI, and fullscreen/RTL interactions on physical systems.
+- A kicked former member may retain already-disclosed EasyTier credentials. The relay allowlist is not database-backed admission control; the protocol does not revoke that member's room secret.
+- Room tokens are held in process memory and memberships do not expire automatically. An abrupt client exit may leave a stale membership. A forced process kill may leave plaintext local config.
+- Linux `cap_net_admin`/`cap_net_raw` grants broad network authority to the bundled sidecar on a multi-user device.
 
-Earlier package runs caught a black headless window and a process that occasionally remained alive after close. Both issues were corrected in the harness/close lifecycle and the final installed-package run passed. The later local extension of Docker-stub failure tests for Compose, daemon, invalid config and API health also passed locally; that extension is included in this PR for CI review.
+These are alpha limitations. Do not describe the product as stable or universally compatible until real multi-machine tests have been completed and recorded.
 
-## Still not verified / remaining risks
+## Release state
 
-Two independent internet connections, real Windows LAN games, NAT hole punching, live peer identity mapping, automatic LAN discovery, Windows adapter/firewall/elevation on a clean player PC, Linux desktop environments beyond Ubuntu 24.04 CI, fullscreen/RTL behavior on physical desktops, app crash recovery and trusted public VPS TLS remain unverified. The Linux namespace relay test is not a substitute for two PCs on different ISPs.
-
-Former members can retain disclosed network credentials. The relay whitelist is not database-backed admission control. The official app stops on confirmed control-plane revocation, but malicious clients need cryptographic revocation. Memory-only room tokens and absent membership TTL can leave stale room entries after exit. Forced process termination can leave plaintext local config. Linux file capabilities are broad for a multiuser machine. These are alpha release risks, not completed features. See [Security](SECURITY.md).
-
-## Release position
-
-Version `0.2.0-alpha.1` is consistent across npm, Rust and Tauri. The workflow generates review artifacts, not tags/releases. `main` and existing releases are not overwritten. This work does not authorize a stable release.
+Target version: `0.2.0-alpha.2` across npm, Cargo and Tauri. Publish only packages from a successful desktop workflow run for the same source commit. Keep the GitHub release marked prerelease; do not replace or move an existing tag. Stable release remains blocked on the real Windows and independent-network tests above.

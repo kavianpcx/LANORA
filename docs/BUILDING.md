@@ -16,6 +16,18 @@ npm ci
 npm run tauri build -- --bundles nsis
 ```
 
+The workflow adds a `.sha256` sidecar beside each Windows installer and Linux package. Verify the package before installing it:
+
+```sh
+sha256sum --check ./<package-name>.sha256
+```
+
+On Windows PowerShell, compare the sidecar's hash with the installer:
+
+```powershell
+Get-FileHash .\<installer-name>.exe -Algorithm SHA256
+```
+
 A source checkout alone does not contain the EasyTier binaries; follow the workflow's prepare step before building locally. `npm run build` checks TypeScript/Vite, but does not build the native executable. A successful installer build does not validate real two-client gaming. Do not distribute an untested binary as a stable release.
 
 ## Linux x64 desktop
@@ -24,7 +36,7 @@ The same desktop source supports a Debian/Ubuntu `.deb`. GitHub Actions installs
 
 ## Candidate validation
 
-For `0.2.0-alpha.1`, PR builds also run `npm test` and `cargo test` before packaging. The Linux workflow runs a real namespace integration test against the built Go API and pinned EasyTier executables. Installation/startup checks are separate CI steps and must be inspected independently of packaging success.
+For `0.2.0-alpha.2`, PR builds also run `npm test` and `cargo test` before packaging. The Linux workflow runs a real namespace integration test against the built Go API and pinned EasyTier executables. Installation/startup checks are separate CI steps and must be inspected independently of packaging success.
 
 ```sh
 cd apps/desktop

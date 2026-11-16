@@ -13,7 +13,7 @@ Results are scoped to their environment. A namespace test uses real EasyTier, re
 | Control API offline while tunnel active | Passed in Linux namespaces | Socket payloads after stopping the API process |
 | Underlay disconnect/reconnect | Passed in Linux namespaces | Linux namespace link down/up; not WAN loss on Windows |
 | Docker fresh installation, restart and SQLite persistence | Passed in CI | `tests/compose_smoke.sh`; local HTTPS proxy process, no public DNS/TLS verification |
-| Native EXE and DEB builds; Rust regressions | Passed in CI | Candidate `0.2.0-alpha.1` build artifacts |
+| Native EXE and DEB builds; Rust regressions | Passed on the earlier candidate; alpha.2 rerun pending | Previous CI artifacts are not evidence for the new installer artwork or package metadata |
 | Install/open/close actual desktop packages | See final audit results | Separate CI steps, never inferred from build success |
 | Windows firewall, adapter permissions and driver cleanup | Not verified | Requires clean Windows 10/11 PCs/VMs and real adapter tests |
 | LAN game Direct IP, broadcast/multicast discovery | Not verified | Record each tested game/version and topology |

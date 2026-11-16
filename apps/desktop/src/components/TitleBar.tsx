@@ -1,8 +1,26 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "@tauri-apps/api/core";
-import { Minus, Square, Copy, X } from "lucide-react";
-export function TitleBar({ lang }: { lang: "en" | "fa" }) {
+import { Minus, Square, Copy, X, Settings2 } from "lucide-react";
+import { Avatar, type AvatarKind } from "./Avatar";
+import brand from "../brand.svg";
+export function TitleBar({
+  lang,
+  status,
+  statusLabels,
+  name,
+  avatar,
+  settingsLabel,
+  onSettings,
+}: {
+  lang: "en" | "fa";
+  status: "idle" | "checking" | "connected" | "failed";
+  statusLabels: Record<"idle" | "checking" | "connected" | "failed", string>;
+  name: string;
+  avatar: AvatarKind;
+  settingsLabel: string;
+  onSettings: () => void;
+}) {
   const [maximized, setMaximized] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [failure, setFailure] = useState(false);
@@ -51,6 +69,7 @@ export function TitleBar({ lang }: { lang: "en" | "fa" }) {
     <div
       className="titlebar"
       dir="ltr"
+      data-fullscreen={fullscreen}
       title={
         failure
           ? lang === "fa"
@@ -59,8 +78,35 @@ export function TitleBar({ lang }: { lang: "en" | "fa" }) {
           : undefined
       }
     >
-      <div data-tauri-drag-region>
-        LANORA <span data-tauri-drag-region>0.2.0 alpha</span>
+      <div
+        className="titlebar-leading"
+        data-tauri-drag-region
+        onDoubleClick={() => safe(window.toggleMaximize())}
+      >
+        <img src={brand} alt="" data-tauri-drag-region />
+        <b data-tauri-drag-region>LANORA</b>
+        <span data-tauri-drag-region>0.2.0-alpha.2</span>
+      </div>
+      <div
+        className="titlebar-drag-fill"
+        data-tauri-drag-region
+        onDoubleClick={() => safe(window.toggleMaximize())}
+      />
+      <div className="titlebar-tools">
+        <span className={`titlebar-status ${status}`} role="status" aria-live="polite">
+          <i />
+          {statusLabels[status]}
+        </span>
+        <button
+          className="titlebar-profile"
+          aria-label={settingsLabel}
+          title={settingsLabel}
+          onClick={onSettings}
+        >
+          <Avatar kind={avatar} />
+          <span>{name || settingsLabel}</span>
+          <Settings2 size={16} />
+        </button>
       </div>
       <button
         aria-label={lang === "fa" ? "کوچک‌کردن" : "Minimize"}

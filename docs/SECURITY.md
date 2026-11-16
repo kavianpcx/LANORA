@@ -8,7 +8,7 @@ Known gaps: anonymous abuse controls are process-local; live presence is not mea
 
 ## Alpha audit: trust boundaries
 
-The `0.2.0-alpha.1` candidate creates Unix configuration files with mode 0600 before writing the secret, uses a separate loopback RPC port, kills timed-out CLI subprocesses and stops EasyTier on a normal window close. Windows files inherit the local user's app-data permissions. This is not encrypted credential storage: a forced process kill or OS crash can leave a secret configuration file behind. Other processes running as the same OS user can access it and the local EasyTier RPC service.
+The `0.2.0-alpha.2` candidate creates Unix configuration files with mode 0600 before writing the secret, uses a separate loopback RPC port, kills timed-out CLI subprocesses and stops EasyTier on a normal window close. Windows files inherit the local user's app-data permissions. This is not encrypted credential storage: a forced process kill or OS crash can leave a secret configuration file behind. Other processes running as the same OS user can access it and the local EasyTier RPC service.
 
 **Removing a membership or closing a room is not cryptographic revocation.** Someone who retained its network name/secret may run a modified EasyTier client. The official client stops after a definite membership-authorization failure, but network credential rotation/device authentication is still required for hostile-member isolation. Invitation rotation only changes who can request admission; it does not rotate the network secret.
 

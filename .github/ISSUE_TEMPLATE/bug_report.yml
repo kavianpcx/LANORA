@@ -1,0 +1,46 @@
+name: Bug report
+description: Report a reproducible defect in LANORA.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please do not include tokens, passwords, network secrets, or personal data. Report security vulnerabilities privately through GitHub Security Advisories.
+  - type: input
+    id: version
+    attributes:
+      label: LANORA version or commit
+      placeholder: 0.1.0-dev / commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: [Web, API, Desktop shell, Networking, Docker deployment, Documentation]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and logs
+      description: Redact credentials and private identifiers.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: Windows/Linux version, browser, API deployment, EasyTier version if applicable

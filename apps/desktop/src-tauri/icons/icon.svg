@@ -1,6 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="LANORA mark">
-  <rect width="128" height="128" rx="31" fill="#3557C7"/>
-  <path d="M37 35v36c0 11 8 19 19 19h34" fill="none" stroke="#FFF" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="37" cy="34" r="9" fill="#D9F179"/>
-  <circle cx="91" cy="90" r="9" fill="#D9F179"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">LANORA connected rooms mark</title>
+  <rect x="48" y="48" width="928" height="928" rx="244" fill="#4355DB"/>
+  <g fill="none" stroke="#F7F8FC" stroke-linecap="round" stroke-linejoin="round" stroke-width="70">
+    <path d="M329 330 512 512 695 330"/>
+    <path d="M512 512v190"/>
+  </g>
+  <g fill="#CAEF5C" stroke="#4355DB" stroke-width="22">
+    <circle cx="304" cy="302" r="76"/>
+    <circle cx="720" cy="302" r="76"/>
+    <circle cx="512" cy="735" r="76"/>
+  </g>
+  <circle cx="512" cy="512" r="91" fill="#F7F8FC"/>
+  <circle cx="512" cy="512" r="44" fill="#1B2445"/>
 </svg>

@@ -10,14 +10,13 @@ import {
   Plus,
   RefreshCw,
   Server,
-  Settings2,
   ShieldCheck,
   X,
 } from "lucide-react";
 import brand from "./brand.svg";
 import { labels } from "./labels";
 import { api, friendlyError, RequestError } from "./api";
-import { Avatar, avatars, type AvatarKind } from "./components/Avatar";
+import { avatars, type AvatarKind } from "./components/Avatar";
 import { ProfileFields } from "./components/ProfileFields";
 import { Modal } from "./components/Modal";
 import { TitleBar } from "./components/TitleBar";
@@ -38,7 +37,7 @@ export default function App() {
     localStorage.getItem("lanora.language") === "fa" ? "fa" : "en",
   );
   const [theme, setTheme] = useState<"light" | "dark">(() =>
-    localStorage.getItem("lanora.theme") === "dark" ? "dark" : "light",
+    localStorage.getItem("lanora.theme") === "light" ? "light" : "dark",
   );
   const [name, setName] = useState(
     () => localStorage.getItem("lanora.playerName") || "Player",
@@ -77,6 +76,10 @@ export default function App() {
   const [mode, setMode] = useState<"create" | "join" | "settings" | null>(() =>
     localStorage.getItem("lanora.playerName") ? null : "settings",
   );
+  const [onboardingStep, setOnboardingStep] = useState<"profile" | "server">(
+    "profile",
+  );
+  const [serverHelp, setServerHelp] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<ListedRoom | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -241,7 +244,7 @@ export default function App() {
     };
   }, [room?.roomId, room?.status, server]);
   useEffect(() => {
-    if (!room || !tunnel.running) return;
+    if (!room || !tunnel.running || tunnel.state === "failed") return;
     let active = true;
     let inFlight = false;
     const refresh = async () => {
@@ -269,7 +272,56 @@ export default function App() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [room?.roomId, tunnel.running]);
+  }, [room?.roomId, tunnel.running, tunnel.state]);
+  useEffect(() => {
+    if (
+      !room ||
+      room.status !== "approved" ||
+      !tunnel.running ||
+      tunnel.state !== "connecting"
+    )
+      return;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        const current = await invoke<EngineStatus>("engine_status").catch(
+          () => null,
+        );
+        if (!active) return;
+        if (current?.virtualIp || current?.state === "failed") {
+          setTunnel(current);
+          return;
+        }
+        await invoke("engine_stop");
+        if (active) {
+          setTunnel({
+            running: false,
+            virtualIp: null,
+            state: "failed",
+            error: "EasyTier did not report a virtual IP within 60 seconds",
+          });
+          setError(
+            lang === "fa"
+              ? "تا یک دقیقه آی‌پی مجازی دریافت نشد. وضعیت سرور و پورت‌های رله را بررسی کنید و دوباره تلاش کنید."
+              : "No virtual IP arrived within a minute. Check the server and relay ports, then retry.",
+          );
+        }
+      } catch (e) {
+        if (active) {
+          setTunnel((old) => ({
+            ...old,
+            state: "failed",
+            error: "EasyTier did not report a virtual IP and could not be stopped",
+          }));
+          setError(friendlyError(e, lang));
+        }
+      }
+    }, 60000);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [room?.roomId, room?.status, tunnel.running, tunnel.state, lang]);
   async function connect() {
     if (checking || room) return;
     setError("");
@@ -320,12 +372,35 @@ export default function App() {
     const data = new FormData(event.currentTarget);
     try {
       if (mode === "settings") {
-        const next = String(data.get("name") || "").trim();
+        const next = String(data.get("name") || name).trim();
         if (next.length < 2 || next.length > 32)
           throw new RequestError("invalid_input");
         setName(next);
         localStorage.setItem("lanora.playerName", next);
         localStorage.setItem("lanora.avatar", avatar);
+        if (onboarding && onboardingStep === "profile") {
+          setOnboardingStep("server");
+          return;
+        }
+        if (onboarding && onboardingStep === "server") {
+          const address = String(data.get("serverAddress") || "").trim();
+          setServerInput(address);
+          if (!address) {
+            setOnboarding(false);
+            setMode(null);
+            return;
+          }
+          const url = await connectServer(address);
+          if (url) {
+            localStorage.setItem("lanora.desktopServer", url);
+            setOnboarding(false);
+            setMode(null);
+            void loadRooms(url).catch((e) =>
+              setError(friendlyError(e, lang)),
+            );
+          }
+          return;
+        }
         setOnboarding(false);
         setMode(null);
         return;
@@ -454,21 +529,44 @@ export default function App() {
   };
   return (
     <>
-      <TitleBar lang={lang} />
+      <TitleBar
+        lang={lang}
+        status={
+          checking
+            ? "checking"
+            : serverReachable
+              ? "connected"
+              : phase === "failed" || Boolean(server)
+                ? "failed"
+                : "idle"
+        }
+        statusLabels={{
+          idle: t.disconnected,
+          checking: t.checking,
+          connected: t.connected,
+          failed: lang === "fa" ? "سرور پاسخ نمی‌دهد" : "Server unreachable",
+        }}
+        name={name}
+        avatar={avatar}
+        settingsLabel={t.settings}
+        onSettings={() => setMode("settings")}
+      />
       <div className="lanora-app" dir={lang === "fa" ? "rtl" : "ltr"}>
         <aside className="app-sidebar">
           <div className="side-brand">
             <img src={brand} alt="" />
             <div>
               <b>LANORA</b>
-              <small>PRIVATE GAME NETWORK</small>
+              <small>
+                {lang === "fa" ? "شبکهٔ خصوصی بازی" : "PRIVATE GAME NETWORK"}
+              </small>
             </div>
           </div>
           <div className="side-divider" />
           <p className="side-label">
             {lang === "fa" ? "مسیر اتصال" : "YOUR ROUTE"}
           </p>
-          <div className="side-step complete">
+          <div className={"side-step " + (serverReachable ? "complete" : "")}>
             <span>01</span>
             <div>
               <b>{lang === "fa" ? "سرور" : "Server"}</b>
@@ -482,26 +580,37 @@ export default function App() {
             </div>
             {serverReachable && <Check size={15} />}
           </div>
-          <div className={"side-step " + (room ? "complete" : "")}>
+          <div
+            className={
+              "side-step " +
+              (room?.status === "approved" ? "complete" : "") +
+              (room?.status === "pending" ? " pending" : "")
+            }
+          >
             <span>02</span>
             <div>
               <b>{lang === "fa" ? "روم" : "Room"}</b>
               <small>
                 {room
-                  ? room.name
+                  ? room.status === "pending"
+                    ? `${room.name} · ${t.pending}`
+                    : room.name
                   : lang === "fa"
                     ? "بسازید یا وارد شوید"
                     : "Create or join"}
               </small>
             </div>
-            {room && <Check size={15} />}
+            {room?.status === "approved" && <Check size={15} />}
           </div>
           <div className={"side-step " + (tunnel.virtualIp ? "complete" : "")}>
             <span>03</span>
             <div>
               <b>{lang === "fa" ? "آی‌پی مجازی" : "Virtual IP"}</b>
               <small dir="ltr">
-                {tunnel.virtualIp || "Waiting for EasyTier"}
+                {tunnel.virtualIp ||
+                  (lang === "fa"
+                    ? "در انتظار EasyTier"
+                    : "Waiting for EasyTier")}
               </small>
             </div>
             {tunnel.virtualIp && <Check size={15} />}
@@ -522,35 +631,11 @@ export default function App() {
           </div>
         </aside>
         <div className="app-workspace">
-          <header className="app-header">
-            <div className="app-brand">
-              <span className="app-breadcrumb">
-                {lang === "fa" ? "فضای بازی / روم‌ها" : "WORKSPACE / ROOMS"}
-              </span>
-            </div>
-            <div className="app-header-actions">
-              <span className={"app-api " + (serverReachable ? "ready" : "")}>
-                {serverReachable
-                  ? t.connected
-                  : server
-                    ? t.disconnected
-                    : t.disconnected}
-              </span>
-              <button
-                className="app-profile"
-                title={t.settings}
-                onClick={() => setMode("settings")}
-              >
-                <Avatar kind={avatar} />
-                {name || t.profile}
-                <Settings2 size={17} />
-              </button>
-            </div>
-          </header>
           <main className="app-main">
             <section className="app-hero">
               <div className="app-eyebrow">
-                <span className="app-live-dot" /> SELF-HOSTED VIRTUAL LAN
+                <span className="app-brand-dot" />
+                {lang === "fa" ? "شبکهٔ بازی شخصی" : "YOUR PRIVATE GAME NETWORK"}
               </div>
               <h1>{t.subtitle}</h1>
               <p>{t.intro}</p>
@@ -574,7 +659,7 @@ export default function App() {
               <div className="app-server-form">
                 <input
                   dir="ltr"
-                  aria-label="Server address"
+                  aria-label={t.server}
                   placeholder="https://games.example.com:443"
                   value={serverInput}
                   disabled={Boolean(room) || checking}
@@ -616,12 +701,15 @@ export default function App() {
               <>
                 <div className="app-toolbar">
                   <div>
-                    <span className="app-eyebrow">ROOM BROWSER</span>
+                    <span className="app-eyebrow">
+                      {lang === "fa" ? "فهرست روم‌ها" : "ROOMS"}
+                    </span>
                     <h2>{t.rooms}</h2>
                   </div>
                   <div className="app-actions">
                     <button
                       className="app-button subtle"
+                      disabled={!serverReachable}
                       onClick={() =>
                         void loadRooms().catch((e) =>
                           setError(friendlyError(e, lang)),
@@ -633,6 +721,7 @@ export default function App() {
                     </button>
                     <button
                       className="app-button secondary"
+                      disabled={!serverReachable}
                       onClick={() => openJoin(null)}
                     >
                       <Link2 size={16} />
@@ -640,6 +729,7 @@ export default function App() {
                     </button>
                     <button
                       className="app-button primary"
+                      disabled={!serverReachable}
                       onClick={() => setMode("create")}
                     >
                       <Plus size={17} />
@@ -669,14 +759,17 @@ export default function App() {
                         <div className="app-room-meta">
                           <h3>{r.name}</h3>
                           <p>
-                            {r.gameName || "LAN game"} · {r.memberCount}/
+                            {r.gameName ||
+                              (lang === "fa" ? "بازی LAN" : "LAN game")} · {r.memberCount}/
                             {r.maxPlayers} {t.members}
                           </p>
                         </div>
                         <button
                           className="app-button secondary"
                           disabled={
-                            !r.acceptingMembers || r.memberCount >= r.maxPlayers
+                            !serverReachable ||
+                            !r.acceptingMembers ||
+                            r.memberCount >= r.maxPlayers
                           }
                           onClick={() => openJoin(r)}
                         >
@@ -767,28 +860,154 @@ export default function App() {
                   <X size={19} />
                 </button>
                 <span className="app-eyebrow">
-                  {mode === "settings" ? "PREFERENCES" : "GAME ROOM"}
+                  {mode === "settings"
+                    ? onboarding
+                      ? lang === "fa"
+                        ? onboardingStep === "profile"
+                          ? "پروفایل شما"
+                          : "سرور شما"
+                        : onboardingStep === "profile"
+                          ? "YOUR PROFILE"
+                          : "YOUR SERVER"
+                      : lang === "fa"
+                        ? "تنظیمات برنامه"
+                        : "APP SETTINGS"
+                    : lang === "fa"
+                      ? "فضای بازی"
+                      : "GAME ROOM"}
                 </span>
                 <h2>
                   {mode === "settings"
                     ? onboarding
-                      ? lang === "fa"
-                        ? "به LANORA خوش آمدید"
-                        : "Welcome to LANORA"
+                      ? onboardingStep === "profile"
+                        ? lang === "fa"
+                          ? "به LANORA خوش آمدید"
+                          : "Welcome to LANORA"
+                        : lang === "fa"
+                          ? "به سرور خودتان وصل شوید"
+                          : "Connect to your server"
                       : t.settings
                     : mode === "create"
                       ? t.create
                       : t.join}
                 </h2>
-                {onboarding && mode === "settings" && (
-                  <p className="app-hint">
-                    {lang === "fa"
-                      ? "یک نام و تصویر انتخاب کنید. ثبت‌نام لازم نیست؛ بعداً می‌توانید تغییرشان دهید."
-                      : "Pick a name and avatar. No signup required. You can change both later."}
-                  </p>
+                {mode === "settings" && onboarding && (
+                  <div
+                    className="onboarding-progress"
+                    aria-label={lang === "fa" ? "مرحله از دو" : "Onboarding step"}
+                  >
+                    <span
+                      className={
+                        onboardingStep === "profile" ? "active" : "done"
+                      }
+                    >
+                      {lang === "fa" ? "۱" : "1"}
+                    </span>
+                    <i />
+                    <span
+                      className={onboardingStep === "server" ? "active" : ""}
+                    >
+                      {lang === "fa" ? "۲" : "2"}
+                    </span>
+                    <small>
+                      {onboardingStep === "profile"
+                        ? lang === "fa"
+                          ? "پروفایل شما"
+                          : "Your profile"
+                        : lang === "fa"
+                          ? "سرور شما"
+                          : "Your server"}
+                    </small>
+                  </div>
                 )}
                 <form className="app-form" onSubmit={submit}>
-                  {mode === "settings" && (
+                  {mode === "settings" &&
+                    onboarding &&
+                    onboardingStep === "profile" && (
+                      <>
+                        <p className="onboarding-copy">
+                          {lang === "fa"
+                            ? "برای شروع فقط یک نام نمایشی انتخاب کنید؛ حساب کاربری لازم نیست."
+                            : "Choose a display name to get started. No account is needed."}
+                        </p>
+                        <ProfileFields
+                          {...{
+                            lang,
+                            theme,
+                            name,
+                            avatar,
+                            setLang,
+                            setTheme,
+                            setAvatar,
+                          }}
+                        />
+                      </>
+                    )}
+                  {mode === "settings" &&
+                    onboarding &&
+                    onboardingStep === "server" && (
+                      <>
+                        <p className="onboarding-copy">
+                          {lang === "fa"
+                            ? "نشانی سروری را وارد کنید که صاحبش برایتان فرستاده است."
+                            : "Enter the server address shared by its owner."}
+                        </p>
+                        <label>
+                          {lang === "fa" ? "نشانی سرور" : "Server address"}
+                          <input
+                            name="serverAddress"
+                            dir="ltr"
+                            inputMode="url"
+                            autoComplete="url"
+                            value={serverInput}
+                            disabled={checking}
+                            onChange={(event) =>
+                              setServerInput(event.target.value)
+                            }
+                            placeholder="https://games.example.com"
+                            autoFocus
+                          />
+                        </label>
+                        <button
+                          className="app-help-toggle"
+                          type="button"
+                          aria-expanded={serverHelp}
+                          onClick={() => setServerHelp((old) => !old)}
+                        >
+                          {serverHelp
+                            ? lang === "fa"
+                              ? "بستن راهنمای سرور"
+                              : "Hide server setup help"
+                            : lang === "fa"
+                              ? "برای راه‌اندازی سرور کمک می‌خواهم"
+                              : "I need help setting up a server"}
+                        </button>
+                        {serverHelp && (
+                          <div className="app-help-panel">
+                            <p>
+                              {lang === "fa"
+                                ? "صاحب سرور این دو دستور را روی VPS لینوکس اجرا می‌کند:"
+                                : "The server owner runs these commands on a Linux VPS:"}
+                            </p>
+                            <code dir="ltr">
+                              git clone --branch release/0.2.x
+                              https://github.com/kavianpcx/LANORA.git
+                              <br />
+                              cd LANORA &amp;&amp; bash scripts/setup-server.sh
+                            </code>
+                          </div>
+                        )}
+                        <button
+                          className="app-button subtle onboarding-back"
+                          type="button"
+                          disabled={checking}
+                          onClick={() => setOnboardingStep("profile")}
+                        >
+                          {lang === "fa" ? "بازگشت به پروفایل" : "Back to profile"}
+                        </button>
+                      </>
+                    )}
+                  {mode === "settings" && !onboarding && (
                     <ProfileFields
                       {...{
                         lang,
@@ -886,13 +1105,48 @@ export default function App() {
                       <Check size={17} />
                     )}{" "}
                     {busy
-                      ? "Working…"
-                      : mode === "settings"
-                        ? t.save
+                      ? lang === "fa"
+                        ? "در حال انجام…"
+                        : "Working…"
+                      : mode === "settings" &&
+                          onboarding &&
+                          onboardingStep === "profile"
+                        ? lang === "fa"
+                          ? "ادامه"
+                          : "Continue"
+                        : mode === "settings" &&
+                            onboarding &&
+                            onboardingStep === "server"
+                          ? lang === "fa"
+                            ? checking
+                              ? "در حال اتصال…"
+                              : "اتصال به سرور"
+                            : checking
+                              ? "Connecting…"
+                              : "Connect to server"
+                          : mode === "settings"
+                            ? t.save
                         : mode === "create"
                           ? t.create
                           : t.join}
                   </button>
+                  {mode === "settings" &&
+                    onboarding &&
+                    onboardingStep === "server" && (
+                      <button
+                        className="app-button subtle"
+                        type="button"
+                        disabled={busy || checking}
+                        onClick={() => {
+                          localStorage.setItem("lanora.playerName", name);
+                          localStorage.setItem("lanora.avatar", avatar);
+                          setOnboarding(false);
+                          setMode(null);
+                        }}
+                      >
+                        {lang === "fa" ? "فعلاً بعداً وصل می‌شوم" : "I’ll connect later"}
+                      </button>
+                    )}
                 </form>
                 {error && (
                   <p className="app-error" role="alert">

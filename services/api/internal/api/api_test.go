@@ -99,7 +99,7 @@ func TestApprovalAndCapacity(t *testing.T) {
 		t.Fatalf("approve status=%d", status)
 	}
 	status, membership := call(t, h, "GET", "/api/v1/rooms/"+roomID+"/membership", guestToken, nil)
-	if status != 200 || membership["status"] != "approved" || membership["networkSecret"] == nil {
+	if status != 200 || membership["status"] != "approved" || membership["networkSecret"] != nil {
 		t.Fatalf("membership status=%d body=%v", status, membership)
 	}
 	status, full := call(t, h, "POST", "/api/v1/rooms/join", thirdAccount, map[string]any{"inviteCode": invite, "username": "Third"})
@@ -181,6 +181,10 @@ func TestNetworkAuthorizationAndIsolation(t *testing.T) {
 		t.Fatalf("cross-room access=%d", status)
 	}
 	call(t, h, "POST", "/api/v1/rooms/"+id+"/approve", host, map[string]any{"userId": guest["userId"], "approve": true})
+	_, approvedMembership := call(t, h, "GET", "/api/v1/rooms/"+id+"/membership", guestToken, nil)
+	if approvedMembership["status"] != "approved" || approvedMembership["networkSecret"] != nil {
+		t.Fatal("membership status response contains tunnel credentials")
+	}
 	_, hostNet := call(t, h, "GET", "/api/v1/rooms/"+id+"/network", host, nil)
 	status, guestNet := call(t, h, "GET", "/api/v1/rooms/"+id+"/network", guestToken, nil)
 	if status != 200 || guestNet["networkSecret"] != hostNet["networkSecret"] {

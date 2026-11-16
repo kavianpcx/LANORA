@@ -9,7 +9,7 @@ You need a Linux VPS, Git, OpenSSL, Docker Engine with the Compose plugin, and p
 Create a DNS A record such as `games.example.com` pointing at your VPS. If you publish an AAAA record, IPv6 must work too. Allow inbound TCP 80/443 and TCP/UDP 11010 in the VPS provider's firewall and operating-system firewall. Do not disable either firewall wholesale. The API's internal port 8080 must not be exposed publicly.
 
 ```sh
-git clone --branch audit/0.2.0-alpha.1 https://github.com/kavianpcx/LANORA.git
+git clone --branch release/0.2.x https://github.com/kavianpcx/LANORA.git
 cd LANORA
 bash scripts/setup-server.sh
 bash scripts/server.sh status

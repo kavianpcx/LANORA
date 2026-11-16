@@ -1,8 +1,9 @@
 [package]
 name = "lanora-desktop"
-version = "0.2.0-alpha.1"
+version = "0.2.0-alpha.2"
 description = "LANORA virtual LAN client"
 authors = ["LANORA"]
+license = "MIT"
 edition = "2021"
 
 [build-dependencies]

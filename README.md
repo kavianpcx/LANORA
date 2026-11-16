@@ -5,21 +5,16 @@
 
 Play a LAN game with friends who are somewhere else. One friend runs the server on a Linux VPS. Everyone installs the desktop app, enters that server's HTTPS address, picks a name, and creates or joins a room. **No account, login, website, or subscription.**
 
-**Experimental alpha:** `0.2.0-alpha.1` is a review candidate, not a published release. API access, room membership, the EasyTier process, its reported virtual IP, and actual peer reachability are separate states. LANORA never treats a room member or an IP alone as proof of a working game connection. Two independent internet connections and Windows game traffic remain **not verified**. See the [audit and test results](docs/AUDIT_0.2.0.md).
+**Experimental alpha:** [Download `0.2.0-alpha.2`](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.2). API access, room membership, the EasyTier process, its reported virtual IP, and actual peer reachability are separate states. LANORA never treats a room member or an IP alone as proof of a working game connection. Two independent internet connections and Windows game traffic remain **not verified**. See the [audit and test results](docs/AUDIT_0.2.0.md) and the [desktop design system](docs/DESIGN_SYSTEM.md).
 
 [![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![Desktop builds](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE)
-
-## First launch
-
-![LANORA first-run profile screen from the installed Linux package in CI. No server or room is connected.](docs/screenshots/linux-first-launch.png)
-
 
 ## 1. Server owner: run these commands on your VPS
 
 First install [Docker Engine with Compose](https://docs.docker.com/engine/install/). You also need Git and OpenSSL. Point a domain's DNS record at the VPS. Allow inbound **TCP 80/443 and TCP/UDP 11010** in your VPS firewall.
 
 ```sh
-git clone --branch audit/0.2.0-alpha.1 https://github.com/kavianpcx/LANORA.git
+git clone --branch release/0.2.x https://github.com/kavianpcx/LANORA.git
 cd LANORA
 bash scripts/setup-server.sh
 ```
@@ -46,16 +41,16 @@ The VPS manages rooms and relays traffic. App downloads come from GitHub, not yo
 
 ## 2. Players: install the desktop app
 
-The `0.2.0-alpha.1` candidate is available as review artifacts in [this desktop build](https://github.com/kavianpcx/LANORA/actions/runs/43897576940), linked from [PR #13](https://github.com/kavianpcx/LANORA/pull/13). Open **Artifacts** (GitHub sign-in required), download the package for your system and extract the ZIP:
+Download a release package from [LANORA Releases](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.2):
 
-- **Windows x64:** `lanora-windows-x64-prerelease`. Run the extracted `.exe` installer.
-- **Ubuntu 24.04 x64:** `lanora-linux-x64-prerelease`. In the folder containing the extracted package, run:
+- **Windows x64:** Download and run the `.exe` installer. It uses LANORA-branded artwork, offers English or Farsi, and installs for the current Windows user by default.
+- **Ubuntu 24.04 x64:** Download and install the `.deb` package:
 
 ```sh
-sudo apt install ./LANORA_0.2.0-alpha.1_amd64.deb
+sudo apt install ./LANORA_0.2.0-alpha.2_amd64.deb
 ```
 
-These are temporary CI artifacts, **not a published release**. Check the [audit](docs/AUDIT_0.2.0.md) for exactly what was tested. The [previous v0.1.0-alpha.5 release](https://github.com/kavianpcx/LANORA/releases/tag/v0.1.0-alpha.5) predates these fixes and is not the recommended candidate.
+These are experimental prerelease builds. Check the [audit](docs/AUDIT_0.2.0.md) for the exact tests and limits. Windows adapter privileges, firewall behavior and two-PC gaming have not been verified on independent real machines.
 
 Linux package installation grants network capabilities to the bundled EasyTier executable. Read the [privilege limitations](docs/SECURITY.md). Windows adapter creation and elevation still need clean-machine validation; do not disable your firewall to work around an error.
 
