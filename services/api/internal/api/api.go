@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+ "io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -27,7 +28,6 @@ import (
 )
 
 type API struct { db *store.DB; log *slog.Logger; adminToken string; origins map[string]bool; mu sync.Mutex; joinMu sync.Mutex; attempts map[string][]time.Time; events map[string]map[chan []byte]bool }
-type ctxKey string
 type principal struct { UserID, Username, Role string; RoomID string }
 type room struct { ID string `json:"id"`; Name string `json:"name"`; HostID string `json:"hostId"`; MaxPlayers int `json:"maxPlayers"`; Visibility string `json:"visibility"`; GameName string `json:"gameName,omitempty"`; Approval bool `json:"requireApproval"`; Accepting bool `json:"acceptingMembers"`; CreatedAt string `json:"createdAt"`; Members []member `json:"members"` }
 type member struct { UserID string `json:"userId"`; Username string `json:"username"`; Role string `json:"role"`; Status string `json:"status"`; JoinedAt string `json:"joinedAt"` }
@@ -67,7 +67,7 @@ func (a *API) health(w http.ResponseWriter,r *http.Request){ if err:=a.db.Ping()
 type createRequest struct { Name string `json:"name"`; Password string `json:"password"`; MaxPlayers int `json:"maxPlayers"`; Visibility string `json:"visibility"`; GameName string `json:"gameName"`; RequireApproval bool `json:"requireApproval"`; Username string `json:"username"` }
 func (a *API) createRoom(w http.ResponseWriter,r *http.Request){ var in createRequest; if !decode(w,r,&in){return}; in.Name=strings.TrimSpace(in.Name); in.Username=strings.TrimSpace(in.Username); if runeLen(in.Name)<2||runeLen(in.Name)>64||runeLen(in.Username)<2||runeLen(in.Username)>32||runeLen(in.GameName)>64||len(in.Password)>128 { writeErr(w,400,"invalid_input","نام روم باید ۲ تا ۶۴، نام بازی تا ۶۴، نام کاربر ۲ تا ۳۲ و رمز حداکثر ۱۲۸ نویسه باشد"); return }; if in.MaxPlayers==0 {in.MaxPlayers=8}; if in.MaxPlayers<2||in.MaxPlayers>32 {writeErr(w,400,"invalid_capacity","ظرفیت باید بین ۲ تا ۳۲ باشد");return}; if in.Visibility=="" {in.Visibility="public"}; if in.Visibility!="private"&&in.Visibility!="public" {writeErr(w,400,"invalid_visibility","نمایش باید private یا public باشد");return}
 	id,e:=randomHex(16); if e!=nil {serverError(w,e);return}; userID,e:=randomHex(16); if e!=nil {serverError(w,e);return}; invite,e:=inviteCode(); if e!=nil {serverError(w,e);return}; token,e:=randomHex(32); if e!=nil {serverError(w,e);return}; secret,e:=randomHex(32); if e!=nil {serverError(w,e);return}; ts:=time.Now().UTC().Format(time.RFC3339Nano)
-	passwordHash,e:=makePasswordHash(in.Password);if e!=nil{serverError(w,e);return}; _,e=a.db.Exec(`INSERT INTO rooms(id,name,host_id,host_token_hash,invite_hash,password_hash,network_secret,max_players,visibility,game_name,approval,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,id,in.Name,userID,hash(token),hash(invite),passwordHash,secret,in.MaxPlayers,in.Visibility,in.GameName,in.RequireApproval,ts); if e!=nil {serverError(w,e);return}; status:="approved"; _,e=a.db.Exec(`INSERT INTO members(room_id,user_id,username,token_hash,role,status,joined_at) VALUES(?,?,?,?,?,?,?)`,id,userID,in.Username,hash(token),"host",status,ts); if e!=nil {serverError(w,e);return}; a.publish(id,"room.created",map[string]any{"roomId":id}); writeJSON(w,201,map[string]any{"roomId":id,"inviteCode":invite,"accessToken":token,"userId":userID,"status":"created","room":a.loadRoom(id)}) }
+	passwordHash,e:=makePasswordHash(in.Password);if e!=nil{serverError(w,e);return}; tx,e:=a.db.Begin();if e!=nil{serverError(w,e);return};defer tx.Rollback(); _,e=tx.Exec(`INSERT INTO rooms(id,name,host_id,host_token_hash,invite_hash,password_hash,network_secret,max_players,visibility,game_name,approval,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,id,in.Name,userID,hash(token),hash(invite),passwordHash,secret,in.MaxPlayers,in.Visibility,in.GameName,in.RequireApproval,ts); if e!=nil {serverError(w,e);return}; status:="approved"; _,e=tx.Exec(`INSERT INTO members(room_id,user_id,username,token_hash,role,status,joined_at) VALUES(?,?,?,?,?,?,?)`,id,userID,in.Username,hash(token),"host",status,ts); if e!=nil {serverError(w,e);return}; if e=tx.Commit();e!=nil{serverError(w,e);return}; a.publish(id,"room.created",map[string]any{"roomId":id}); writeJSON(w,201,map[string]any{"roomId":id,"inviteCode":invite,"accessToken":token,"userId":userID,"status":"created","room":a.loadRoom(id)}) }
 
 // Public rooms reveal only their display metadata. Membership tokens and tunnel
 // credentials are never included in discovery results.
@@ -112,11 +112,32 @@ func (a *API) authenticate(w http.ResponseWriter,r *http.Request)(principal,bool
 
 func (a *API) loadRoom(id string) room { var x room; var approval,accept int; e:=a.db.QueryRow(`SELECT id,name,host_id,max_players,visibility,game_name,approval,accepting,created_at FROM rooms WHERE id=?`,id).Scan(&x.ID,&x.Name,&x.HostID,&x.MaxPlayers,&x.Visibility,&x.GameName,&approval,&accept,&x.CreatedAt); if e!=nil{return x}; x.Approval=approval==1;x.Accepting=accept==1; rows,e:=a.db.Query(`SELECT user_id,username,role,status,joined_at FROM members WHERE room_id=? ORDER BY joined_at`,id); if e==nil { defer rows.Close(); for rows.Next(){var m member; if rows.Scan(&m.UserID,&m.Username,&m.Role,&m.Status,&m.JoinedAt)==nil{x.Members=append(x.Members,m)} } }; return x }
 
-func (a *API) eventsWS(w http.ResponseWriter,r *http.Request){ p,ok:=a.authenticate(w,r); if !ok{return}; upgrader:=websocket.Upgrader{CheckOrigin:func(r *http.Request)bool{return a.originAllowed(r.Header.Get("Origin"))}};c,e:=upgrader.Upgrade(w,r,nil); if e!=nil{return}; ch:=make(chan []byte,16); a.mu.Lock(); if a.events[p.RoomID]==nil{a.events[p.RoomID]=map[chan []byte]bool{}}; a.events[p.RoomID][ch]=true; a.mu.Unlock(); defer func(){a.mu.Lock();delete(a.events[p.RoomID],ch);a.mu.Unlock();c.Close()}(); for {select{case msg:=<-ch: c.SetWriteDeadline(time.Now().Add(5*time.Second));if c.WriteMessage(websocket.TextMessage,msg)!=nil{return};case <-r.Context().Done():return}} }
+func (a *API) eventsWS(w http.ResponseWriter,r *http.Request){
+ p,ok:=a.authenticate(w,r); if !ok{return}
+ upgrader:=websocket.Upgrader{CheckOrigin:func(r *http.Request)bool{return a.originAllowed(r.Header.Get("Origin"))}}
+ c,e:=upgrader.Upgrade(w,r,nil);if e!=nil{return}
+ ch:=make(chan []byte,16);done:=make(chan struct{})
+ a.mu.Lock();if a.events[p.RoomID]==nil{a.events[p.RoomID]=map[chan []byte]bool{}};a.events[p.RoomID][ch]=true;a.mu.Unlock()
+ defer func(){a.mu.Lock();delete(a.events[p.RoomID],ch);if len(a.events[p.RoomID])==0{delete(a.events,p.RoomID)};a.mu.Unlock();c.Close()}()
+ c.SetReadLimit(1024);c.SetReadDeadline(time.Now().Add(60*time.Second))
+ c.SetPongHandler(func(string)error{return c.SetReadDeadline(time.Now().Add(60*time.Second))})
+ go func(){defer close(done);for{if _,_,err:=c.ReadMessage();err!=nil{return}}}()
+ ticker:=time.NewTicker(20*time.Second);defer ticker.Stop()
+ authorized:=func()bool{var count int;err:=a.db.QueryRow(`SELECT COUNT(*) FROM members WHERE room_id=? AND user_id=? AND status='approved'`,p.RoomID,p.UserID).Scan(&count);return err==nil&&count==1}
+ for{select{
+ case msg:=<-ch:
+   if !authorized(){return};c.SetWriteDeadline(time.Now().Add(5*time.Second));if c.WriteMessage(websocket.TextMessage,msg)!=nil{return}
+ case <-ticker.C:
+   if !authorized(){return};if c.WriteControl(websocket.PingMessage,nil,time.Now().Add(5*time.Second))!=nil{return}
+ case <-done:return
+ case <-r.Context().Done():return
+ }}
+}
+
 func (a *API) publish(id,kind string,data any){ b,_:=json.Marshal(map[string]any{"type":kind,"data":data,"at":time.Now().UTC()});a.mu.Lock();defer a.mu.Unlock();for ch:=range a.events[id]{select{case ch<-b:default:}} }
 func (a *API) adminSummary(w http.ResponseWriter,r *http.Request){ if a.adminToken==""||r.Header.Get("Authorization")!="Bearer "+a.adminToken {writeErr(w,401,"unauthorized","دسترسی مدیر سرور لازم است");return}; var rooms,members int; _=a.db.QueryRow(`SELECT COUNT(*) FROM rooms`).Scan(&rooms);_=a.db.QueryRow(`SELECT COUNT(*) FROM members WHERE status='approved'`).Scan(&members);writeJSON(w,200,map[string]any{"activeRooms":rooms,"approvedMemberships":members,"service":"lanora-api"}) }
 
-func decode(w http.ResponseWriter,r *http.Request,v any)bool{r.Body=http.MaxBytesReader(w,r.Body,16<<10);d:=json.NewDecoder(r.Body);d.DisallowUnknownFields();if e:=d.Decode(v);e!=nil{writeErr(w,400,"invalid_json","بدنهٔ درخواست معتبر نیست");return false};return true}
+func decode(w http.ResponseWriter,r *http.Request,v any)bool{r.Body=http.MaxBytesReader(w,r.Body,16<<10);d:=json.NewDecoder(r.Body);d.DisallowUnknownFields();if e:=d.Decode(v);e!=nil{writeErr(w,400,"invalid_json","بدنهٔ درخواست معتبر نیست");return false};if d.Decode(&struct{}{})!=io.EOF{writeErr(w,400,"invalid_json","Only one JSON object is allowed");return false};return true}
 func writeJSON(w http.ResponseWriter,status int,v any){w.Header().Set("Content-Type","application/json; charset=utf-8");w.WriteHeader(status);_=json.NewEncoder(w).Encode(v)}
 func runeLen(s string)int{return utf8.RuneCountInString(s)}
 func writeErr(w http.ResponseWriter,status int,code,msg string){writeJSON(w,status,errBody{Error:errorInfo{Code:code,Message:msg}})}

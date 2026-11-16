@@ -23,4 +23,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: cp .env.example .env && docker compose config --quiet
+      - run: bash -n scripts/setup-server.sh scripts/server.sh tests/compose_smoke.sh
+      - run: python3 tests/server_commands_test.py
+      - run: bash tests/compose_smoke.sh
+      - if: always()
+        run: docker compose down

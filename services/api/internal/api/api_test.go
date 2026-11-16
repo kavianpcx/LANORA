@@ -25,3 +25,37 @@ func TestInviteRotationAndAuthorization(t *testing.T){h:=testAPI(t);hostAccount:
 
 
 func TestPublicDiscovery(t *testing.T){h:=testAPI(t);_,created:=call(t,h,"POST","/api/v1/rooms","",map[string]any{"name":"Public LAN","username":"Host","visibility":"public"});_,private:=call(t,h,"POST","/api/v1/rooms","",map[string]any{"name":"Secret LAN","username":"Host","visibility":"private"});status,result:=call(t,h,"GET","/api/v1/rooms","",nil);if status!=200{t.Fatalf("list status=%d",status)};list:=result["rooms"].([]any);if len(list)!=1||list[0].(map[string]any)["id"]!=created["roomId"]{t.Fatalf("discovery=%v",list)};if _,ok:=list[0].(map[string]any)["networkSecret"];ok{t.Fatal("secret leaked")};status,_=call(t,h,"POST","/api/v1/rooms/join","",map[string]any{"roomId":private["roomId"],"username":"Guest"});if status!=404{t.Fatalf("private join by ID=%d",status)};status,joined:=call(t,h,"POST","/api/v1/rooms/join","",map[string]any{"roomId":created["roomId"],"username":"Guest"});if status!=200||joined["status"]!="approved"{t.Fatalf("public join %d: %v",status,joined)}}
+
+func TestNetworkAuthorizationAndIsolation(t *testing.T) {
+ t.Setenv("LANORA_RELAY_PEER_URL","tcp://relay.example.org:11010")
+ h:=testAPI(t)
+ _,a:=call(t,h,"POST","/api/v1/rooms","",map[string]any{"name":"First","username":"Host","requireApproval":true})
+ _,b:=call(t,h,"POST","/api/v1/rooms","",map[string]any{"name":"Second","username":"Host"})
+ id:=a["roomId"].(string);host:=a["accessToken"].(string)
+ _,guest:=call(t,h,"POST","/api/v1/rooms/join","",map[string]any{"inviteCode":a["inviteCode"],"username":"Guest"})
+ guestToken:=guest["accessToken"].(string)
+ status,_:=call(t,h,"GET","/api/v1/rooms/"+id+"/network",guestToken,nil)
+ if status!=401{t.Fatalf("pending network access=%d",status)}
+ _,pending:=call(t,h,"GET","/api/v1/rooms/"+id+"/membership",guestToken,nil)
+ if pending["networkSecret"]!=nil{t.Fatal("pending credentials leaked")}
+ status,_=call(t,h,"GET","/api/v1/rooms/"+id+"/network",b["accessToken"].(string),nil)
+ if status!=403{t.Fatalf("cross-room access=%d",status)}
+ call(t,h,"POST","/api/v1/rooms/"+id+"/approve",host,map[string]any{"userId":guest["userId"],"approve":true})
+ _,hostNet:=call(t,h,"GET","/api/v1/rooms/"+id+"/network",host,nil)
+ status,guestNet:=call(t,h,"GET","/api/v1/rooms/"+id+"/network",guestToken,nil)
+ if status!=200||guestNet["networkSecret"]!=hostNet["networkSecret"]{t.Fatal("approved peers need same network")}
+ _,otherNet:=call(t,h,"GET","/api/v1/rooms/"+b["roomId"].(string)+"/network",b["accessToken"].(string),nil)
+ if otherNet["networkSecret"]==hostNet["networkSecret"]{t.Fatal("rooms share credentials")}
+ call(t,h,"POST","/api/v1/rooms/"+id+"/leave",guestToken,nil)
+ status,_=call(t,h,"GET","/api/v1/rooms/"+id+"/network",guestToken,nil)
+ if status!=401{t.Fatalf("departed member authorized=%d",status)}
+ call(t,h,"DELETE","/api/v1/rooms/"+id,host,nil)
+ status,_=call(t,h,"GET","/api/v1/rooms/"+id+"/network",host,nil)
+ if status!=401{t.Fatalf("closed room authorized=%d",status)}
+}
+
+func TestRejectTrailingJSON(t *testing.T) {
+ h:=testAPI(t);r:=httptest.NewRequest("POST","/api/v1/rooms",bytes.NewBufferString(`{"name":"Room","username":"Host"} {}`))
+ w:=httptest.NewRecorder();h.ServeHTTP(w,r)
+ if w.Code!=400{t.Fatalf("trailing JSON accepted: %d",w.Code)}
+}

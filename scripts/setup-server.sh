@@ -16,7 +16,9 @@ sed -e "s/^LANORA_PUBLIC_HOST=.*/LANORA_PUBLIC_HOST=$host/" \
     -e "s|^LANORA_RELAY_PEER_URL=.*|LANORA_RELAY_PEER_URL=tcp://$host:11010|" \
     .env.example > .env
 unset admin_secret relay_secret
-if ! docker compose config --quiet; then echo 'Compose configuration failed. Check .env.' >&2; exit 1; fi
+if ! docker compose config --quiet >/dev/null 2>&1; then echo 'Compose configuration failed. Check .env.' >&2; exit 1; fi
 docker compose up -d --build
-printf '\nLANORA started. Share this server address with players: https://%s\n' "$host"
+printf '\nLANORA containers started. After HTTPS health succeeds, share: https://%s\n' "$host"
 printf 'Open inbound TCP 80/443 and TCP/UDP 11010. Check health with:\n  curl -f https://%s/api/v1/health\n' "$host"
+
+printf "Inspect local status with: bash scripts/server.sh status\n"

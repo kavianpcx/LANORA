@@ -1,4 +1,4 @@
-name: Desktop prerelease
+name: Desktop alpha validation
 on:
   push:
     branches: [main]
@@ -8,9 +8,10 @@ on:
       - 'docker-compose.yml'
       - '.github/workflows/windows.yml'
       - 'THIRD_PARTY_LICENSES.md'
+  pull_request:
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 jobs:
   windows:
     runs-on: windows-latest
@@ -46,6 +47,12 @@ jobs:
         run: |
           Copy-Item apps/desktop/node_modules/@fontsource/inter/LICENSE apps/desktop/src-tauri/resources/licenses/Inter-OFL.txt
           Copy-Item apps/desktop/node_modules/@fontsource/vazirmatn/LICENSE apps/desktop/src-tauri/resources/licenses/Vazirmatn-OFL.txt
+      - name: Frontend regression tests
+        working-directory: apps/desktop
+        run: npm test
+      - name: Native regression tests
+        working-directory: apps/desktop/src-tauri
+        run: cargo test
       - name: Build Windows installer
         working-directory: apps/desktop
         run: npm run tauri build -- --bundles nsis
@@ -87,6 +94,21 @@ jobs:
           npm ci
           cp node_modules/@fontsource/inter/LICENSE src-tauri/resources/licenses/Inter-OFL.txt
           cp node_modules/@fontsource/vazirmatn/LICENSE src-tauri/resources/licenses/Vazirmatn-OFL.txt
+      - name: Frontend regression tests
+        working-directory: apps/desktop
+        run: npm test
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.4'
+      - name: Real local namespace network test
+        run: |
+          cd services/api
+          go build -o ../../lanora-api-test ./cmd/lanora-api
+          cd ../..
+          sudo python3 tests/network_smoke.py apps/desktop/src-tauri/resources/easytier/easytier-core apps/desktop/src-tauri/resources/easytier/easytier-cli ./lanora-api-test
+      - name: Native regression tests
+        working-directory: apps/desktop/src-tauri
+        run: cargo test
       - name: Build Linux Debian package
         working-directory: apps/desktop
         run: npm run tauri build -- --bundles deb
@@ -101,22 +123,3 @@ jobs:
           name: lanora-linux-x64-prerelease
           path: apps/desktop/src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error
-  publish:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [windows, linux]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: lanora-windows-x64-prerelease
-          path: installer
-      - uses: actions/download-artifact@v4
-        with:
-          name: lanora-linux-x64-prerelease
-          path: installer
-      - name: Publish clearly labeled prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="v0.1.0-alpha.${GITHUB_RUN_NUMBER}"
-          gh release create "$tag" installer/*.exe installer/*.deb --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "LANORA $tag (experimental)" --notes 'Experimental Windows and Linux builds. EasyTier is bundled, but peer connectivity, Windows elevation, Linux network capabilities, firewall behavior, two-PC gaming, and relay fallback have NOT been verified. Do not treat API reachability or an adapter IP as proof that peers can play. See THIRD_PARTY_LICENSES.md and the bundled EasyTier LGPL-3.0 license.'

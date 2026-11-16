@@ -12,3 +12,6 @@ services/api/data/
 *.db-wal
 apps/desktop/src-tauri/binaries/
 .codex/
+**/.test-build/
+**/__pycache__/
+lanora-api-test

@@ -11,6 +11,14 @@ import (
 )
 
 func main() {
+    if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+        client := &http.Client{Timeout: 3*time.Second}
+        response, err := client.Get("http://127.0.0.1:8080/api/v1/health")
+        if err != nil { os.Exit(1) }
+        response.Body.Close()
+        if response.StatusCode != http.StatusOK { os.Exit(1) }
+        return
+    }
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 	dbPath := env("LANORA_DB_PATH", "data/lanora.db")

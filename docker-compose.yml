@@ -12,15 +12,18 @@ services:
       LANORA_ALLOWED_ORIGINS: ${LANORA_ALLOWED_ORIGINS:-tauri://localhost,http://tauri.localhost,https://tauri.localhost,http://localhost:1420}
     volumes:
       - lanora_data:/data
+    healthcheck:
+      test: ["CMD", "/lanora-api", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     expose: ["8080"]
     networks: [private]
   easytier:
     image: ghcr.io/easytier/easytier:v2.6.4@sha256:91d6732ea5ff71542fdb99333d2ee7b168e973443114db84db061e452427d91e
     restart: unless-stopped
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    cap_add: [NET_ADMIN]
-    command: ["--network-name", "lanora-relay-control", "--network-secret", "${LANORA_RELAY_SECRET:?Set LANORA_RELAY_SECRET in .env}", "--listeners", "tcp://0.0.0.0:11010", "udp://0.0.0.0:11010", "--relay-network-whitelist", "lanora-*"]
+    command: ["--no-tun", "--network-name", "lanora-relay-control", "--network-secret", "${LANORA_RELAY_SECRET:?Set LANORA_RELAY_SECRET in .env}", "--listeners", "tcp://0.0.0.0:11010", "udp://0.0.0.0:11010", "--relay-network-whitelist", "lanora-*"]
     ports:
       - "11010:11010/tcp"
       - "11010:11010/udp"
