@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.3/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.4/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
 <p align="center"><a href="README.md">English</a> · <a href="README.fa.md">فارسی</a></p>
 
 # LANORA
@@ -7,7 +7,9 @@
 
 LANORA برنامه‌ای متن‌باز و خودمیزبان برای بازی‌های دارای قابلیت LAN است. یک نفر سرور را روی VPS لینوکس اجرا می‌کند. بازیکنان برنامه را نصب می‌کنند، نشانی سرور و کد خصوصی را می‌زنند و خودکار وارد شبکهٔ مشترک می‌شوند. حساب کاربری یا وب‌سایت لازم نیست.
 
-> **وضعیت: آلفای آزمایشی.** نسخهٔ 0.2.0-alpha.3 تست‌های خودکار API، استقرار، بسته‌های دسکتاپ و شبکهٔ رله در محیط ایزوله را گذرانده است. اتصال دو رایانه روی اینترنت‌های جدا، ترافیک بازی از تونل ویندوز، اتصال مستقیم P2P و کشف خودکار بازی‌ها هنوز تأیید نشده‌اند.
+> **وضعیت: آلفای آزمایشی.** نسخهٔ 0.2.0-alpha.4 تست‌های خودکار API، استقرار، بسته‌های دسکتاپ و شبکهٔ رله در محیط ایزوله را گذرانده است. اتصال دو رایانه روی اینترنت‌های جدا، ترافیک بازی از تونل ویندوز، اتصال مستقیم P2P و کشف خودکار بازی‌ها هنوز تأیید نشده‌اند.
+>
+> **محدودیت امنیتی:** چرخاندن کد دسترسی، هویت شبکه را عوض می‌کند اما نمی‌تواند کلاینتی را که راز EasyTier قبلی را دارد مجبور به قطع کند. کد را عوض کنید و از همهٔ بازیکنان مورداعتماد بخواهید قطع شوند و دوباره وصل شوند؛ تا پایان مهاجرت، شبکهٔ قبلی را افشاشده فرض کنید.
 
 [![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![ساخت برنامه](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![مجوز MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE) [![آخرین آلفا](https://img.shields.io/github/v/release/kavianpcx/LANORA?include_prereleases&label=alpha)](https://github.com/kavianpcx/LANORA/releases)
 
@@ -36,9 +38,9 @@ bash scripts/server.sh code
 
 ## دانلود و اتصال بازیکنان
 
-- **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.3/LANORA_0.2.0-alpha.3_x64-setup.exe)
-- **لینوکس x64 (Debian/Ubuntu):** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.3/LANORA_0.2.0-alpha.3_amd64.deb)
-- [یادداشت انتشار و کدهای SHA-256](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.3)
+- **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.4/LANORA_0.2.0-alpha.4_x64-setup.exe)
+- **لینوکس x64 (Debian/Ubuntu):** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.4/LANORA_0.2.0-alpha.4_amd64.deb)
+- [یادداشت انتشار و کدهای SHA-256](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.4)
 
 ۱. برنامه را نصب و باز کنید. نام نمایشی انتخاب کنید؛ ثبت‌نام لازم نیست.
 ۲. نشانی سرور و کد دسترسی را وارد کنید و **Connect** را بزنید.
