@@ -42,17 +42,17 @@ type principal struct {
 	RoomID                 string
 }
 type room struct {
-	ID                 string   `json:"id"`
-	Name               string   `json:"name"`
-	HostID             string   `json:"hostId"`
-	MaxPlayers         int      `json:"maxPlayers"`
-	Visibility         string   `json:"visibility"`
-	GameName           string   `json:"gameName,omitempty"`
-	Approval           bool     `json:"requireApproval"`
-	Accepting          bool     `json:"acceptingMembers"`
-	CreatedAt          string   `json:"createdAt"`
-	NetworkGeneration  int64    `json:"networkGeneration"`
-	Members            []member `json:"members"`
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	HostID            string   `json:"hostId"`
+	MaxPlayers        int      `json:"maxPlayers"`
+	Visibility        string   `json:"visibility"`
+	GameName          string   `json:"gameName,omitempty"`
+	Approval          bool     `json:"requireApproval"`
+	Accepting         bool     `json:"acceptingMembers"`
+	CreatedAt         string   `json:"createdAt"`
+	NetworkGeneration int64    `json:"networkGeneration"`
+	Members           []member `json:"members"`
 }
 type member struct {
 	UserID   string `json:"userId"`
