@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/lanora-wordmark.svg" alt="LANORA" width="230"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.3/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
 <p align="center"><a href="README.md">English</a> · <a href="README.fa.md">فارسی</a></p>
 
 # LANORA
