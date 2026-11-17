@@ -3,7 +3,7 @@
 set -euo pipefail
 [[ ! -e .env ]] || { echo 'Refusing to overwrite .env'; exit 1; }
 cp .env.example .env
-sed -i "s/^LANORA_PUBLIC_HOST=.*/LANORA_PUBLIC_HOST=localhost/; s/^LANORA_ADMIN_TOKEN=.*/LANORA_ADMIN_TOKEN=$(openssl rand -hex 32)/; s/^LANORA_RELAY_SECRET=.*/LANORA_RELAY_SECRET=$(openssl rand -hex 32)/" .env
+sed -i "s/^LANORA_PUBLIC_HOST=.*/LANORA_PUBLIC_HOST=localhost/; s/^LANORA_ADMIN_TOKEN=.*/LANORA_ADMIN_TOKEN=$(openssl rand -hex 32)/; s/^LANORA_RELAY_SECRET=.*/LANORA_RELAY_SECRET=$(openssl rand -hex 32)/; s/^LANORA_SHARED_NETWORK_CODE=.*/LANORA_SHARED_NETWORK_CODE=$(openssl rand -hex 32)/" .env
 chmod 600 .env
 docker compose config --quiet
 docker compose up -d --build

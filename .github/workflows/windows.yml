@@ -5,6 +5,9 @@ on:
     paths:
       - 'apps/desktop/**'
       - 'services/api/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/ci.yml'
       - 'docker-compose.yml'
       - '.github/workflows/windows.yml'
       - 'THIRD_PARTY_LICENSES.md'
