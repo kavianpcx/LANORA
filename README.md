@@ -3,56 +3,67 @@
 
 # LANORA
 
-LANORA is an experimental, self-hosted virtual LAN app for playing LAN games with friends over the internet. One friend runs the server on a Linux VPS; everyone installs the Windows or supported Linux client, enters that server's address, and creates or joins a room. There is no account or login.
+**Connect to your private game network, copy the host’s virtual IP, and play.**
 
-**Status:** The API and room flow are implemented. The desktop client launches EasyTier and asks it for a virtual IP. A successful two-PC tunnel, peer communication, game traffic, firewall behavior, and relay fallback have **not been verified**. Do not present this alpha as a proven gaming VPN.
+LANORA is an open-source, self-hosted virtual LAN app for friends playing LAN-supported games over the internet. One person runs the server on a Linux VPS. Players install the desktop app, enter the server address and private access code, and connect to the same shared network. There is no account and no website.
 
-[![API tests](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![Windows installer](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=main)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![MIT license](https://img.shields.io/badge/license-MIT-3557C7)](LICENSE)
+> **Status: experimental alpha.** LANORA 0.2.0-alpha.3 has passed automated API, deployment, desktop package, and isolated relay-network tests. Two computers on separate public networks, Windows game traffic, direct P2P, and game-specific LAN discovery have not been verified.
 
-## Server owner: install on a Linux VPS
+[![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![Desktop builds](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE) [![Latest alpha](https://img.shields.io/github/v/release/kavianpcx/LANORA?include_prereleases&label=alpha)](https://github.com/kavianpcx/LANORA/releases)
 
-You need a VPS with Docker and Docker Compose, a domain pointing to that VPS, and ports **80/tcp, 443/tcp, 11010/tcp and 11010/udp** open. Run these commands over SSH:
+## Quick setup for the server owner
+
+You need a Linux VPS, a domain pointed at it, Docker Engine with the Compose plugin, Git, and OpenSSL. Allow inbound TCP ports **80** and **443**, and **11010 TCP/UDP**, in both the VPS and provider firewalls.
+
+Copy these commands into the VPS terminal:
 
 ```sh
-git clone https://github.com/kavianpcx/LANORA.git
+git clone --branch release/0.2.x https://github.com/kavianpcx/LANORA.git
 cd LANORA
-cp .env.example .env
-openssl rand -hex 32
-openssl rand -hex 32
-nano .env
-docker compose up -d --build
-docker compose ps
-curl -f https://YOUR_DOMAIN/api/v1/health
+bash scripts/setup-server.sh
 ```
 
-In `.env`, replace `LANORA_PUBLIC_HOST` with your domain, `LANORA_RELAY_PEER_URL` with `tcp://YOUR_DOMAIN:11010`, and paste the two **different** random values into `LANORA_ADMIN_TOKEN` and `LANORA_RELAY_SECRET`. Save the file, then run Compose. Share `https://YOUR_DOMAIN` with players. The server does **not** host a website or distribute Windows downloads. See [full VPS instructions](docs/SELF_HOSTING.md).
+Enter your domain when asked. The script creates the private keys, starts LANORA, and prints the server address and network access code. Send both to your players privately.
 
-## Players: download the desktop app
+Check the services or reveal the access code later:
 
-**Windows 10/11 x64:** [Download the experimental `.exe` installer](https://github.com/kavianpcx/LANORA/releases/download/v0.1.0-alpha.2/LANORA_0.1.0_x64-setup.exe) from GitHub. Install it, then open LANORA. A newer release may appear in [Releases](https://github.com/kavianpcx/LANORA/releases).
+```sh
+bash scripts/server.sh status
+bash scripts/server.sh code
+```
 
-**Linux x64 (Debian/Ubuntu):** A `.deb` client build is being added. Do not use the Windows installer on Linux. The download command and direct link will appear here only after its GitHub Actions build succeeds. The Linux package must set limited network capabilities on its bundled EasyTier core during installation; this needs administrator permission.
+The status output does not reveal secrets. Public servers use HTTPS; plain HTTP is accepted only for loopback addresses. Read the [full VPS guide](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/SELF_HOSTING.md) if you need help with DNS, firewall ports, or TLS.
 
-**Connect and play:**
+## Download and connect as a player
 
-1. In **Settings**, set your display name, English/Persian language, and light/dark theme. There is no account or login.
-2. Enter the **same HTTPS server address** the VPS owner shared, for example `https://games.example.com:443`. A raw IP works only when its HTTPS certificate is trusted for that IP.
-3. Player A creates a room and shares the invite code. Players B and C choose the room in the public list or enter the code for a private room. If enabled, the host approves them.
-4. When each app reports a virtual IP, A hosts the LAN game. B and C enter **A's virtual IP** in the game's Direct IP/Join by address screen. The VPS IP is for connecting LANORA, not for joining the game.
-5. Test the connection. A visible adapter IP alone does not prove that peers can reach each other; LAN discovery and two-PC traffic are not yet verified.
+- **Windows 10/11 x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.3/LANORA_0.2.0-alpha.3_x64-setup.exe)
+- **Linux x64 (Debian/Ubuntu):** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.3/LANORA_0.2.0-alpha.3_amd64.deb)
+- [View release notes and SHA-256 checksums](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.3)
 
-The server manages rooms, membership, and relay discovery. EasyTier carries the game traffic on a separate virtual network. The VPS address is for connecting LANORA clients to their control server; it is **not** the game host address. LAN discovery may fail for games that need broadcast or multicast. Try Direct IP first.
+1. Install and open LANORA. Choose a display name; no signup is needed.
+2. Enter the server address and access code from the server owner, then press **Connect**.
+3. When LANORA reports your virtual IP, share it with the friend hosting the game.
+4. Other players enter the host’s **virtual IP** in the game’s Direct IP / Join by address option. The VPS address is only for connecting LANORA.
 
-## What's in this repository
+LAN discovery is not guaranteed for every game. Games that rely on broadcast or multicast may require Direct IP.
 
-| Path | Role |
+## What has been tested
+
+The release workflow passed API authorization and race tests, frontend and Rust tests, Docker deployment checks, Windows installer build/install/launch, and Linux package build/install/launch. In an isolated Linux test, two clients joined the shared network, received distinct EasyTier IPs, exchanged real TCP and UDP traffic through the relay, and kept their default routes unchanged.
+
+This does **not** verify two separate internet connections, a Windows tunnel carrying game traffic, direct P2P/NAT traversal, an external VPS relay, or any specific game. See the [network test limits](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/ROADMAP.md).
+
+## How LANORA works
+
+The self-hosted Go API authenticates the shared access code and coordinates membership. EasyTier carries game traffic on a separate virtual network; the API is not the game-data path. LANORA does not change the system default gateway or global proxy. Peer latency and reachability are shown only when the native engine provides evidence.
+
+## Project layout
+
+| Path | Purpose |
 |---|---|
-| `apps/desktop` | Tauri 2, React, TypeScript Windows app and native EasyTier process control |
-| `services/api` | Go and SQLite room API |
-| `deploy/docker` | API and Caddy Docker images |
-| `docker-compose.yml` | API, private SQLite storage, TLS proxy, EasyTier shared node |
-| `docs` | [Setup](docs/GETTING_STARTED.md), [network](docs/NETWORKING.md), [API](docs/API.md), [build](docs/BUILDING.md), [security](docs/SECURITY.md) |
+| `apps/desktop` | Tauri 2, React, TypeScript, and Rust desktop client |
+| `services/api` | Go API and SQLite storage |
+| `docker-compose.yml`, `deploy/docker` | Self-hosted API, TLS proxy, and EasyTier relay |
+| `docs` | [Getting started](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/GETTING_STARTED.md), [networking](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/NETWORKING.md), [security](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/SECURITY.md), and [troubleshooting](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/TROUBLESHOOTING.md) |
 
-Run API tests with `cd services/api && go test ./...`; build the desktop frontend with `cd apps/desktop && npm ci && npm run build`. The desktop installers are built by [GitHub Actions](.github/workflows/windows.yml) only after the Windows build succeeds. See [building](docs/BUILDING.md). Verified: the [Windows build #3](https://github.com/kavianpcx/LANORA/actions/runs/43761263098) produced an EXE and [API CI #38](https://github.com/kavianpcx/LANORA/actions/runs/43761263111) passed. Neither test proves a working game tunnel. Known limitations and next tests are in [ROADMAP](docs/ROADMAP.md). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md).
-
-LANORA's own code is [MIT licensed](LICENSE). Bundled EasyTier is separately LGPL-3.0; read [third-party licenses](THIRD_PARTY_LICENSES.md) before redistribution.
+To build from source, see the [build guide](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/BUILDING.md). Contributions are welcome; start with [CONTRIBUTING.md](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/CONTRIBUTING.md). LANORA code is MIT-licensed. EasyTier is separately licensed; see [third-party notices](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/THIRD_PARTY_LICENSES.md).
