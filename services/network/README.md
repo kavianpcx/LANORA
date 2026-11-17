@@ -1,5 +1,7 @@
 # LANORA network service
 
-The Windows native supervisor lives in `apps/desktop/src-tauri/src/main.rs`. The Windows workflow stages the pinned EasyTier v2.6.4 release as a Tauri resource. The desktop client receives network credentials only after approved room membership, starts EasyTier with DHCP, and queries its node IP. A production implementation still needs a signed installer, Windows elevation and adapter validation, peer metrics, firewall rule ownership, reconnect testing, and cleanup validation.
+The desktop's native EasyTier supervisor is in apps/desktop/src-tauri/src/main.rs. The current Windows and Linux packages bundle pinned EasyTier 2.6.4 resources.
 
-Do not display a successful peer connection based on a healthy API, process launch, or adapter IP. Peer traffic and relay fallback have not been validated on two Windows PCs.
+The server API discovers the player-password policy, enforces it on join, creates a per-device session, and returns network credentials only after authorization. Passwordless mode skips the player password but still creates an authenticated API session. Administrator authentication and the internal relay credential are independent of player access.
+
+The desktop starts EasyTier with DHCP, reads the real adapter IP, and reports heartbeat presence separately from peer routes. Do not report a healthy API or a started process as a working peer connection. Linux namespace CI verifies relay TCP/UDP traffic; separate public networks, Windows adapter/firewall behavior, Windows game traffic, and game-specific discovery remain unverified.

@@ -1,69 +1,116 @@
-<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.3/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.5/apps/desktop/src-tauri/icons/icon.png" alt="نشان برنامهٔ LANORA" width="128"></p>
 <p align="center"><a href="README.md">English</a> · <a href="README.fa.md">فارسی</a></p>
 
 # LANORA
 
-**به شبکهٔ بازی وصل شو، آی‌پی مجازی میزبان را کپی کن و بازی کن.**
+**به شبکهٔ بازی دوستان وصل شو، آی‌پی مجازی میزبان را بفرست و بازی کن.**
 
-LANORA برنامه‌ای متن‌باز و خودمیزبان برای بازی‌های دارای قابلیت LAN است. یک نفر سرور را روی VPS لینوکس اجرا می‌کند. بازیکنان برنامه را نصب می‌کنند، نشانی سرور و کد خصوصی را می‌زنند و خودکار وارد شبکهٔ مشترک می‌شوند. حساب کاربری یا وب‌سایت لازم نیست.
+LANORA برنامه‌ای متن‌باز و خودمیزبان برای بازی‌هایی است که از LAN پشتیبانی می‌کنند. یک نفر سرور را روی VPS لینوکس اجرا می‌کند. بازیکنان برنامهٔ دسکتاپ را نصب و نشانی سرور را وارد می‌کنند. برنامه فقط وقتی رمز بازیکن را می‌پرسد که آن سرور رمز بخواهد. حساب کاربری یا سرویس میزبانی‌شدهٔ LANORA وجود ندارد.
 
-> **وضعیت: آلفای آزمایشی.** نسخهٔ 0.2.0-alpha.3 تست‌های خودکار API، استقرار، بسته‌های دسکتاپ و شبکهٔ رله در محیط ایزوله را گذرانده است. اتصال دو رایانه روی اینترنت‌های جدا، ترافیک بازی از تونل ویندوز، اتصال مستقیم P2P و کشف خودکار بازی‌ها هنوز تأیید نشده‌اند.
+> **نسخهٔ فعلی: <code dir="ltr">0.2.0-alpha.5</code> (پیش‌انتشار).** بازی بین دو ویندوز روی اینترنت‌های جدا، عبور ترافیک بازی از تونل ویندوز، P2P/NAT traversal و کشف خودکار LAN در بازی‌های مشخص تأیید نشده‌اند.
+>
+> **هشدار دسترسی:** در سرور بدون رمز، هر کسی که بتواند به سرور دسترسی پیدا کند می‌تواند درخواست عضویت بدهد. تغییر سیاست رمز، نشست‌های API را باطل و هویت شبکه را عوض می‌کند؛ اما نمی‌تواند کلاینت تغییریافته‌ای را که هنوز از شبکهٔ قدیمی EasyTier استفاده می‌کند مجبور به قطع کند. پس از تغییر سیاست از همه بخواهید کامل قطع شوند و دوباره وصل شوند.
 
 [![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![ساخت برنامه](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![مجوز MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE) [![آخرین آلفا](https://img.shields.io/github/v/release/kavianpcx/LANORA?include_prereleases&label=alpha)](https://github.com/kavianpcx/LANORA/releases)
 
-## راه‌اندازی سادهٔ سرور
+## دانلود LANORA
 
-به یک VPS لینوکس، دامنه‌ای که به آن اشاره کند، Docker Engine همراه افزونهٔ Compose، Git و OpenSSL نیاز دارید. پورت‌های ورودی **80** و **443** و نیز **11010 با TCP و UDP** را در فایروال VPS و پنل شرکت میزبان باز کنید.
+- **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_x64-setup.exe.sha256)
+- **لینوکس x64، Debian/Ubuntu:** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_amd64.deb.sha256)
+- [یادداشت انتشار و همهٔ فایل‌ها](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.5)
 
-این دستورها را در ترمینال VPS کپی کنید:
+پیش از نصب، فایل دانلودشده را با فایل SHA-256 کناری آن بررسی کنید.
 
-```sh
+## اتصال به‌عنوان بازیکن
+
+۱. LANORA را نصب و باز کنید. یک نام نمایشی انتخاب کنید؛ ثبت‌نام لازم نیست.
+۲. نشانی HTTPS را از صاحب سرور بگیرید و در برنامه وارد کنید.
+۳. **Connect** را بزنید. فقط اگر برنامه رمز خواست، آن را وارد کنید.
+۴. وقتی LANORA آی‌پی مجازی شما را نشان داد، آن را برای دوست میزبان بازی بفرستید.
+۵. بقیهٔ بازیکنان آی‌پی مجازی میزبان را در بخش Direct IP یا Join by address بازی وارد کنند. نشانی VPS فقط برای اتصال LANORA است.
+
+کشف خودکار LAN در بازی‌ها متفاوت است. بعضی بازی‌ها به Direct IP نیاز دارند و ممکن است از Broadcast یا Multicast کار نکنند.
+
+## راه‌اندازی سرور شخصی
+
+نسخهٔ فعلی سرور و برنامه از سورس شاخهٔ <code dir="ltr">release/0.2.x</code> استفاده می‌کند. نصب‌کننده API سرور را از همان checkout می‌سازد؛ سرور میزبانی‌شده یا حساب جداگانه‌ای برای دانلود لازم نیست.
+
+به یک VPS لینوکس، دامنه‌ای که به IP عمومی آن اشاره کند، Docker Engine همراه افزونهٔ Compose، Git و OpenSSL نیاز دارید. پورت‌های ورودی TCP **80** و **443** و نیز **11010 با TCP و UDP** را در فایروال VPS و پنل شرکت میزبان باز کنید. پورت API یعنی 8080 باید خصوصی بماند.
+
+این دستورها را در VPS اجرا کنید:
+
+~~~sh
 git clone --branch release/0.2.x https://github.com/kavianpcx/LANORA.git
 cd LANORA
 bash scripts/setup-server.sh
-```
+~~~
 
-وقتی پرسید، دامنه را وارد کنید. اسکریپت کلیدهای خصوصی را می‌سازد، سرویس‌ها را اجرا می‌کند و نشانی سرور و کد دسترسی شبکه را نشان می‌دهد. هر دو را فقط برای بازیکنان مورداعتماد بفرستید.
+وقتی اسکریپت دامنه را خواست، آن را وارد کنید. در نصب تازه، این پرسش نمایش داده می‌شود:
 
-برای بررسی وضعیت یا دیدن دوبارهٔ کد:
+~~~text
+Require a password for players? [Y/n]:
+~~~
 
-```sh
+برای حفظ گزینهٔ امن پیش‌فرض، Enter یا **Yes** را بزنید. سرویس‌ها شروع می‌شوند و سپس اسکریپت رمز را دو بار می‌پرسد. هنگام تایپ، رمز نمایش داده نمی‌شود:
+
+~~~text
+Enter player password:
+Confirm player password:
+~~~
+
+رمز باید حداقل ۱۲ نویسه داشته باشد و یا ۱۶ نویسه باشد یا دست‌کم از سه نوع نویسه استفاده کند؛ حداکثر اندازه ۱۲۸ بایت است. API فقط Hash از نوع PBKDF2-SHA256 را ذخیره می‌کند، نه متن رمز را. تا پایان تنظیم سیاست، بازیکنان نمی‌توانند وارد شوند.
+
+برای دسترسی بدون رمز **No** را انتخاب کنید. اسکریپت هشدار می‌دهد که هر کسی بتواند به سرور برسد می‌تواند وارد شبکهٔ مشترک بازی شود. این انتخاب فقط به بازیکنان مربوط است؛ احراز هویت مدیر و اعتبارنامه‌های رلهٔ EasyTier جداگانه محافظت می‌شوند.
+
+در پایان، نشانی سرور و سیاست انتخاب‌شده نمایش داده می‌شود. نمونه:
+
+~~~text
+Player address (verify HTTPS from another network): https://games.example.com
+Player password protection is enabled. Share your chosen password privately.
+~~~
+
+در نصب بدون رمز، خط آخر هشدار می‌دهد که هر کسی که به سرور دسترسی دارد می‌تواند وارد شود. نشانی HTTPS را برای بازیکنان بفرستید؛ رمز را فقط وقتی محافظت فعال است خصوصی به اشتراک بگذارید.
+
+برای بررسی وضعیت یا تغییر سیاست در آینده، بدون نصب دوباره:
+
+~~~sh
 bash scripts/server.sh status
-bash scripts/server.sh code
-```
+bash scripts/server.sh player-auth status
+bash scripts/server.sh player-auth enable
+bash scripts/server.sh player-auth change
+bash scripts/server.sh player-auth disable
+~~~
 
-دستور وضعیت اطلاعات محرمانه را نشان نمی‌دهد. سرور عمومی باید HTTPS داشته باشد؛ HTTP فقط برای نشانی‌های loopback مثل `127.0.0.1` مجاز است. راهنمای [کامل VPS](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/SELF_HOSTING.md) تنظیم DNS، پورت‌ها و TLS را توضیح می‌دهد.
-
-## دانلود و اتصال بازیکنان
-
-- **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.3/LANORA_0.2.0-alpha.3_x64-setup.exe)
-- **لینوکس x64 (Debian/Ubuntu):** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.3/LANORA_0.2.0-alpha.3_amd64.deb)
-- [یادداشت انتشار و کدهای SHA-256](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.3)
-
-۱. برنامه را نصب و باز کنید. نام نمایشی انتخاب کنید؛ ثبت‌نام لازم نیست.
-۲. نشانی سرور و کد دسترسی را وارد کنید و **Connect** را بزنید.
-۳. وقتی برنامه IP مجازی را نشان داد، آن را برای دوستی که میزبان بازی است بفرستید.
-۴. بقیهٔ بازیکنان IP مجازی میزبان را در گزینهٔ Direct IP بازی وارد کنند. IP سرور VPS برای اتصال به LANORA است، نه برای ورود به بازی.
-
-کشف خودکار LAN برای همهٔ بازی‌ها تضمین نمی‌شود. بازی‌هایی که به Broadcast یا Multicast نیاز دارند ممکن است به اتصال با Direct IP احتیاج داشته باشند.
-
-## چه چیزهایی آزمایش شده‌اند؟
-
-در گردش انتشار، تست‌های مجوزدهی API و race، تست‌های رابط و Rust، بررسی استقرار Docker، ساخت/نصب/اجرای برنامهٔ ویندوز و ساخت/نصب/اجرای بستهٔ لینوکس موفق شدند. در تست ایزولهٔ Linux، دو کلاینت به شبکهٔ مشترک پیوستند، IPهای EasyTier متفاوت گرفتند، ترافیک واقعی TCP و UDP را از رله ردوبدل کردند و default route سیستمشان تغییر نکرد.
-
-این آزمایش **اتصال دو اینترنت جداگانه، عبور ترافیک بازی از تونل ویندوز، P2P/NAT traversal، رله روی VPS بیرونی یا سازگاری با بازی مشخصی** را تأیید نمی‌کند. جزئیات در [محدودیت‌های تست شبکه](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/ROADMAP.md) است.
+نصب‌های موجود، تنظیمات <code dir="ltr">.env</code>، پایگاه داده و سیاست فعلی را نگه می‌دارند؛ راه‌اندازی دوباره سرور را بی‌اجازه به حالت بدون رمز نمی‌برد. مراحل به‌روزرسانی، پرسش‌های نصب و رفتار تغییر سیاست در [راهنمای VPS](docs/SELF_HOSTING.md) آمده است.
 
 ## LANORA چطور کار می‌کند؟
 
-API خودمیزبان Go کد دسترسی را بررسی و عضویت‌ها را هماهنگ می‌کند. EasyTier ترافیک بازی را از شبکهٔ مجازی جداگانه عبور می‌دهد؛ API مسیر ترافیک بازی نیست. LANORA دروازهٔ پیش‌فرض اینترنت یا پراکسی سراسری سیستم را تغییر نمی‌دهد. وضعیت و تأخیر همتا فقط وقتی نمایش داده می‌شود که موتور شبکه اطلاعات واقعی ارائه کند.
+API خودمیزبان Go اعلام می‌کند که سرور برای بازیکنان رمز می‌خواهد یا نه و درخواست عضویت را بررسی می‌کند. پس از مجوز واقعی، برای هر دستگاه نشست بازیکن می‌سازد. حالت بدون رمز، رمز بازیکن را حذف می‌کند اما نشست را همچنان می‌سازد؛ مسیرهای مدیر و اعتبارنامه‌های داخلی رلهٔ EasyTier جداگانه محافظت می‌شوند. EasyTier ترافیک بازی را از شبکهٔ مجازی عبور می‌دهد. LANORA دروازهٔ پیش‌فرض اینترنت یا پراکسی سراسری را تغییر نمی‌دهد و API مسیر ترافیک بازی نیست.
+
+## چه چیزهایی آزمایش شده‌اند؟
+
+تست‌های Go API و race، تست‌های رابط و Rust، بررسی استقرار Docker، ساخت/نصب/اجرای نصب‌کنندهٔ ویندوز و ساخت/نصب/اجرای بستهٔ لینوکس در گردش انتشار موفق شدند. در تست ایزولهٔ Linux، دو کلاینت EasyTier ترافیک TCP و UDP را از رله ردوبدل کردند.
+
+این تست‌ها **دو رایانه روی اینترنت‌های جدا، ترافیک بازی در ویندوز، رله روی VPS بیرونی، P2P مستقیم یا بازی مشخصی** را تأیید نمی‌کنند. پیش از استفادهٔ عمومی، [محدودیت‌های تست شبکه](docs/ROADMAP.md) را بخوانید.
+
+## راهنماها
+
+- [شروع سریع](docs/GETTING_STARTED.md)
+- [راهنمای کامل VPS، پرسش‌ها و به‌روزرسانی](docs/SELF_HOSTING.md)
+- [نصب برنامهٔ دسکتاپ](docs/INSTALLATION.md)
+- [نحوهٔ کار شبکه](docs/NETWORKING.md)
+- [نکات امنیتی](docs/SECURITY.md)
+- [تنظیمات](docs/CONFIGURATION.md)
+- [عیب‌یابی](docs/TROUBLESHOOTING.md)
+- [ساخت از سورس](docs/BUILDING.md)
 
 ## ساختار پروژه
 
 | مسیر | کاربرد |
 |---|---|
-| `apps/desktop` | برنامهٔ دسکتاپ Tauri 2، React، TypeScript و Rust |
-| `services/api` | API با Go و ذخیره‌سازی SQLite |
-| `docker-compose.yml` و `deploy/docker` | API، پراکسی TLS و رلهٔ EasyTier برای میزبانی شخصی |
-| `docs` | [شروع سریع](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/GETTING_STARTED.md)، [شبکه](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/NETWORKING.md)، [امنیت](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/SECURITY.md) و [عیب‌یابی](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/TROUBLESHOOTING.md) |
+| apps/desktop | برنامهٔ دسکتاپ Tauri 2، React، TypeScript و Rust |
+| services/api | API با Go و ذخیره‌سازی SQLite |
+| docker-compose.yml و deploy/docker | API، پراکسی HTTPS و رلهٔ EasyTier برای میزبانی شخصی |
+| docs | راهنماهای نصب، شبکه، امنیت و انتشار |
 
-برای ساخت از سورس، [راهنمای Build](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/BUILDING.md) را ببینید. مشارکت‌ها خوش‌آمدند؛ از [راهنمای مشارکت](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/CONTRIBUTING.md) شروع کنید. کد LANORA مجوز MIT دارد و EasyTier مجوز جداگانه دارد؛ [اعلان مجوزهای شخص ثالث](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/THIRD_PARTY_LICENSES.md) را ببینید.
+کد LANORA مجوز MIT دارد. EasyTier مجوز جداگانه دارد؛ [اعلان مجوزهای شخص ثالث](THIRD_PARTY_LICENSES.md) را ببینید.
