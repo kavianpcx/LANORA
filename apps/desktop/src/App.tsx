@@ -134,6 +134,10 @@ export default function App() {
   }
  
   useEffect(() => {
+    // Remove access codes saved by older versions; new versions never restore them.
+    localStorage.removeItem("lanora.sharedCode");
+  }, []);
+  useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = "ltr";
     document.documentElement.dataset.theme = theme;
