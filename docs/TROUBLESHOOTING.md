@@ -4,6 +4,8 @@
 
 Check that the server URL is the HTTPS domain, for example https://games.example.com. Check internet access, DNS, TLS certificate validity, and that the VPS allows inbound TCP 80 and 443. Do not add -k to curl and do not disable certificate checks in the app.
 
+For local development, use `http://localhost:8080`, `http://127.0.0.1:8080`, or `http://[::1]:8080` when the API is listening on this same computer. Bare loopback input such as `localhost:8080` also uses HTTP. In the standard Compose setup, API port 8080 is private behind Caddy; publish it only for intentional local testing. Port 1420 is the UI development server. `localhost` always means the computer running the desktop app, not a remote VPS.
+
 On the VPS, run:
 
 ~~~sh
