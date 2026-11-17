@@ -1,4 +1,4 @@
-import { RequestError } from "./api";
+import { RequestError } from "./api.js";
 
 export type PlayerAuthMode = "password_required" | "passwordless" | "legacy_password";
 
