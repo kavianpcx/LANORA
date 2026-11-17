@@ -28,14 +28,14 @@ import (
 )
 
 type API struct {
-	db                    *store.DB
-	log                   *slog.Logger
-	adminToken            string
-	origins               map[string]bool
-	mu                    sync.Mutex
-	joinMu                sync.Mutex
-	attempts              map[string][]time.Time
-	events                map[string]map[chan []byte]bool
+	db         *store.DB
+	log        *slog.Logger
+	adminToken string
+	origins    map[string]bool
+	mu         sync.Mutex
+	joinMu     sync.Mutex
+	attempts   map[string][]time.Time
+	events     map[string]map[chan []byte]bool
 }
 type principal struct {
 	UserID, Username, Role string
