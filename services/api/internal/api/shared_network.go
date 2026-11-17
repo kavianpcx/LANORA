@@ -157,9 +157,9 @@ func (a *API) connectionInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{
-		"serverName":  "LANORA Server",
+		"serverName": "LANORA Server",
 		"playerAuth": state.PlayerAuth,
-		"apiVersion":  "v1",
+		"apiVersion": "v1",
 	})
 }
 
@@ -179,7 +179,7 @@ func (a *API) adminPlayerAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, map[string]any{
 		"playerAuth": state.PlayerAuth,
-		"configured":  state.PlayerAuth == "passwordless" || state.PasswordHash != "",
+		"configured": state.PlayerAuth == "passwordless" || state.PasswordHash != "",
 	})
 }
 
@@ -245,7 +245,7 @@ func (a *API) updateAdminPlayerAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{
-		"playerAuth":     in.PlayerAuth,
+		"playerAuth":      in.PlayerAuth,
 		"configured":      true,
 		"sessionsRevoked": true,
 	})
