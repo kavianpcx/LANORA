@@ -68,7 +68,7 @@ export default function App() {
     () => localStorage.getItem("lanora.sharedCode") || "",
   );
   const [connectionStage, setConnectionStage] = useState<
-    "idle" | "server" | "authenticating" | "tunnel" | "failed"
+    "idle" | "server" | "authenticating" | "tunnel" | "connected" | "failed"
   >("idle");
   const [peerStatuses, setPeerStatuses] = useState<PeerStatus[]>([]);
   const {
