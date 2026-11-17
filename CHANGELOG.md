@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0-alpha.7 — Compact profile dialogs — 2026-11-17
+
+- Constrain profile setup and Settings dialogs to the available window height, with a persistent header and action footer and one scrollable content area.
+- Compact the avatar picker, remove its duplicate selected-avatar preview, and keep the existing avatar art and saved IDs.
+- Clarify the Profile and Server onboarding steps, keep primary actions accessible, and keep onboarding open until EasyTier reports a real virtual IP or the user dismisses it.
+- Style the in-dialog scrollbar for both themes, contain background scrolling, restore focus on close, and retain Escape support.
+- Replace the connected-state server form with a compact summary, distinguish server API RTT from peer route RTT, expire stale route measurements, and show bounded recovery after an unexpected EasyTier process exit.
+- Persist validated player names and avatar IDs against authenticated shared-network and room memberships; refresh other members through existing polling.
+- Rotate room network credentials and increment the generation after a host removes a member; authorized room clients detect the rotation and rejoin.
+- Add redacted connection diagnostics and `bash scripts/server.sh doctor` for local API, relay-container, password-policy, ports, database/player summary, and sanitized API error-type checks.
+- Add backend coverage for profile synchronization, avatar persistence, membership authorization, and room credential rotation.
+- Keep this release experimental; Windows scaling variants and independent public-network/game connectivity remain unverified.
+
 ## 0.2.0-alpha.6 — Desktop connection and avatar polish — 2026-11-17
 
 - Replace the generic avatar glyphs with a cohesive set of 17 bundled character illustrations; preserve old avatar IDs and add selected preview plus keyboard navigation.

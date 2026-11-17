@@ -17,6 +17,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "admin-summary" {
+		if err := adminSummaryCommand(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) >= 2 && os.Args[1] == "player-auth" {
 		if err := playerAuthCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -56,6 +63,46 @@ func main() {
 		logger.Error("server stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+func adminSummaryCommand() error {
+	token := strings.TrimSpace(os.Getenv("LANORA_ADMIN_TOKEN"))
+	if token == "" {
+		return fmt.Errorf("LANORA_ADMIN_TOKEN is not configured")
+	}
+	endpoint, err := healthcheckURL(env("LANORA_LISTEN_ADDR", ":8080"))
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return fmt.Errorf("could not prepare the local API address")
+	}
+	u.Path = "/api/v1/admin/summary"
+	request, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		return fmt.Errorf("could not prepare the server summary request")
+	}
+	request.Header.Set("Authorization", "Bearer "+token)
+	client := &http.Client{Timeout: 5 * time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("could not reach the LANORA API inside the server container")
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("server summary is unavailable (HTTP %d)", response.StatusCode)
+	}
+	var summary struct {
+		ActiveRooms         int `json:"activeRooms"`
+		ApprovedMemberships int `json:"approvedMemberships"`
+		ActiveSharedPlayers int `json:"activeSharedPlayers"`
+	}
+	if err := json.NewDecoder(io.LimitReader(response.Body, 16<<10)).Decode(&summary); err != nil {
+		return fmt.Errorf("the API returned an invalid server summary")
+	}
+	fmt.Printf("Database/API summary: PASS\nActive shared players: %d\nApproved room memberships: %d\nRooms: %d\n", summary.ActiveSharedPlayers, summary.ApprovedMemberships, summary.ActiveRooms)
+	return nil
 }
 
 func playerAuthCommand(args []string) error {

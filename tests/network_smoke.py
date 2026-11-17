@@ -88,8 +88,21 @@ with tempfile.TemporaryDirectory(prefix='lanora-test-') as directory:
         status, _=rejected('/network/config',token=protected['accessToken'])
         assert status==401, 'policy change did not revoke an existing player session'
         assert request('/connection-info')['playerAuth']=='passwordless', 'passwordless policy was not discoverable'
-        host=request('/network/join',{'deviceId':secrets.token_hex(16),'username':'Host'})
-        guest=request('/network/join',{'deviceId':secrets.token_hex(16),'username':'Guest'})
+        host_device_id=secrets.token_hex(16)
+        guest_device_id=secrets.token_hex(16)
+        host=request('/network/join',{'deviceId':host_device_id,'username':'Host','avatar':'cat'})
+        guest=request('/network/join',{'deviceId':guest_device_id,'username':'Guest','avatar':'fox'})
+        def member_for(response, user_id):
+            return next((member for member in response['members'] if member['userId']==user_id), None)
+        assert member_for(guest, host['userId'])['avatar']=='cat' and member_for(guest, guest['userId'])['avatar']=='fox', 'players did not receive their selected avatars'
+        request('/network/profile', {'username':'Host','avatar':'panda'}, host['accessToken'], 'PATCH')
+        profiles=request('/network/heartbeat',{},guest['accessToken'])['members']
+        assert next(member for member in profiles if member['userId']==host['userId'])['avatar']=='panda', 'avatar update did not reach the other player'
+        request('/network/leave',{},host['accessToken'])
+        host=request('/network/join',{'deviceId':host_device_id,'username':'Host'})
+        profiles=request('/network/heartbeat',{},guest['accessToken'])['members']
+        assert next(member for member in profiles if member['userId']==host['userId'])['avatar']=='panda', 'saved avatar did not persist after reconnect'
+        print('PASS: two authorized player profiles synchronize, update live, and persist after reconnect',flush=True)
         configs=[host['network'],guest['network']]
         assert configs[0]==configs[1], 'Authorized players received different shared networks'
         assert request('/network/config',token=host['accessToken'])==configs[0], 'Authorized config did not match join response'

@@ -33,6 +33,7 @@ struct EngineStatus {
 struct PeerStatus {
     virtual_ip: String,
     latency_ms: Option<f64>,
+    route_type: Option<&'static str>,
 }
 
 fn collect_peer_statuses(value: &Value, output: &mut Vec<PeerStatus>) {
@@ -68,9 +69,15 @@ fn collect_peer_statuses(value: &Value, output: &mut Vec<PeerStatus>) {
                             })
                             .filter(|value| value.is_finite() && *value > 0.0);
                         if !output.iter().any(|peer| peer.virtual_ip == ip.to_string()) {
+                            let route_type = match cost {
+                                Some("Direct") => Some("direct"),
+                                Some("Relay") => Some("relay"),
+                                _ => None,
+                            };
                             output.push(PeerStatus {
                                 virtual_ip: ip.to_string(),
                                 latency_ms: latency,
+                                route_type,
                             });
                         }
                     }
@@ -378,10 +385,12 @@ mod tests {
                 PeerStatus {
                     virtual_ip: "10.126.0.2".into(),
                     latency_ms: Some(24.5),
+                    route_type: Some("direct"),
                 },
                 PeerStatus {
                     virtual_ip: "10.126.0.3".into(),
                     latency_ms: None,
+                    route_type: Some("relay"),
                 },
             ]
         );

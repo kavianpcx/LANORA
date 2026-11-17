@@ -9,10 +9,27 @@ export function Modal({
   label: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(
+    typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  );
   useEffect(() => {
     const dialog = ref.current!;
+    const previousDocumentOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
     dialog.showModal();
-    return () => dialog.close();
+    dialog.querySelector<HTMLElement>("[autofocus]")?.focus({ preventScroll: true });
+    return () => {
+      if (dialog.open) dialog.close();
+      document.documentElement.style.overflow = previousDocumentOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      const target = previouslyFocused.current;
+      if (target?.isConnected)
+        queueMicrotask(() => target.focus({ preventScroll: true }));
+    };
   }, []);
   return (
     <dialog
@@ -23,7 +40,7 @@ export function Modal({
         event.preventDefault();
         onClose();
       }}
-      onMouseDown={(event) => {
+      onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >

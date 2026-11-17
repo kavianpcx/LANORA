@@ -31,6 +31,15 @@ case "$*" in
  'info') [[ "${FAIL_AT:-}" != daemon ]]; exit $?;;
  'compose config --quiet') [[ "${FAIL_AT:-}" != config ]]; exit $?;;
  'compose exec -T caddy wget '*) [[ "${FAIL_AT:-}" != health ]]; exit $?;;
+ 'compose exec -T api /lanora-api healthcheck') [[ "${FAIL_AT:-}" != health ]]; exit $?;;
+ 'compose exec -T api /lanora-api admin-summary')
+   [[ "${FAIL_AT:-}" != summary ]] || exit 1
+   echo 'Database/API summary: PASS'
+   echo 'Active shared players: 2';;
+ 'compose port caddy 80') echo '0.0.0.0:80';;
+ 'compose port caddy 443') echo '0.0.0.0:443';;
+ 'compose port easytier 11010') echo '0.0.0.0:11010';;
+ 'compose logs --tail=100 api') echo '{"level":"ERROR","error_type":"*api.someError"}';;
  'compose exec -T api /lanora-api player-auth status')
    echo "${PLAYER_POLICY:-Player password: required}"
    [[ "${FAIL_AT:-}" != policy ]]
@@ -154,6 +163,20 @@ esac
         self.assertNotIn('down', calls)
         self.assertNotIn('--volumes', calls)
         self.assertIn('compose logs --tail=100 api', calls)
+
+    def test_doctor_reports_policy_ports_and_safe_database_summary(self):
+        result = self.run_server(('doctor',), env={**self.env, 'PLAYER_POLICY': 'Player password: disabled'})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('API: PASS', result.stdout)
+        self.assertIn('Relay: PASS', result.stdout)
+        self.assertIn('Player password: disabled', result.stdout)
+        self.assertIn('anyone who can reach this server', result.stdout)
+        self.assertIn('https://games.example.org', result.stdout)
+        self.assertIn('0.0.0.0:11010', result.stdout)
+        self.assertIn('Active shared players: 2', result.stdout)
+        self.assertIn('Public HTTPS and relay reachability: NOT CHECKED', result.stdout)
+        self.assertIn('*api.someError', result.stdout)
+        self.assert_no_secrets(result)
 
     def test_legacy_code_migration_preserves_other_env_values(self):
         result = self.run_server(('migrate-legacy-player-code',))

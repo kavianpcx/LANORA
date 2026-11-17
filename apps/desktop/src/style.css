@@ -540,35 +540,132 @@ select {
   background: #0a1224ac;
   display: grid;
   place-items: center;
-  padding: 22px;
+  padding: 12px;
   z-index: 10;
+  overflow: hidden;
+  overscroll-behavior: contain;
 }
 .app-dialog {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   width: min(500px, 100%);
-  max-height: 90vh;
-  overflow: auto;
+  max-height: calc(100vh - 24px);
+  overflow: hidden;
   background: var(--surface);
   border-radius: 20px;
-  padding: 29px;
   box-shadow: 0 25px 75px #0005;
   position: relative;
+  border: 1px solid var(--line);
+}
+.app-dialog-profile {
+  width: min(560px, 100%);
+}
+@supports (height: 100dvh) {
+  .app-dialog {
+    max-height: calc(100dvh - 24px);
+  }
+}
+.app-dialog-header {
+  position: relative;
+  flex: none;
+  padding: 22px 26px 8px;
 }
 .app-dialog-close {
   position: absolute;
-  top: 22px;
-  inset-inline-end: 23px;
+  top: 15px;
+  inset-inline-end: 16px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
   border: 0;
   background: none;
   color: var(--muted);
   cursor: pointer;
+  border-radius: 10px;
+}
+.app-dialog-close:hover {
+  color: var(--ink);
+  background: var(--surface-quiet);
 }
 .app-dialog h2 {
   font-size: 25px;
-  margin: 8px 0 19px;
+  line-height: 1.25;
+  margin: 7px 0 8px;
+  padding-inline-end: 44px;
+}
+.app-dialog-description {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0 0 10px;
+  max-width: 48ch;
+}
+.app-dialog-form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0;
+}
+.app-dialog-body {
+  display: grid;
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 13px;
+  padding: 8px 24px 18px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted) 60%, var(--surface)) transparent;
+}
+.app-dialog-body::-webkit-scrollbar {
+  width: 8px;
+}
+.app-dialog-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.app-dialog-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 60%, var(--surface));
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+}
+.app-dialog-body:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -3px;
+}
+.app-dialog-footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 24px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.app-dialog-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+.app-dialog-footer .app-button {
+  flex: none;
+  margin: 0;
 }
 .app-form {
   display: grid;
   gap: 15px;
+}
+.app-form.app-dialog-form {
+  display: flex;
+  gap: 0;
 }
 .app-form label {
   display: grid;
@@ -663,6 +760,14 @@ select {
   background: var(--bg);
   border-radius: 10px;
 }
+.app-profile-preferences {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+.app-profile-preferences .app-pref {
+  min-height: 40px;
+}
 .app-pref button {
   display: flex;
   gap: 6px;
@@ -690,15 +795,25 @@ select {
 }
 .onboarding-progress {
   display: grid;
-  grid-template-columns: 30px minmax(28px, 1fr) 30px auto;
+  grid-template-columns: minmax(0, 1fr) minmax(24px, 1fr) minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  margin: 4px 0 18px;
+  gap: 8px;
+  margin: 11px 0 4px;
   color: var(--muted);
 }
-.onboarding-progress > span {
+.onboarding-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.onboarding-step:last-child {
+  justify-content: flex-end;
+}
+.onboarding-step > span {
   width: 30px;
   height: 30px;
+  flex: none;
   border: 1px solid var(--line);
   border-radius: 50%;
   display: grid;
@@ -706,8 +821,12 @@ select {
   font-size: 12px;
   font-weight: 700;
 }
-.onboarding-progress > span.active,
-.onboarding-progress > span.done {
+.onboarding-step.active,
+.onboarding-step.done {
+  color: var(--ink);
+}
+.onboarding-step.active > span,
+.onboarding-step.done > span {
   color: var(--button-fg);
   background: var(--accent);
   border-color: transparent;
@@ -716,8 +835,10 @@ select {
   height: 1px;
   background: var(--line);
 }
-.onboarding-progress > small {
+.onboarding-step > small {
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .onboarding-copy {
   color: var(--muted);
@@ -751,9 +872,6 @@ select {
   overflow-wrap: anywhere;
   color: var(--ink);
   font: 12px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace;
-}
-.onboarding-back {
-  justify-self: start;
 }
 .spin {
   animation: spin 1s linear infinite;
@@ -1004,9 +1122,6 @@ select {
   width: 17px;
   flex: none;
 }
-.app-dialog {
-  border: 1px solid var(--line);
-}
 @media (max-width: 850px) {
   .app-sidebar {
     width: 74px;
@@ -1181,22 +1296,6 @@ select {
 .titlebar + .lanora-app .app-sidebar {
   min-height: calc(100vh - 56px);
 }
-.avatar-picker {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-  justify-items: center;
-}
- .avatar-picker button {
-  padding: 4px;
-  border: 2px solid transparent;
-  border-radius: 16px;
-  background: transparent;
-  cursor: pointer;
-}
-.avatar-picker button[aria-pressed="true"] {
-  border-color: var(--accent);
-}
 .skeleton {
   padding: 28px;
   border-radius: 14px;
@@ -1226,8 +1325,16 @@ dialog.app-overlay {
   max-height: 100vh;
   margin: 0;
   border: 0;
-  padding: 24px;
+  padding: 12px;
   color: var(--ink);
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+@supports (height: 100dvh) {
+  dialog.app-overlay {
+    height: 100dvh;
+    max-height: 100dvh;
+  }
 }
 dialog.app-overlay::backdrop {
   background: transparent;
@@ -1285,39 +1392,283 @@ button:focus-visible {
 .app-member > .avatar-shell {
   border-radius: 12px;
 }
-.avatar-selected-preview {
+
+/* Compact connected state: the connection form remains available only before joining. */
+.app-main-content.connected {
+  max-width: 900px;
+}
+.app-main-content.connected .app-room {
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.app-room-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 0 17px;
+  border-bottom: 1px solid var(--line);
+}
+.app-room-title {
+  min-width: 0;
+}
+.app-room-title h1 {
+  margin: 4px 0 6px;
+  font-size: clamp(23px, 3vw, 30px);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.app-room-server {
+  margin: 0;
+  max-width: 100%;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.app-room-header-meta {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+}
+.app-room-state {
+  max-width: 300px;
+  padding: 8px 11px;
+}
+.app-room-state.warning {
+  color: var(--warning, #d79a25);
+  background: color-mix(in srgb, #d79a25 12%, var(--surface));
+}
+.app-room-state.failed {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+}
+.app-room-state.ready {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+}
+.app-server-latency {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.app-network-summary {
   display: flex;
   align-items: center;
-  gap: 13px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--surface-quiet);
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
 }
-.avatar-selected-preview > div {
-  display: grid;
-  gap: 2px;
+.app-my-ip {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
 }
-.avatar-selected-preview small {
+.app-my-ip .app-card-icon {
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  border-radius: 12px;
+}
+.app-my-ip-copy {
+  min-width: 0;
+}
+.app-my-ip-copy small,
+.app-my-ip-copy strong {
+  display: block;
+}
+.app-my-ip-copy small {
+  margin-bottom: 3px;
   color: var(--muted);
   font-size: 11px;
 }
-.avatar-selected-preview strong {
-  font-size: 14px;
+.app-my-ip-copy strong {
+  font: 750 21px/1.25 Inter, ui-monospace, monospace;
+  letter-spacing: .01em;
+}
+.app-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.app-invite.compact {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  padding: 7px 10px;
+  margin: 12px 0 0;
+  background: transparent;
+  border: 1px solid var(--line);
+}
+.app-invite.compact span {
+  font-size: 11px;
+}
+.app-invite.compact code {
+  font-size: 12px;
+}
+.app-invite.compact .app-icon {
+  width: 28px;
+  height: 28px;
+}
+.app-player-section {
+  margin-top: 18px;
+}
+.app-player-section .app-members-head {
+  margin: 0 0 3px;
+}
+.app-player-section .app-members-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+}
+.app-player-count {
+  min-width: 25px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--surface-quiet);
+  color: var(--muted);
+  text-align: center;
+  font-size: 11px;
+}
+.app-player-section .app-members {
+  display: block;
+  border-top: 1px solid var(--line);
+}
+.app-player-section .app-member {
+  min-height: 62px;
+  gap: 11px;
+  padding: 10px 2px;
+}
+.app-player-section .app-member.self {
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
+}
+.app-player-section .app-member-copy {
+  min-width: 120px;
+}
+.app-player-section .app-member-copy b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.app-player-section .app-member-copy small {
+  margin: 4px 0 0;
+  font-size: 11px;
+  white-space: normal;
+}
+.app-you-label {
+  color: var(--accent);
+  font-weight: 600;
+}
+.app-peer-quality {
+  unicode-bidi: isolate;
+}
+.app-player-section .app-member code {
+  margin-inline-start: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+.app-member-approval {
+  display: flex;
+  gap: 5px;
+}
+.app-network-help {
+  margin-top: 15px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.app-network-help summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--accent);
+}
+.app-network-help p {
+  max-width: 680px;
+  margin: 9px 0;
+  line-height: 1.65;
+}
+.app-diagnostics dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 16px;
+  max-width: 620px;
+  margin: 10px 0 12px;
+}
+.app-diagnostics dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.app-diagnostics dt {
+  overflow-wrap: anywhere;
+}
+.app-diagnostics dd {
+  margin: 0;
+  color: var(--ink);
+  font: 700 10px Inter, ui-monospace, monospace;
+  white-space: nowrap;
+}
+.app-sidebar .side-step {
+  padding: 9px 6px;
+  gap: 9px;
+}
+.app-sidebar .side-divider {
+  margin: 20px 0 15px;
+}
+
+@media (max-width: 720px) {
+  .app-room-heading {
+    flex-direction: column;
+    gap: 11px;
+  }
+  .app-room-header-meta {
+    align-items: flex-start;
+  }
+  .app-network-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .app-summary-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .app-player-section .app-member code {
+    max-width: 130px;
+  }
 }
 .avatar-picker {
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  justify-items: center;
+  gap: 6px;
+  width: 100%;
   padding: 2px;
 }
 .avatar-picker button {
-  width: 100%;
-  max-width: 62px;
-  height: auto;
+  width: 56px;
+  height: 56px;
+  padding: 3px;
+  margin: 0;
   aspect-ratio: 1;
   display: grid;
   place-items: center;
   border: 2px solid transparent;
-  border-radius: 17px;
+  border-radius: 15px;
+  background: transparent;
+  cursor: pointer;
   transition:
     border-color 150ms ease,
     background 150ms ease,
@@ -1337,7 +1688,26 @@ button:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--accent) 50%, transparent);
   outline-offset: 2px;
 }
+.avatar-picker-expand {
+  justify-self: start;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+.avatar-picker-expand:hover {
+  text-decoration: underline;
+}
+.avatar-picker-expand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
 .avatar-picker button .avatar-shell {
+  width: 46px;
+  height: 46px;
   max-width: 100%;
   max-height: 100%;
 }
@@ -1714,7 +2084,58 @@ button:focus-visible {
     display: none;
   }
 }
+@media (max-height: 640px) {
+  .app-dialog-header {
+    padding-top: 14px;
+    padding-bottom: 5px;
+  }
+  .app-dialog h2 {
+    font-size: 22px;
+    margin-top: 4px;
+    margin-bottom: 6px;
+  }
+  .app-dialog-description {
+    margin-bottom: 6px;
+  }
+  .onboarding-progress {
+    margin-top: 7px;
+  }
+  .app-dialog-body {
+    gap: 10px;
+    padding-top: 6px;
+    padding-bottom: 10px;
+  }
+  .app-dialog-footer {
+    padding-top: 9px;
+    padding-bottom: 11px;
+  }
+  .avatar-picker button {
+    width: 50px;
+    height: 50px;
+  }
+  .avatar-picker button .avatar-shell {
+    width: 42px;
+    height: 42px;
+  }
+}
 @media (max-width: 420px) {
+  .avatar-picker {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .app-dialog-header {
+    padding-inline: 18px;
+  }
+  .app-dialog-body {
+    padding-inline: 16px;
+  }
+  .app-dialog-footer {
+    padding-inline: 16px;
+  }
+  .app-dialog-footer-actions {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 360px) {
   .avatar-picker {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }

@@ -10,6 +10,7 @@ export type ConnectionStage =
 
 export type ConnectionStatus =
   | "server-unreachable"
+  | "connection-interrupted"
   | "server-reachable"
   | "authentication-pending"
   | "authentication-failed"
@@ -28,7 +29,11 @@ export function deriveConnectionStatus(input: {
   virtualIp: string | null;
   reachablePeerCount: number;
 }): ConnectionStatus {
-  if (!input.serverReachable) return "server-unreachable";
+  if (!input.serverReachable) {
+    return input.roomActive && input.tunnelRunning
+      ? "connection-interrupted"
+      : "server-unreachable";
+  }
   if (input.stage === "auth-failed") return "authentication-failed";
   if (input.stage === "authenticating") return "authentication-pending";
   if (input.stage === "failed") return "connection-failed";
