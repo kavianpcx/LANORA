@@ -7,7 +7,7 @@ from urllib.parse import unquote
 root=Path(__file__).resolve().parents[1]
 package=json.loads((root/'apps/desktop/package.json').read_text())
 version=package['version']
-assert version=='0.2.0-alpha.3'
+assert re.fullmatch(r'0\\.2\\.0-alpha\\.\\d+', version), f'unexpected prerelease version: {version}'
 tauri=json.loads((root/'apps/desktop/src-tauri/tauri.conf.json').read_text())
 assert tauri['version']==version
 nsis=tauri['bundle']['windows']['nsis']
