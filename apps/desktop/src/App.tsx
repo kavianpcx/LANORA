@@ -64,9 +64,8 @@ export default function App() {
   const [serverInput, setServerInput] = useState(
     () => localStorage.getItem("lanora.desktopServer") || "",
   );
-  const [accessCode, setAccessCode] = useState(
-    () => localStorage.getItem("lanora.sharedCode") || "",
-  );
+  // Access codes are session-only and are never persisted in browser storage.
+  const [accessCode, setAccessCode] = useState("");
   const [connectionStage, setConnectionStage] = useState<
     "idle" | "server" | "authenticating" | "tunnel" | "connected" | "failed"
   >("idle");
@@ -124,27 +123,9 @@ export default function App() {
     } catch {
       sameServer = false;
     }
-    if (!sameServer) {
-      localStorage.removeItem("lanora.sharedCode");
-      setAccessCode("");
-    }
+    if (!sameServer) setAccessCode("");
   }
-  useEffect(() => {
-    let active = true;
-    // Defer to the microtask queue so StrictMode's discarded mount cannot start a request.
-    void Promise.resolve().then(() => {
-      if (
-        active &&
-        serverInput &&
-        accessCode &&
-        localStorage.getItem("lanora.playerName")
-      )
-        void connect();
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+ 
   useEffect(() => {
     document.documentElement.lang = lang;
     document.documentElement.dir = "ltr";
@@ -341,7 +322,6 @@ export default function App() {
               error: null,
             });
             setRoom(null);
-            localStorage.removeItem("lanora.sharedCode");
             setAccessCode("");
             setError(friendlyError(e, lang));
           }
@@ -486,7 +466,6 @@ export default function App() {
       deviceId: localDeviceId(),
       username: name.trim(),
     });
-    localStorage.setItem("lanora.sharedCode", code);
     setAccessCode(code);
     const active: ActiveRoom = {
       roomId: "shared",
@@ -684,7 +663,6 @@ export default function App() {
         }
       }
       if (room.roomId === "shared") {
-        localStorage.removeItem("lanora.sharedCode");
         setAccessCode("");
       }
       setRoom(null);
@@ -832,8 +810,18 @@ export default function App() {
             </p>
           </div>
           <div className="side-footer">
-            <span className={serverReachable ? "online" : ""} />
-            {serverReachable ? t.connected : t.disconnected}
+            <span className={room && tunnel.virtualIp ? "online" : ""} />
+            {room && tunnel.virtualIp
+              ? lang === "fa"
+                ? "آداپتور مجازی آماده است"
+                : "Virtual adapter ready"
+              : serverReachable
+                ? connectionStage === "failed"
+                  ? lang === "fa"
+                    ? "سرور در دسترس است · اتصال ناموفق"
+                    : "Server reachable · Connection failed"
+                  : t.serverReachable
+                : t.disconnected}
           </div>
         </aside>
         <div className="app-workspace">
