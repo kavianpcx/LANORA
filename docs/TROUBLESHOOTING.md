@@ -4,6 +4,8 @@
 
 Check that the server URL is the HTTPS domain, for example https://games.example.com. Check internet access, DNS, TLS certificate validity, and that the VPS allows inbound TCP 80 and 443. Do not add -k to curl and do not disable certificate checks in the app.
 
+For a backend running on the same computer as the desktop app, use `http://localhost:8080`, `http://127.0.0.1:8080`, or `http://[::1]:8080`. Bare loopback input such as `localhost:8080` also uses HTTP. Port 8080 is the backend API default in the Compose setup; the Tauri/Vite development UI uses port 1420 and is not the API. `localhost` always means the computer running the LANORA client. Public hosts default to HTTPS, and LANORA does not fall back to public HTTP. Plain HTTP to a private-LAN host is rejected by the current client.
+
 On the VPS, run:
 
 ~~~sh

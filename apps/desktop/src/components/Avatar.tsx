@@ -16,7 +16,7 @@ import raccoon from "../assets/avatars/raccoon.webp";
 import robot from "../assets/avatars/robot.webp";
 import tiger from "../assets/avatars/tiger.webp";
 import { avatarNames, type AvatarKind } from "./avatarData";
-export { avatarForPlayer, avatarNames, avatars } from "./avatarData";
+export { avatarNames, avatars } from "./avatarData";
 export type { AvatarKind } from "./avatarData";
 
 const images: Record<AvatarKind, string> = {
@@ -70,7 +70,7 @@ export function Avatar({
 }) {
   return (
     <span
-      className="avatar-shell"
+      className={`avatar-shell avatar-${kind}`}
       style={{
         width: size,
         height: size,

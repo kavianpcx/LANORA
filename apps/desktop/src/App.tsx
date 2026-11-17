@@ -25,6 +25,7 @@ import {
   type PlayerAuthMode,
 } from "./serverAuth";
 import { deriveConnectionStatus, type ConnectionStage } from "./connectionStatus";
+import { PLAYER_PRESENCE_MAX_AGE_MS } from "./diagnostics";
 import { avatars, type AvatarKind } from "./components/Avatar";
 import { ProfileFields } from "./components/ProfileFields";
 import { Modal } from "./components/Modal";
@@ -57,7 +58,7 @@ function localDeviceId() {
 export default function App() {
   const [startupReady, setStartupReady] = useState(false);
   const [showStartupSkeleton, setShowStartupSkeleton] = useState(false);
-  const [appVersion, setAppVersion] = useState("0.2.0-alpha.7");
+  const [appVersion, setAppVersion] = useState("0.2.0-alpha.8");
   const [lang, setLang] = useState<Lang>(() =>
     localStorage.getItem("lanora.language") === "fa" ? "fa" : "en",
   );
@@ -78,6 +79,7 @@ export default function App() {
   const [serverInput, setServerInput] = useState(
     () => localStorage.getItem("lanora.desktopServer") || "",
   );
+  const [addressError, setAddressError] = useState("");
   const [passwordPromptMode, setPasswordPromptMode] = useState<PlayerAuthMode | null>(null);
   const [playerPassword, setPlayerPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -99,6 +101,10 @@ export default function App() {
   } = useServer();
   const tunnelBusy = useRef(false);
   const connectionBusy = useRef(false);
+  const leaveBusy = useRef(false);
+  const retryBusy = useRef(false);
+  const mainServerInputRef = useRef<HTMLInputElement>(null);
+  const onboardingServerInputRef = useRef<HTMLInputElement>(null);
   const roomsBusy = useRef(false);
   const roomsVersion = useRef(0);
   const networkGenerationRef = useRef<{ roomId: string; generation: number | null }>({ roomId: "", generation: null });
@@ -121,6 +127,8 @@ export default function App() {
   const [serverHelp, setServerHelp] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<ListedRoom | null>(null);
   const [busy, setBusy] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState("");
   const [settingsError, setSettingsError] = useState("");
   const [notice, setNotice] = useState("");
@@ -203,6 +211,11 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 1800);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => {
     setLatencyMonitoring(Boolean(room));
   }, [room?.roomId, setLatencyMonitoring]);
   useEffect(() => {
@@ -214,6 +227,7 @@ export default function App() {
   }, [onboarding, room?.roomId, tunnel.state, tunnel.virtualIp]);
   function updateServerAddress(raw: string) {
     setServerInput(raw);
+    setAddressError("");
     setError("");
     setNotice("");
     let sameServer = false;
@@ -587,6 +601,18 @@ export default function App() {
   }, [room?.roomId, room?.status, tunnel.running, tunnel.state, lang]);
   async function connect(rawAddress = serverInput) {
     if (connectionBusy.current || checking || room) return;
+    if (!rawAddress.trim()) {
+      setAddressError(t.addressRequired);
+      setError("");
+      window.requestAnimationFrame(() => {
+        const target = onboarding && mode === "settings" && onboardingStep === "server"
+          ? onboardingServerInputRef.current
+          : mainServerInputRef.current;
+        target?.focus();
+      });
+      return;
+    }
+    setAddressError("");
     connectionBusy.current = true;
     setBusy(true);
     setError("");
@@ -789,8 +815,8 @@ export default function App() {
           const address = String(data.get("serverAddress") || "").trim();
           setServerInput(address);
           if (!address) {
-            setOnboarding(false);
-            setMode(null);
+            setAddressError(t.addressRequired);
+            window.requestAnimationFrame(() => onboardingServerInputRef.current?.focus());
             return;
           }
           await connect(address);
@@ -882,7 +908,9 @@ export default function App() {
     }
   }
   async function leave() {
-    if (!room || tunnelBusy.current) return;
+    if (!room || busy || tunnelBusy.current || leaveBusy.current) return;
+    leaveBusy.current = true;
+    setDisconnecting(true);
     setBusy(true);
     setReconnectAttempt(0);
     setReconnecting(false);
@@ -932,6 +960,24 @@ export default function App() {
     } catch (e) {
       setError(friendlyError(e, lang));
     } finally {
+      leaveBusy.current = false;
+      setDisconnecting(false);
+      setBusy(false);
+    }
+  }
+  async function retryTunnel() {
+    if (!room || busy || tunnelBusy.current || retryBusy.current) return;
+    retryBusy.current = true;
+    setRetrying(true);
+    setBusy(true);
+    try {
+      await invoke("engine_stop");
+      await startTunnel(room.roomId, room.accessToken);
+    } catch (e) {
+      setError(friendlyError(e, lang));
+    } finally {
+      retryBusy.current = false;
+      setRetrying(false);
       setBusy(false);
     }
   }
@@ -1008,11 +1054,15 @@ export default function App() {
             <div>
               <b>{lang === "fa" ? "سرور" : "Server"}</b>
               <small>
-                {serverReachable
-                  ? server
-                  : lang === "fa"
-                    ? "نشانی سرور را وارد کنید"
-                    : "Enter your server address"}
+                {checking
+                  ? t.checking
+                  : server
+                    ? serverReachable
+                      ? server
+                      : t.serverUnreachable
+                    : lang === "fa"
+                      ? "نشانی سرور را وارد کنید"
+                      : "Enter your server address"}
               </small>
             </div>
             {serverReachable && <Check size={15} />}
@@ -1117,8 +1167,11 @@ export default function App() {
               </div>
               <div className="app-server-form">
                 <input
+                  ref={mainServerInputRef}
                   dir="ltr"
                   aria-label={t.server}
+                  aria-invalid={Boolean(addressError)}
+                  aria-describedby={addressError ? "server-address-error" : undefined}
                   placeholder="https://games.example.com:443"
                   value={serverInput}
                   disabled={Boolean(room) || checking || busy}
@@ -1155,6 +1208,11 @@ export default function App() {
                       : t.connect}
                 </button>
               </div>
+              {addressError && (
+                <p id="server-address-error" className="app-field-error" role="alert" dir={lang === "fa" ? "rtl" : "ltr"}>
+                  {addressError}
+                </p>
+              )}
               <p className="app-hint">
                 <ShieldCheck size={15} />
                 <span dir={lang === "fa" ? "rtl" : "ltr"}>{t.backendOnly}</span>
@@ -1267,7 +1325,8 @@ export default function App() {
                 serverAddress={server}
                 serverLatencyMs={serverLatencyMs}
                 serverReachable={serverReachable}
-                presenceFresh={presenceUpdatedAt > 0 && presenceClock - presenceUpdatedAt < 35000}
+                presenceFresh={presenceUpdatedAt > 0 && presenceClock - presenceUpdatedAt < PLAYER_PRESENCE_MAX_AGE_MS}
+                presenceUpdatedAt={presenceUpdatedAt}
                 reconnecting={reconnecting}
                 reconnectAttempt={reconnectAttempt}
                 tunnel={tunnel}
@@ -1276,6 +1335,8 @@ export default function App() {
                 avatar={avatar}
                 playerName={name}
                 busy={busy || tunnelBusy.current}
+                disconnecting={disconnecting}
+                retrying={retrying}
                 onCopy={(value) =>
                   void navigator.clipboard
                     .writeText(value)
@@ -1294,11 +1355,7 @@ export default function App() {
                     .then(() => setNotice(t.copied))
                     .catch(() => setError(lang === "fa" ? "کپی گزارش انجام نشد." : "Could not copy diagnostics."))
                 }
-                onRetry={() =>
-                  void invoke("engine_stop")
-                    .then(() => startTunnel(room.roomId, room.accessToken))
-                    .catch((e) => setError(friendlyError(e, lang)))
-                }
+                onRetry={() => void retryTunnel()}
                 onLeave={() => void leave()}
                 onApprove={(id, approved) => void approve(id, approved)}
               />
@@ -1327,7 +1384,7 @@ export default function App() {
                 <span dir={lang === "fa" ? "rtl" : "ltr"}>{error}</span>
               </div>
             )}
-            {notice && <p className="app-notice" dir={lang === "fa" ? "rtl" : "ltr"}>{notice}</p>}
+            {notice && <p className="app-notice" role="status" aria-live="polite" dir={lang === "fa" ? "rtl" : "ltr"}>{notice}</p>}
             <footer className="app-footer">
               <LockKeyhole size={14} />
               <span dir={lang === "fa" ? "rtl" : "ltr"}>{t.dev}</span>
@@ -1448,12 +1505,14 @@ export default function App() {
                         <label dir={lang === "fa" ? "rtl" : "ltr"}>
                           {lang === "fa" ? "نشانی سرور" : "Server address"}
                           <input
+                            ref={onboardingServerInputRef}
                             name="serverAddress"
                             dir="ltr"
                             inputMode="url"
                             autoComplete="url"
+                            aria-invalid={Boolean(addressError)}
+                            aria-describedby={addressError ? "onboarding-server-address-error" : undefined}
                             value={serverInput}
-                            required
                             disabled={Boolean(room) || checking || busy}
                             onChange={(event) =>
                               updateServerAddress(event.target.value)
@@ -1461,6 +1520,11 @@ export default function App() {
                             placeholder="https://games.example.com"
                             autoFocus
                           />
+                          {addressError && (
+                            <small id="onboarding-server-address-error" className="app-field-error" role="alert">
+                              {addressError}
+                            </small>
+                          )}
                         </label>
                         {room && (
                           <div className="app-connection-progress" role="status" dir={lang === "fa" ? "rtl" : "ltr"}>
