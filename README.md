@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.3/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.4/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
 <p align="center"><a href="README.md">English</a> · <a href="README.fa.md">فارسی</a></p>
 
 # LANORA
@@ -7,7 +7,9 @@
 
 LANORA is an open-source, self-hosted virtual LAN app for friends playing LAN-supported games over the internet. One person runs the server on a Linux VPS. Players install the desktop app, enter the server address and private access code, and connect to the same shared network. There is no account and no website.
 
-> **Status: experimental alpha.** LANORA 0.2.0-alpha.3 has passed automated API, deployment, desktop package, and isolated relay-network tests. Two computers on separate public networks, Windows game traffic, direct P2P, and game-specific LAN discovery have not been verified.
+> **Status: experimental alpha.** LANORA 0.2.0-alpha.4 has passed automated API, deployment, desktop package, and isolated relay-network tests. Two computers on separate public networks, Windows game traffic, direct P2P, and game-specific LAN discovery have not been verified.
+>
+> **Security limit:** Access-code rotation changes the network identity, but cannot force a client that already has the old EasyTier secret to disconnect. Rotate the code and have every trusted player leave and rejoin; treat the old overlay as compromised until migration is complete.
 
 [![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![Desktop builds](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE) [![Latest alpha](https://img.shields.io/github/v/release/kavianpcx/LANORA?include_prereleases&label=alpha)](https://github.com/kavianpcx/LANORA/releases)
 
@@ -36,9 +38,9 @@ The status output does not reveal secrets. Public servers use HTTPS; plain HTTP 
 
 ## Download and connect as a player
 
-- **Windows 10/11 x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.3/LANORA_0.2.0-alpha.3_x64-setup.exe)
-- **Linux x64 (Debian/Ubuntu):** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.3/LANORA_0.2.0-alpha.3_amd64.deb)
-- [View release notes and SHA-256 checksums](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.3)
+- **Windows 10/11 x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.4/LANORA_0.2.0-alpha.4_x64-setup.exe)
+- **Linux x64 (Debian/Ubuntu):** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.4/LANORA_0.2.0-alpha.4_amd64.deb)
+- [View release notes and SHA-256 checksums](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.4)
 
 1. Install and open LANORA. Choose a display name; no signup is needed.
 2. Enter the server address and access code from the server owner, then press **Connect**.
