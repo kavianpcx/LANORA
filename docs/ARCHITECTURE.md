@@ -1,7 +1,12 @@
 # Architecture
 
-`apps/desktop` is a Tauri 2 Windows app with React UI and Rust native process control. `services/api` is Go REST/WebSocket with SQLite. `docker-compose.yml` runs the API, TLS proxy Caddy, and an EasyTier v2.6.4 shared node. Caddy serves only API responses; there is no website. SQLite persists in `lanora_data`.
+LANORA has two independent planes:
 
-The control path is client → HTTPS Caddy → API → SQLite. The game data path is Windows EasyTier peers via their virtual addresses, with the configured shared node available as relay. The backend does not proxy every game packet. Room membership is token-scoped, with no account login. A fresh display name belongs to the current room token, not a verified identity. Pending members cannot access network configuration. The frontend cannot launch arbitrary server commands.
+- Control plane: Go API, SQLite, Caddy TLS proxy. It publishes the player authentication policy, enforces it on join, issues device bearer tokens, and returns player presence.
+- Data plane: the desktop's bundled EasyTier v2.6.4 process and the server's EasyTier relay. Game packets do not pass through the API.
 
-The desktop currently reads a virtual IP from EasyTier CLI but does not identify or measure peer paths. WebSocket room events are in-memory and membership count does not prove online presence. See [Networking](NETWORKING.md) and [Security](SECURITY.md).
+The desktop uses React and TypeScript in a Tauri 2 window. Rust validates network configuration, supervises EasyTier, reads the actual adapter IP, and queries EasyTier's local CLI for peer routes. The client does not accept commands from the API; the API returns structured network settings.
+
+A server has one shared EasyTier network by default. An optional player password is stored as a PBKDF2-SHA256 hash; passwordless mode intentionally permits reachable clients to join. The separate network secret is persisted in SQLite, and each device gets a random bearer token whose hash is stored with its presence record. Administrator authentication and relay credentials remain separate. Legacy room APIs remain available as an advanced path.
+
+The shared network uses EasyTier DHCP. LANORA disables exit nodes. It does not install a system-wide proxy or direct the default internet route through the tunnel.

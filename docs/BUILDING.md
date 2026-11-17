@@ -1,23 +1,51 @@
-# Building
+# Build and verify LANORA
 
-The API requires Go 1.27+:
+The current pre-release is 0.2.0-alpha.5. To build the matching server and desktop source, check out release/0.2.x. The server API is built from the repository checkout by Docker Compose; it is not a separately hosted image.
 
-```sh
+Run each command block from the repository root unless the block changes directories itself.
+
+## API
+
+The API requires Go 1.27 or newer:
+
+~~~sh
 cd services/api
-go test ./...
+GOWORK=off go test -mod=readonly -race ./...
+mkdir -p ../../dist
 go build -trimpath -o ../../dist/lanora-api ./cmd/lanora-api
-```
+~~~
 
-The Windows client requires Windows 10/11 x64, Node.js 22+, Rust stable, Tauri v2 prerequisites, and the pinned EasyTier v2.6.4 Windows binary and driver. The [desktop workflow](../.github/workflows/windows.yml) downloads its ZIP, checks SHA-256, stages resources and notices, then builds NSIS:
+## Desktop prerequisites
 
-```powershell
+The Windows x64 build needs Windows 10/11, Node.js 22, Rust stable, Tauri 2 prerequisites, and the pinned EasyTier 2.6.4 Windows resources. The Debian/Ubuntu x64 build needs Node.js 22, Rust stable, Tauri Linux dependencies, and the pinned EasyTier 2.6.4 Linux resources. The desktop workflow downloads these resources, verifies their SHA-256 values, stages license notices, and builds the packages.
+
+Frontend tests and Rust tests:
+
+~~~sh
 cd apps/desktop
 npm ci
+npm test
+npm run build
+cd src-tauri
+cargo test
+~~~
+
+Build a Windows installer on Windows:
+
+~~~sh
+cd apps/desktop
 npm run tauri build -- --bundles nsis
-```
+~~~
 
-A source checkout alone does not contain the EasyTier binaries; follow the workflow's prepare step before building locally. `npm run build` checks TypeScript/Vite, but does not build the native executable. A successful installer build does not validate real two-client gaming. Do not distribute an untested binary as a stable release.
+Build a Debian package on Linux:
 
-## Linux x64 desktop
+~~~sh
+cd apps/desktop
+npm run tauri build -- --bundles deb
+~~~
 
-The same desktop source supports a Debian/Ubuntu `.deb`. GitHub Actions installs Tauri Linux prerequisites, downloads and verifies the EasyTier v2.6.4 Linux x64 ZIP, and runs `npm run tauri build -- --bundles deb`. The package declares `libcap2-bin` and its post-install hook grants `cap_net_admin,cap_net_raw` to the bundled EasyTier core, so the UI need not run as root. Package installation requires administrator permission. The package and privilege behavior still need runtime testing on a clean Linux desktop; other distributions are not covered.
+A plain source checkout does not include the EasyTier binaries. Follow the prepare-resource steps in the [desktop workflow](../.github/workflows/windows.yml) before building locally.
+
+## What release CI verifies
+
+The Windows and Linux jobs run frontend and Rust tests, build their platform packages, and install and launch those packages. The Linux job also runs the isolated namespace relay test using two EasyTier clients, checks TCP/UDP traffic, and confirms that the test did not alter the system default route. The server-validation job runs Go race tests, setup-command tests, repository checks, and Docker Compose smoke tests. Successful CI does not verify two PCs on separate public networks or game-specific LAN discovery. See the [network test matrix](../tests/NETWORK_TEST_MATRIX.md).
