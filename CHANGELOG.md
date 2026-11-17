@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0-alpha.8 — Connection UX and diagnostic accuracy — 2026-11-17
+
+- Reject empty and malformed server addresses before connecting; infer HTTP for bare loopback development addresses while keeping public hosts on HTTPS.
+- Refine player rows and disconnect/copy actions, compact measured server and peer RTT, and show stale presence and partial peer-route states accurately.
+- Separate observed relay routes from independent relay tests and whitelist copied diagnostic fields.
+- Preserve all 17 avatar IDs and existing WebP artwork.
+- Keep this experimental prerelease; native Windows, real localhost backend, multi-PC internet, and game-traffic behavior remain unverified here.
+
 ## 0.2.0-alpha.5 — Optional player passwords — 2026-11-17
 
 - Let server owners choose required or passwordless player access during fresh setup; protected access remains the default.

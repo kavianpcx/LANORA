@@ -1,6 +1,6 @@
 # FAQ
 
-**Where do I download the app?** Use the current [LANORA 0.2.0-alpha.5 release](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.5). It includes Windows x64 and Debian/Ubuntu Linux x64 packages with SHA-256 sidecars.
+**Where do I download the app?** Use the current [LANORA 0.2.0-alpha.8 release](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.8). It includes Windows x64 and Debian/Ubuntu Linux x64 packages with SHA-256 sidecars.
 
 **Do players need an account?** No. Choose a display name in LANORA and enter the server address.
 

@@ -1,6 +1,6 @@
 # Set up a LANORA server
 
-This walkthrough shows what a server owner needs, what the installer asks, and what appears when setup finishes. The current server source is on the release/0.2.x branch and matches LANORA 0.2.0-alpha.5.
+This walkthrough shows what a server owner needs, what the installer asks, and what appears when setup finishes. The current server source is on the release/0.2.x branch and matches LANORA 0.2.0-alpha.8.
 
 ## 1. Prepare your VPS
 

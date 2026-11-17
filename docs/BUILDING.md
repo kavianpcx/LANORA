@@ -1,6 +1,6 @@
 # Build and verify LANORA
 
-The current pre-release is 0.2.0-alpha.5. To build the matching server and desktop source, check out release/0.2.x. The server API is built from the repository checkout by Docker Compose; it is not a separately hosted image.
+The current pre-release is 0.2.0-alpha.8. To build the matching server and desktop source, check out release/0.2.x. The server API is built from the repository checkout by Docker Compose; it is not a separately hosted image.
 
 Run each command block from the repository root unless the block changes directories itself.
 

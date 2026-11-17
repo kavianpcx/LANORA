@@ -18,8 +18,8 @@ Enter the domain when asked. On a fresh server, choose whether players need a pa
 
 ## Player
 
-Download the current [Windows installer](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_x64-setup.exe) or [Linux package](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_amd64.deb) from [release 0.2.0-alpha.5](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.5). Check the adjacent SHA-256 file before installing.
+Download the current [Windows installer](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe) or [Linux package](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb) from [release 0.2.0-alpha.8](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.8). Check the adjacent SHA-256 file before installing.
 
 Open LANORA, choose a display name, enter the server's HTTPS address, and click Connect. The app asks for a password only if that server requires one. When your virtual IP appears, give it to the game host. Other players use the host's virtual IP in the game's Direct IP or Join by address option.
 
-The app's server-online status means its API heartbeat is working. EasyTier peer status is reported separately.
+The app's server-online status means its API heartbeat is working. EasyTier peer status is reported separately. For local development with a backend on the same machine, use `http://localhost:8080` or `http://127.0.0.1:8080`; port 1420 is the UI dev server, not the API. Public hosts use HTTPS and do not fall back to HTTP.
