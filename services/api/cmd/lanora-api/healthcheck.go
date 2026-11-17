@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -17,8 +18,9 @@ func healthcheckURL(listenAddr string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid LANORA_LISTEN_ADDR: %w", err)
 	}
-	if port == "" {
-		return "", fmt.Errorf("invalid LANORA_LISTEN_ADDR: missing port")
+	portNumber, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || portNumber == 0 {
+		return "", fmt.Errorf("invalid LANORA_LISTEN_ADDR: port must be between 1 and 65535")
 	}
 	if host == "" || host == "0.0.0.0" || host == "::" {
 		host = "127.0.0.1"
