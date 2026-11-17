@@ -451,7 +451,7 @@ export default function App() {
       localStorage.setItem("lanora.desktopServer", url);
       if (!accessCode.trim()) {
         setError(t.accessCodeRequired);
-        setConnectionStage("auth-failed");
+        setConnectionStage("failed");
         return;
       }
       await joinSharedNetwork(url, accessCode);
