@@ -15,6 +15,6 @@ On a fresh installation, setup asks whether players must enter a password. **Yes
 
 ## Player
 
-Install LANORA from the [alpha release](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.5). Enter the server's HTTPS address and your display name. Connect; LANORA asks for a password only when the server requires it. Wait for the EasyTier virtual IP, then give the game host's IP to the other players. Use Direct IP if the game does not discover LAN games automatically.
+Install LANORA from the [alpha release](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.6). Enter the server's HTTPS address and your display name. Connect; LANORA asks for a password only when the server requires it. Wait for the EasyTier virtual IP, then give the game host's IP to the other players. Use Direct IP if the game does not discover LAN games automatically.
 
 The app online label reflects API heartbeat; EasyTier peer status is shown separately.

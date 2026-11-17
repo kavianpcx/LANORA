@@ -1,5 +1,10 @@
 import { Globe2, Sun, Moon } from "lucide-react";
-import { Avatar, avatars, type AvatarKind } from "./Avatar";
+import {
+  Avatar,
+  avatarNames,
+  avatars,
+  type AvatarKind,
+} from "./Avatar";
 import { labels } from "../labels";
 export function ProfileFields({
   lang,
@@ -19,18 +24,59 @@ export function ProfileFields({
   setAvatar: (v: AvatarKind) => void;
 }) {
   const t = labels[lang];
+  const focusAvatar = (index: number) => {
+    const next = avatars[index];
+    if (!next) return;
+    setAvatar(next);
+    document.getElementById(`avatar-${next}`)?.focus();
+  };
   return (
     <>
-      <div className="avatar-picker">
+      <div className="avatar-selected-preview" aria-live="polite">
+        <Avatar kind={avatar} size={58} decorative />
+        <div>
+          <small>{lang === "fa" ? "آواتار انتخاب‌شده" : "Selected avatar"}</small>
+          <strong dir="auto">{avatarNames[lang][avatar]}</strong>
+        </div>
+      </div>
+      <div
+        className="avatar-picker"
+        role="group"
+        aria-label={lang === "fa" ? "انتخاب آواتار" : "Choose an avatar"}
+      >
         {avatars.map((a) => (
           <button
             key={a}
+            id={`avatar-${a}`}
             type="button"
-            aria-label={a}
+            aria-label={avatarNames[lang][a]}
             aria-pressed={avatar === a}
+            tabIndex={avatar === a ? 0 : -1}
             onClick={() => setAvatar(a)}
+            onKeyDown={(event) => {
+              const index = avatars.indexOf(a);
+              const rowLength = 5;
+              const nextIndex =
+                event.key === "ArrowRight"
+                  ? Math.min(index + 1, avatars.length - 1)
+                  : event.key === "ArrowLeft"
+                    ? Math.max(index - 1, 0)
+                    : event.key === "ArrowDown"
+                      ? Math.min(index + rowLength, avatars.length - 1)
+                      : event.key === "ArrowUp"
+                        ? Math.max(index - rowLength, 0)
+                        : event.key === "Home"
+                          ? 0
+                          : event.key === "End"
+                            ? avatars.length - 1
+                            : index;
+              if (nextIndex !== index) {
+                event.preventDefault();
+                focusAvatar(nextIndex);
+              }
+            }}
           >
-            <Avatar kind={a} />
+            <Avatar kind={a} size={48} decorative />
           </button>
         ))}
       </div>

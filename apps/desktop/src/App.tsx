@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, type FormEvent } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   Activity,
   ArrowRight,
@@ -28,6 +29,8 @@ import { avatars, type AvatarKind } from "./components/Avatar";
 import { ProfileFields } from "./components/ProfileFields";
 import { Modal } from "./components/Modal";
 import { TitleBar } from "./components/TitleBar";
+import { StartupSkeleton } from "./components/StartupSkeleton";
+import { ConnectionJourney } from "./components/ConnectionJourney";
 import { useServer } from "./hooks/useServer";
 import type {
   Lang,
@@ -52,6 +55,9 @@ function localDeviceId() {
 }
 
 export default function App() {
+  const [startupReady, setStartupReady] = useState(false);
+  const [showStartupSkeleton, setShowStartupSkeleton] = useState(false);
+  const [appVersion, setAppVersion] = useState("0.2.0-alpha.6");
   const [lang, setLang] = useState<Lang>(() =>
     localStorage.getItem("lanora.language") === "fa" ? "fa" : "en",
   );
@@ -109,6 +115,7 @@ export default function App() {
   const [selectedRoom, setSelectedRoom] = useState<ListedRoom | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [settingsError, setSettingsError] = useState("");
   const [notice, setNotice] = useState("");
   const t = labels[lang];
   const connectionStatus = deriveConnectionStatus({
@@ -122,17 +129,69 @@ export default function App() {
   const [onboarding, setOnboarding] = useState(
     () => !localStorage.getItem("lanora.playerName"),
   );
+  useEffect(() => {
+    let active = true;
+    const revealTimer = window.setTimeout(() => {
+      if (active) setShowStartupSkeleton(true);
+    }, 120);
+    const releaseTimer = window.setTimeout(() => {
+      if (active) {
+        setStartupReady(true);
+        setShowStartupSkeleton(false);
+      }
+    }, 1500);
+    const finish = () => {
+      if (!active) return;
+      window.clearTimeout(revealTimer);
+      window.clearTimeout(releaseTimer);
+      setStartupReady(true);
+      setShowStartupSkeleton(false);
+    };
+    const initialize = async () => {
+      if (!isTauri()) return;
+      const [versionResult] = await Promise.allSettled([
+        getVersion(),
+        invoke<EngineStatus>("engine_status"),
+      ]);
+      if (active && versionResult.status === "fulfilled")
+        setAppVersion(versionResult.value);
+    };
+    void Promise.race([
+      initialize(),
+      new Promise<void>((resolve) => window.setTimeout(resolve, 1450)),
+    ]).finally(finish);
+    return () => {
+      active = false;
+      window.clearTimeout(revealTimer);
+      window.clearTimeout(releaseTimer);
+    };
+  }, []);
   function closeModal() {
     if (busy) return;
     if (onboarding) {
-      localStorage.setItem("lanora.playerName", name);
-      localStorage.setItem("lanora.avatar", avatar);
-      setOnboarding(false);
+      try {
+        localStorage.setItem("lanora.playerName", name);
+        localStorage.setItem("lanora.avatar", avatar);
+        setOnboarding(false);
+      } catch {
+        setSettingsError(
+          lang === "fa"
+            ? "ذخیرهٔ پروفایل روی این دستگاه ناموفق بود. فضای ذخیره‌سازی را بررسی کنید."
+            : "Could not save the profile on this device. Check local storage and try again.",
+        );
+        return;
+      }
     }
     setMode(null);
   }
+  function openSettings() {
+    setSettingsError("");
+    setMode("settings");
+  }
   function updateServerAddress(raw: string) {
     setServerInput(raw);
+    setError("");
+    setNotice("");
     let sameServer = false;
     try {
       sameServer = normalize(raw) === localStorage.getItem("lanora.desktopServer");
@@ -500,12 +559,13 @@ export default function App() {
       roomId: "shared",
       name: labels[lang].sharedNetwork,
       accessToken: joined.accessToken,
+      selfUserId: joined.userId,
       role: "member",
       status: "approved",
       members: joined.members,
     };
+    setConnectionStage("authorized");
     setRoom(active);
-    setConnectionStage("tunnel");
     await startTunnel("shared", active.accessToken, url, joined.network);
   }
   async function submitServerPassword(event: FormEvent<HTMLFormElement>) {
@@ -559,6 +619,7 @@ export default function App() {
             : `/api/v1/rooms/${id}/network`,
           token,
         ));
+      if (id === "shared") setConnectionStage("tunnel");
       await invoke("engine_start", { cfg });
       setTunnel({
         running: true,
@@ -582,15 +643,16 @@ export default function App() {
     event.preventDefault();
     setBusy(true);
     setError("");
+    setSettingsError("");
     const data = new FormData(event.currentTarget);
     try {
       if (mode === "settings") {
         const next = String(data.get("name") || name).trim();
         if (next.length < 2 || next.length > 32)
           throw new RequestError("invalid_input");
-        setName(next);
         localStorage.setItem("lanora.playerName", next);
         localStorage.setItem("lanora.avatar", avatar);
+        setName(next);
         if (onboarding && onboardingStep === "profile") {
           setOnboardingStep("server");
           return;
@@ -614,7 +676,7 @@ export default function App() {
       }
       if (!server) throw new Error("Connect to your server first.");
       if (!name || name.trim().length < 2) {
-        setMode("settings");
+        openSettings();
         throw new Error("Set your display name first.");
       }
       if (mode === "create") {
@@ -668,7 +730,17 @@ export default function App() {
       setMode(null);
       setSelectedRoom(null);
     } catch (e) {
-      setError(friendlyError(e, lang));
+      if (mode === "settings") {
+        setSettingsError(
+          e instanceof RequestError
+            ? friendlyError(e, lang)
+            : lang === "fa"
+              ? "ذخیرهٔ تنظیمات روی این دستگاه ناموفق بود. فضای ذخیره‌سازی را بررسی کنید."
+              : "Could not save settings on this device. Check local storage and try again.",
+        );
+      } else {
+        setError(friendlyError(e, lang));
+      }
     } finally {
       setBusy(false);
     }
@@ -749,10 +821,12 @@ export default function App() {
     setMode("join");
     setError("");
   };
+  if (!startupReady) return <StartupSkeleton lang={lang} visible={showStartupSkeleton} />;
   return (
     <>
       <TitleBar
         lang={lang}
+        appVersion={appVersion}
         status={
           checking || busy || tunnel.state === "connecting"
             ? "checking"
@@ -774,7 +848,7 @@ export default function App() {
         name={name}
         avatar={avatar}
         settingsLabel={t.settings}
-        onSettings={() => setMode("settings")}
+        onSettings={openSettings}
       />
       <div className="lanora-app" dir="ltr" data-lang={lang}>
         <aside className="app-sidebar">
@@ -875,6 +949,7 @@ export default function App() {
         </aside>
         <div className="app-workspace">
           <main className="app-main">
+            <div className="app-main-content" key={room?.roomId ?? "connect"}>
             <section className="app-hero">
               <div className="app-eyebrow">
                 <span className="app-brand-dot" />
@@ -927,13 +1002,15 @@ export default function App() {
                     <ArrowRight size={17} />
                   )}{" "}
                   {checking
-                    ? phase === "connecting"
-                      ? t.checking
-                      : t.checking
+                    ? t.checking
                     : busy
-                      ? connectionStage === "authenticating"
-                        ? t.authenticating
-                        : t.connectingNetwork
+                      ? connectionStage === "server"
+                        ? t.checking
+                        : connectionStage === "authenticating"
+                          ? t.authenticating
+                          : connectionStage === "authorized"
+                            ? t.accessApproved
+                            : t.connectingNetwork
                       : t.connect}
                 </button>
               </div>
@@ -941,17 +1018,8 @@ export default function App() {
                 <ShieldCheck size={15} />
                 <span dir={lang === "fa" ? "rtl" : "ltr"}>{t.backendOnly}</span>
               </p>
-              {connectionStage !== "idle" && connectionStage !== "failed" && !room && !passwordPromptMode && (
-                <p className="app-connection-progress" role="status" aria-live="polite">
-                  <RefreshCw size={15} className="spin" />
-                  <span dir={lang === "fa" ? "rtl" : "ltr"}>
-                    {connectionStage === "server"
-                      ? t.checking
-                      : connectionStage === "authenticating"
-                        ? t.authenticating
-                        : t.connectingNetwork}
-                  </span>
-                </p>
+              {!passwordPromptMode && (
+                <ConnectionJourney stage={connectionStage} lang={lang} />
               )}
             </section>
             {!room && server && (
@@ -1054,9 +1122,11 @@ export default function App() {
             {room && (
               <RoomView
                 room={room}
+                serverAddress={server}
                 tunnel={tunnel}
                 peerStatuses={peerStatuses}
                 lang={lang}
+                avatar={avatar}
                 busy={busy || tunnelBusy.current}
                 onCopy={(value) =>
                   void navigator.clipboard
@@ -1108,6 +1178,7 @@ export default function App() {
               <LockKeyhole size={14} />
               <span dir={lang === "fa" ? "rtl" : "ltr"}>{t.dev}</span>
             </footer>
+            </div>
           </main>
           {mode && (
             <Modal
@@ -1407,17 +1478,31 @@ export default function App() {
                         type="button"
                         disabled={busy || checking}
                         onClick={() => {
-                          localStorage.setItem("lanora.playerName", name);
-                          localStorage.setItem("lanora.avatar", avatar);
-                          setOnboarding(false);
-                          setMode(null);
+                          try {
+                            localStorage.setItem("lanora.playerName", name);
+                            localStorage.setItem("lanora.avatar", avatar);
+                            setOnboarding(false);
+                            setSettingsError("");
+                            setMode(null);
+                          } catch {
+                            setSettingsError(
+                              lang === "fa"
+                                ? "ذخیرهٔ پروفایل روی این دستگاه ناموفق بود. فضای ذخیره‌سازی را بررسی کنید."
+                                : "Could not save the profile on this device. Check local storage and try again.",
+                            );
+                          }
                         }}
                       >
                         {lang === "fa" ? "فعلاً بعداً وصل می‌شوم" : "I’ll connect later"}
                       </button>
                     )}
                 </form>
-                {error && (
+                {mode === "settings" && settingsError && (
+                  <p className="app-error" role="alert" dir={lang === "fa" ? "rtl" : "ltr"}>
+                    {settingsError}
+                  </p>
+                )}
+                {mode !== "settings" && error && (
                   <p className="app-error" role="alert">
                     {error}
                   </p>

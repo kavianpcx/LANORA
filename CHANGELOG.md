@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0-alpha.6 — Desktop connection and avatar polish — 2026-11-17
+
+- Replace the generic avatar glyphs with a cohesive set of 17 bundled character illustrations; preserve old avatar IDs and add selected preview plus keyboard navigation.
+- Add a bounded startup skeleton backed by desktop version and native engine initialization checks, without requiring the server to be online.
+- Show actual server, player-authorization, and virtual-network connection stages; animate the content transition without fake progress.
+- Show the joined server address and use stable local avatar fallbacks for other players. Avatar choices are not synchronized by the current server API.
+- Keep connection failures on the connection screen and show only local profile-save errors in Settings.
+- Keep this release experimental; independent public-network peer connectivity and game-specific LAN discovery remain unverified.
+
 ## 0.2.0-alpha.5 — Optional player passwords — 2026-11-17
 
 - Let server owners choose required or passwordless player access during fresh setup; protected access remains the default.

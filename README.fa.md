@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.5/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.6/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
 <p align="center"><a href="README.md">English</a> · <a href="README.fa.md">فارسی</a></p>
 
 # LANORA
@@ -7,7 +7,7 @@
 
 LANORA برنامه‌ای متن‌باز و خودمیزبان برای بازی‌های دارای قابلیت LAN است. یک نفر سرور را روی VPS لینوکس اجرا می‌کند. بازیکنان برنامه را نصب می‌کنند، نشانی سرور را وارد می‌کنند و فقط اگر صاحب سرور لازم بداند رمز می‌زنند. حساب کاربری یا وب‌سایت لازم نیست.
 
-> **وضعیت: آلفای آزمایشی.** نسخهٔ 0.2.0-alpha.5 امکان اختیاری‌کردن رمز بازیکنان را اضافه می‌کند. اتصال رایانه‌های مستقل ویندوز روی اینترنت عمومی، ترافیک بازی از تونل ویندوز، اتصال مستقیم P2P و کشف خودکار بازی‌ها هنوز تأیید نشده‌اند.
+> **وضعیت: آلفای آزمایشی.** نسخهٔ 0.2.0-alpha.6 آواتارها، بارگذاری آغازین و نمایش وضعیت اتصال را بهبود می‌دهد و امکان اختیاری‌کردن رمز بازیکنان را حفظ می‌کند. اتصال رایانه‌های مستقل ویندوز روی اینترنت عمومی، ترافیک بازی از تونل ویندوز، اتصال مستقیم P2P و کشف خودکار بازی‌ها هنوز تأیید نشده‌اند.
 >
 > **محدودیت امنیتی:** تغییر سیاست رمز، نشست‌های API را باطل و هویت شبکهٔ فعلی را عوض می‌کند؛ اما نمی‌تواند کلاینت تغییریافته‌ای را که به شبکهٔ قدیمی EasyTier وصل است مجبور به قطع کند. پس از تغییر سیاست از همهٔ بازیکنان بخواهید کامل قطع شوند و دوباره وصل شوند.
 
@@ -46,9 +46,9 @@ bash scripts/server.sh player-auth disable
 
 ## دانلود و اتصال بازیکنان
 
-- **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_x64-setup.exe)
-- **لینوکس x64 (Debian/Ubuntu):** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_amd64.deb)
-- [یادداشت انتشار و کدهای SHA-256](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.5)
+- **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.6/LANORA_0.2.0-alpha.6_x64-setup.exe)
+- **لینوکس x64 (Debian/Ubuntu):** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.6/LANORA_0.2.0-alpha.6_amd64.deb)
+- [یادداشت انتشار و کدهای SHA-256](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.6)
 
 ۱. برنامه را نصب و باز کنید. نام نمایشی انتخاب کنید؛ ثبت‌نام لازم نیست.
 ۲. نشانی سرور را وارد کنید و **Connect** را بزنید. فقط اگر سرور رمز بخواهد، LANORA آن را می‌پرسد.
