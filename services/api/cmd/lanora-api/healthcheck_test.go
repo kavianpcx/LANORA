@@ -27,7 +27,7 @@ func TestHealthcheckURLUsesConfiguredPort(t *testing.T) {
 }
 
 func TestHealthcheckURLRejectsInvalidListener(t *testing.T) {
-	for _, addr := range []string{"", "8080", ":not-a-port"} {
+	for _, addr := range []string{"", "8080", ":not-a-port", ":65536", ":0"} {
 		if addr == "" {
 			continue // Empty config intentionally selects the default.
 		}
