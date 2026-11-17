@@ -13,7 +13,11 @@ import (
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
 		client := &http.Client{Timeout: 3 * time.Second}
-		response, err := client.Get("http://127.0.0.1:8080/api/v1/health")
+		healthURL, err := healthcheckURL(env("LANORA_LISTEN_ADDR", ":8080"))
+		if err != nil {
+			os.Exit(1)
+		}
+		response, err := client.Get(healthURL)
 		if err != nil {
 			os.Exit(1)
 		}

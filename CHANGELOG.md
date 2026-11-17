@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0-alpha.4 — Status and deployment reliability — 2026-11-17
+
+- Derive API healthcheck targets from `LANORA_LISTEN_ADDR`; align Caddy with `LANORA_API_INTERNAL_PORT` for custom internal ports.
+- Keep shared access codes in process memory only and remove legacy localStorage values on startup.
+- Separate API availability, authorization, tunnel startup, virtual-IP assignment and measured peer reachability in desktop status.
+- Add regression coverage for custom healthcheck ports and connection-state transitions.
+- Document network-secret rotation, client migration steps, and the fact that API token revocation cannot immediately evict an already-connected EasyTier peer.
+- Keep this release experimental. Independent Windows PCs on public networks, external VPS relay, P2P/NAT and game-specific compatibility remain unverified.
+
 ## 0.2.0-alpha.3 — Shared-network preview — 2026-11-17
 
 - Make the server-wide shared network the primary client flow: enter the server address and private access code, then LANORA joins the same EasyTier network automatically.

@@ -1,15 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="520" height="128" viewBox="0 0 520 128" role="img" aria-label="LANORA">
-  <rect x="3" y="3" width="122" height="122" rx="32" fill="#4355DB"/>
-  <g fill="none" stroke="#F7F8FC" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M41 41 64 64 87 41"/>
-    <path d="M64 64v24"/>
+  <defs>
+    <linearGradient id="lanoraBlue" x1="14" y1="12" x2="112" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#586BFA"/>
+      <stop offset="1" stop-color="#3544C7"/>
+    </linearGradient>
+    <radialGradient id="lanoraHub" cx="0" cy="0" r="1" gradientTransform="matrix(0 18 -18 0 62 59)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E9FF9D"/>
+      <stop offset="1" stop-color="#CAEF5C"/>
+    </radialGradient>
+  </defs>
+  <rect width="128" height="128" rx="34" fill="url(#lanoraBlue)"/>
+  <rect x="5" y="5" width="118" height="118" rx="30" stroke="#fff" stroke-opacity=".12" stroke-width="2"/>
+  <circle cx="64" cy="64" r="39" fill="#2638B5" fill-opacity=".16"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M39 44 58 59m31-15L70 59M39 84l19-15m31 15L70 69" stroke-opacity=".74" stroke-width="5"/>
+    <path d="M39 44c-8 5-12 12-13 20m63-20c8 5 12 12 13 20M39 84c-8-5-12-12-13-20m63 20c8-5 12-12 13-20" stroke-opacity=".24" stroke-width="3"/>
   </g>
-  <g fill="#CAEF5C" stroke="#4355DB" stroke-width="3">
-    <circle cx="38" cy="38" r="10"/>
-    <circle cx="90" cy="38" r="10"/>
-    <circle cx="64" cy="92" r="10"/>
+  <g fill="#fff">
+    <circle cx="37" cy="42" r="7"/>
+    <circle cx="91" cy="42" r="7"/>
+    <circle cx="37" cy="86" r="7"/>
+    <circle cx="91" cy="86" r="7"/>
   </g>
-  <circle cx="64" cy="64" r="11" fill="#F7F8FC"/>
-  <circle cx="64" cy="64" r="5.5" fill="#1B2445"/>
-  <text x="157" y="84" fill="#182135" font-family="Inter,Arial,sans-serif" font-size="53" font-weight="750" letter-spacing="6">LANORA</text>
+  <circle cx="64" cy="64" r="15" fill="url(#lanoraHub)"/>
+  <circle cx="64" cy="64" r="5" fill="#4355DB"/>
+  <text x="158" y="83" fill="#191C27" font-family="Inter,Arial,sans-serif" font-size="56" font-weight="700" letter-spacing="6">LANORA</text>
 </svg>

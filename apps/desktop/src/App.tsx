@@ -16,6 +16,7 @@ import {
 import brand from "./brand.svg";
 import { labels } from "./labels";
 import { api, friendlyError, normalize, RequestError } from "./api";
+import { deriveConnectionStatus, type ConnectionStage } from "./connectionStatus";
 import { avatars, type AvatarKind } from "./components/Avatar";
 import { ProfileFields } from "./components/ProfileFields";
 import { Modal } from "./components/Modal";
@@ -64,12 +65,9 @@ export default function App() {
   const [serverInput, setServerInput] = useState(
     () => localStorage.getItem("lanora.desktopServer") || "",
   );
-  const [accessCode, setAccessCode] = useState(
-    () => localStorage.getItem("lanora.sharedCode") || "",
-  );
-  const [connectionStage, setConnectionStage] = useState<
-    "idle" | "server" | "authenticating" | "tunnel" | "connected" | "failed"
-  >("idle");
+  // Access codes are session-only and are never persisted in browser storage.
+  const [accessCode, setAccessCode] = useState("");
+  const [connectionStage, setConnectionStage] = useState<ConnectionStage>("idle");
   const [peerStatuses, setPeerStatuses] = useState<PeerStatus[]>([]);
   const {
     server,
@@ -104,6 +102,14 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const t = labels[lang];
+  const connectionStatus = deriveConnectionStatus({
+    serverReachable,
+    stage: connectionStage,
+    roomActive: Boolean(room),
+    tunnelRunning: tunnel.running,
+    virtualIp: tunnel.virtualIp,
+    reachablePeerCount: peerStatuses.length,
+  });
   const [onboarding, setOnboarding] = useState(
     () => !localStorage.getItem("lanora.playerName"),
   );
@@ -124,26 +130,12 @@ export default function App() {
     } catch {
       sameServer = false;
     }
-    if (!sameServer) {
-      localStorage.removeItem("lanora.sharedCode");
-      setAccessCode("");
-    }
+    if (!sameServer) setAccessCode("");
   }
+ 
   useEffect(() => {
-    let active = true;
-    // Defer to the microtask queue so StrictMode's discarded mount cannot start a request.
-    void Promise.resolve().then(() => {
-      if (
-        active &&
-        serverInput &&
-        accessCode &&
-        localStorage.getItem("lanora.playerName")
-      )
-        void connect();
-    });
-    return () => {
-      active = false;
-    };
+    // Remove access codes saved by older versions; new versions never restore them.
+    localStorage.removeItem("lanora.sharedCode");
   }, []);
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -341,7 +333,6 @@ export default function App() {
               error: null,
             });
             setRoom(null);
-            localStorage.removeItem("lanora.sharedCode");
             setAccessCode("");
             setError(friendlyError(e, lang));
           }
@@ -466,7 +457,7 @@ export default function App() {
       await joinSharedNetwork(url, accessCode);
     } catch (e) {
       setError(friendlyError(e, lang));
-      setConnectionStage("failed");
+      setConnectionStage(e instanceof RequestError && e.status === 401 ? "auth-failed" : "failed");
     } finally {
       connectionBusy.current = false;
       setBusy(false);
@@ -486,7 +477,6 @@ export default function App() {
       deviceId: localDeviceId(),
       username: name.trim(),
     });
-    localStorage.setItem("lanora.sharedCode", code);
     setAccessCode(code);
     const active: ActiveRoom = {
       roomId: "shared",
@@ -684,7 +674,6 @@ export default function App() {
         }
       }
       if (room.roomId === "shared") {
-        localStorage.removeItem("lanora.sharedCode");
         setAccessCode("");
       }
       setRoom(null);
@@ -832,8 +821,24 @@ export default function App() {
             </p>
           </div>
           <div className="side-footer">
-            <span className={serverReachable ? "online" : ""} />
-            {serverReachable ? t.connected : t.disconnected}
+            <span className={connectionStatus === "peer-connected" ? "online" : ""} />
+            {connectionStatus === "server-unreachable"
+              ? t.disconnected
+              : connectionStatus === "server-reachable"
+                ? t.serverReachable
+                : connectionStatus === "authentication-pending"
+                  ? lang === "fa" ? "در حال بررسی کد دسترسی" : "Checking access code"
+                  : connectionStatus === "authentication-failed"
+                    ? lang === "fa" ? "کد دسترسی نامعتبر است" : "Access code rejected"
+                    : connectionStatus === "authorized"
+                      ? lang === "fa" ? "دسترسی تأیید شد" : "Authorized"
+                      : connectionStatus === "tunnel-starting"
+                        ? lang === "fa" ? "در حال راه‌اندازی تونل" : "Starting tunnel"
+                        : connectionStatus === "peer-connected"
+                          ? lang === "fa" ? "همتا در دسترس است" : "Peer reachable"
+                          : connectionStatus === "peer-unverified"
+                            ? lang === "fa" ? "IP دریافت شد · ارتباط همتا تأیید نشده" : "Virtual IP assigned · Peer unverified"
+                            : lang === "fa" ? "اتصال ناموفق" : "Connection failed"}
           </div>
         </aside>
         <div className="app-workspace">
