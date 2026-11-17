@@ -54,10 +54,18 @@ fn collect_peer_statuses(value: &Value, output: &mut Vec<PeerStatus>) {
                     .next()
                     .unwrap_or_default();
                 if let Ok(ip) = raw_ip.parse::<std::net::Ipv4Addr>() {
-                    if !ip.is_unspecified() && !ip.is_loopback() && !ip.is_multicast() && !ip.is_broadcast() {
+                    if !ip.is_unspecified()
+                        && !ip.is_loopback()
+                        && !ip.is_multicast()
+                        && !ip.is_broadcast()
+                    {
                         let latency = fields
                             .get("lat_ms")
-                            .and_then(|value| value.as_f64().or_else(|| value.as_str()?.parse::<f64>().ok()))
+                            .and_then(|value| {
+                                value
+                                    .as_f64()
+                                    .or_else(|| value.as_str()?.parse::<f64>().ok())
+                            })
                             .filter(|value| value.is_finite() && *value > 0.0);
                         if !output.iter().any(|peer| peer.virtual_ip == ip.to_string()) {
                             output.push(PeerStatus {
