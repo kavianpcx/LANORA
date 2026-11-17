@@ -88,13 +88,14 @@ import -window root native-profile-saved.png
 click_at 560 28
 sleep 1
 import -window "$window" native-settings-open.png
-# The selected avatar has focus. Tab to the display-name input.
-xdotool key Tab Tab
+# Click the visible field explicitly; native focus can return to the dialog's
+# close button when Settings opens from the custom title bar.
+click_at 380 470
 xdotool key ctrl+a
 xdotool type --clearmodifiers --delay 15 'Edited Player'
 import -window "$window" native-settings-edit.png
-# Move through the preference controls to Save and submit the profile form.
-xdotool key Tab Tab Tab Tab Tab Return
+# Save the edit and verify it persists when Settings is reopened.
+click_at 589 657
 sleep 1
 import -window "$window" native-settings-saved.png
 click_at 560 28
