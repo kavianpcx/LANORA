@@ -34,3 +34,9 @@ test('peer reachability requires actual peer evidence', () => {
 test('tunnel startup is not presented as connected', () => {
   assert.equal(deriveConnectionStatus({...base, roomActive: true, stage: 'tunnel'}), 'tunnel-starting');
 });
+
+test('an API interruption does not claim a still-running virtual network stopped', () => {
+  assert.equal(deriveConnectionStatus({
+    ...base, serverReachable: false, roomActive: true, tunnelRunning: true,
+  }), 'connection-interrupted');
+});

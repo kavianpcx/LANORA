@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Globe2, Sun, Moon } from "lucide-react";
 import {
   Avatar,
@@ -14,6 +15,8 @@ export function ProfileFields({
   setLang,
   setTheme,
   setAvatar,
+  showPreferences = true,
+  autoFocusAvatar = false,
 }: {
   lang: "en" | "fa";
   theme: "light" | "dark";
@@ -22,29 +25,34 @@ export function ProfileFields({
   setLang: (v: "en" | "fa") => void;
   setTheme: (v: "light" | "dark") => void;
   setAvatar: (v: AvatarKind) => void;
+  showPreferences?: boolean;
+  autoFocusAvatar?: boolean;
 }) {
   const t = labels[lang];
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const [showAll, setShowAll] = useState(false);
+  const shownAvatars = showAll
+    ? avatars
+    : avatars.filter((item, index) => index < 6 || item === avatar);
   const focusAvatar = (index: number) => {
-    const next = avatars[index];
+    const next = shownAvatars[index];
     if (!next) return;
     setAvatar(next);
-    document.getElementById(`avatar-${next}`)?.focus();
+    pickerRef.current
+      ?.querySelector<HTMLButtonElement>(`#avatar-${next}`)
+      ?.focus();
   };
   return (
     <>
-      <div className="avatar-selected-preview" aria-live="polite">
-        <Avatar kind={avatar} size={58} decorative />
-        <div>
-          <small>{lang === "fa" ? "آواتار انتخاب‌شده" : "Selected avatar"}</small>
-          <strong dir="auto">{avatarNames[lang][avatar]}</strong>
-        </div>
-      </div>
       <div
+        ref={pickerRef}
+        id="profile-avatar-picker"
         className="avatar-picker"
         role="group"
         aria-label={lang === "fa" ? "انتخاب آواتار" : "Choose an avatar"}
+        dir="ltr"
       >
-        {avatars.map((a) => (
+        {shownAvatars.map((a) => (
           <button
             key={a}
             id={`avatar-${a}`}
@@ -52,23 +60,27 @@ export function ProfileFields({
             aria-label={avatarNames[lang][a]}
             aria-pressed={avatar === a}
             tabIndex={avatar === a ? 0 : -1}
+            autoFocus={autoFocusAvatar && avatar === a}
             onClick={() => setAvatar(a)}
             onKeyDown={(event) => {
-              const index = avatars.indexOf(a);
-              const rowLength = 5;
+              const index = shownAvatars.indexOf(a);
+              const columns = pickerRef.current
+                ? getComputedStyle(pickerRef.current)
+                    .gridTemplateColumns.trim().split(/\s+/).length
+                : 5;
               const nextIndex =
                 event.key === "ArrowRight"
-                  ? Math.min(index + 1, avatars.length - 1)
+                  ? Math.min(index + 1, shownAvatars.length - 1)
                   : event.key === "ArrowLeft"
                     ? Math.max(index - 1, 0)
                     : event.key === "ArrowDown"
-                      ? Math.min(index + rowLength, avatars.length - 1)
+                      ? Math.min(index + columns, shownAvatars.length - 1)
                       : event.key === "ArrowUp"
-                        ? Math.max(index - rowLength, 0)
+                        ? Math.max(index - columns, 0)
                         : event.key === "Home"
                           ? 0
                           : event.key === "End"
-                            ? avatars.length - 1
+                          ? shownAvatars.length - 1
                             : index;
               if (nextIndex !== index) {
                 event.preventDefault();
@@ -80,58 +92,75 @@ export function ProfileFields({
           </button>
         ))}
       </div>
-      <label>
+      {avatars.length > 6 && (
+        <button
+          className="avatar-picker-expand"
+          type="button"
+          aria-expanded={showAll}
+          aria-controls="profile-avatar-picker"
+          onClick={() => setShowAll((value) => !value)}
+        >
+          {showAll ? t.showFewerAvatars : t.showAllAvatars}
+        </button>
+      )}
+      <label dir={lang === "fa" ? "rtl" : "ltr"}>
         {t.profile}
         <input
           name="name"
           defaultValue={name}
+          dir="auto"
+          autoComplete="nickname"
           minLength={2}
           maxLength={32}
           required
           placeholder={t.displayName}
         />
       </label>
-      <div className="app-pref">
-        <span>{t.language}</span>
-        <div>
-          <button
-            type="button"
-            className={lang === "en" ? "selected" : ""}
-            onClick={() => setLang("en")}
-          >
-            <Globe2 size={15} />
-            English
-          </button>
-          <button
-            type="button"
-            className={lang === "fa" ? "selected" : ""}
-            onClick={() => setLang("fa")}
-          >
-            فارسی
-          </button>
+      {showPreferences && (
+        <div className="app-profile-preferences">
+          <div className="app-pref">
+            <span dir={lang === "fa" ? "rtl" : "ltr"}>{t.language}</span>
+            <div>
+              <button
+                type="button"
+                className={lang === "en" ? "selected" : ""}
+                onClick={() => setLang("en")}
+              >
+                <Globe2 size={15} />
+                English
+              </button>
+              <button
+                type="button"
+                className={lang === "fa" ? "selected" : ""}
+                onClick={() => setLang("fa")}
+              >
+                فارسی
+              </button>
+            </div>
+          </div>
+          <div className="app-pref">
+            <span dir={lang === "fa" ? "rtl" : "ltr"}>{t.theme}</span>
+            <div>
+              <button
+                type="button"
+                className={theme === "light" ? "selected" : ""}
+                onClick={() => setTheme("light")}
+              >
+                <Sun size={15} />
+                {t.light}
+              </button>
+              <button
+                type="button"
+                className={theme === "dark" ? "selected" : ""}
+                onClick={() => setTheme("dark")}
+              >
+                <Moon size={15} />
+                {t.dark}
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
-      <div className="app-pref">
-        <span>{t.theme}</span>
-        <div>
-          <button
-            type="button"
-            className={theme === "light" ? "selected" : ""}
-            onClick={() => setTheme("light")}
-          >
-            <Sun size={15} />
-            {t.light}
-          </button>
-          <button
-            type="button"
-            className={theme === "dark" ? "selected" : ""}
-            onClick={() => setTheme("dark")}
-          >
-            <Moon size={15} />
-            {t.dark}
-          </button>
-        </div>
-      </div>
+      )}
     </>
   );
 }

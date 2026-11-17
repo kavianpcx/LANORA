@@ -8,8 +8,11 @@ On the VPS, run:
 
 ~~~sh
 bash scripts/server.sh status
+bash scripts/server.sh doctor
 bash scripts/server.sh logs
 ~~~
+
+`doctor` checks services from the VPS and reports whether the password policy and database summary are available. Its public HTTPS and relay checks are deliberately marked not checked; use another internet connection to confirm those paths.
 
 To verify from outside the VPS, run curl -f https://YOUR_DOMAIN/api/v1/health from another computer.
 
@@ -37,6 +40,10 @@ bash scripts/server.sh status
 The control API being reachable only proves that the server can authorize the client. The Windows/Linux adapter still needs to start. Retry from the app, check that LANORA is allowed to create its virtual adapter, and ask the operator to confirm the relay container is running. Do not disable the firewall globally.
 
 On Linux, the packaged EasyTier binary needs the network capability configured by package installation. On Windows, allow the adapter/driver prompt if one is shown. The alpha has only been installed and launched by CI on Windows; a real Windows tunnel has not yet been verified.
+
+## The connected screen says server interrupted
+
+The API stopped receiving a fresh heartbeat. LANORA keeps a still-running EasyTier tunnel visible while server presence is stale, so this status does not by itself mean that game traffic stopped. Restore access to the server and reconnect if the status does not recover. Peer route and latency data are reported separately and may become unknown when their reading gets stale.
 
 ## A friend is listed as app-online, but the game cannot reach them
 

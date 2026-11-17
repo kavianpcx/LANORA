@@ -356,6 +356,138 @@ func TestSharedNetworkAuthorizationPresenceAndCleanup(t *testing.T) {
 	}
 }
 
+func TestSharedPlayerProfileSyncAndPersistence(t *testing.T) {
+	t.Setenv("LANORA_RELAY_PEER_URL", "tcp://relay.example.org:11010")
+	h, _ := testAPIWithDB(t)
+	status, _ := call(t, h, "PATCH", "/api/v1/admin/player-auth", "admin-test-token", map[string]any{"playerAuth": "passwordless"})
+	if status != 200 {
+		t.Fatalf("enable passwordless access=%d", status)
+	}
+	join := func(device, username, avatar string) map[string]any {
+		t.Helper()
+		status, result := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+			"deviceId": device, "username": username, "avatar": avatar,
+		})
+		if status != 200 {
+			t.Fatalf("join %s=%d body=%v", username, status, result)
+		}
+		return result
+	}
+	a := join(strings.Repeat("a", 32), "Player A", "cat")
+	b := join(strings.Repeat("b", 32), "Player B", "fox")
+	status, _ = call(t, h, "PATCH", "/api/v1/network/profile", a["accessToken"].(string), map[string]any{"username": "Player A", "avatar": "panda"})
+	if status != 200 {
+		t.Fatalf("authorized profile update=%d", status)
+	}
+	status, heartbeat := call(t, h, "POST", "/api/v1/network/heartbeat", b["accessToken"].(string), map[string]any{})
+	if status != 200 {
+		t.Fatalf("second player heartbeat=%d body=%v", status, heartbeat)
+	}
+	seenUpdatedProfile := false
+	for _, raw := range heartbeat["members"].([]any) {
+		member := raw.(map[string]any)
+		if member["userId"] == a["userId"] {
+			seenUpdatedProfile = member["username"] == "Player A" && member["avatar"] == "panda"
+		}
+	}
+	if !seenUpdatedProfile {
+		t.Fatalf("other player did not receive updated profile: %v", heartbeat["members"])
+	}
+	status, _ = call(t, h, "PATCH", "/api/v1/network/profile", "", map[string]any{"username": "Intruder", "avatar": "dragon"})
+	if status != 401 {
+		t.Fatalf("unauthorized profile update=%d", status)
+	}
+	status, _ = call(t, h, "POST", "/api/v1/network/leave", a["accessToken"].(string), nil)
+	if status != 200 {
+		t.Fatalf("leave before reconnect=%d", status)
+	}
+	status, rejoined := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"deviceId": strings.Repeat("a", 32), "username": "Player A",
+	})
+	if status != 200 {
+		t.Fatalf("rejoin without avatar=%d body=%v", status, rejoined)
+	}
+	status, heartbeat = call(t, h, "POST", "/api/v1/network/heartbeat", b["accessToken"].(string), map[string]any{})
+	if status != 200 {
+		t.Fatalf("heartbeat after reconnect=%d", status)
+	}
+	for _, raw := range heartbeat["members"].([]any) {
+		member := raw.(map[string]any)
+		if member["userId"] == rejoined["userId"] && member["avatar"] != "panda" {
+			t.Fatalf("avatar did not persist on reconnect: %v", member)
+		}
+	}
+	status, invalid := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"deviceId": strings.Repeat("c", 32), "username": "Player C", "avatar": "unlisted-avatar",
+	})
+	if status != 400 || invalid["error"].(map[string]any)["code"] != "invalid_profile" {
+		t.Fatalf("invalid avatar was accepted: %d %v", status, invalid)
+	}
+}
+
+func TestRoomProfilesAreAuthorizedAndVisibleToOtherMembers(t *testing.T) {
+	h := testAPI(t)
+	status, host := call(t, h, "POST", "/api/v1/rooms", "", map[string]any{
+		"name": "Profile Room", "username": "Host", "deviceId": strings.Repeat("d", 32), "avatar": "cat",
+	})
+	if status != 201 {
+		t.Fatalf("create room=%d body=%v", status, host)
+	}
+	roomID := host["roomId"].(string)
+	status, guest := call(t, h, "POST", "/api/v1/rooms/join", "", map[string]any{
+		"inviteCode": host["inviteCode"], "username": "Guest", "deviceId": strings.Repeat("e", 32), "avatar": "fox",
+	})
+	if status != 200 {
+		t.Fatalf("join room=%d body=%v", status, guest)
+	}
+	status, _ = call(t, h, "PATCH", "/api/v1/rooms/"+roomID+"/profile", guest["accessToken"].(string), map[string]any{"username": "Guest", "avatar": "panda"})
+	if status != 200 {
+		t.Fatalf("authorized room profile update=%d", status)
+	}
+	status, loaded := call(t, h, "GET", "/api/v1/rooms/"+roomID, host["accessToken"].(string), nil)
+	if status != 200 {
+		t.Fatalf("load room=%d body=%v", status, loaded)
+	}
+	found := false
+	for _, raw := range loaded["members"].([]any) {
+		member := raw.(map[string]any)
+		if member["userId"] == guest["userId"] {
+			found = member["username"] == "Guest" && member["avatar"] == "panda" && member["online"] == true
+		}
+	}
+	if !found {
+		t.Fatalf("updated room profile/presence not visible: %v", loaded["members"])
+	}
+	status, _ = call(t, h, "PATCH", "/api/v1/rooms/"+roomID+"/profile", "", map[string]any{"username": "Intruder", "avatar": "dragon"})
+	if status != 401 {
+		t.Fatalf("unauthorized room profile update=%d", status)
+	}
+}
+
+func TestKickingRoomMemberRotatesNetworkGeneration(t *testing.T) {
+	t.Setenv("LANORA_RELAY_PEER_URL", "tcp://relay.example.org:11010")
+	h := testAPI(t)
+	_, host := call(t, h, "POST", "/api/v1/rooms", "", map[string]any{"name": "Rotate Room", "username": "Host"})
+	roomID := host["roomId"].(string)
+	_, guest := call(t, h, "POST", "/api/v1/rooms/join", "", map[string]any{"inviteCode": host["inviteCode"], "username": "Guest"})
+	status, before := call(t, h, "GET", "/api/v1/rooms/"+roomID+"/network", host["accessToken"].(string), nil)
+	if status != 200 {
+		t.Fatalf("get initial network config=%d body=%v", status, before)
+	}
+	status, removed := call(t, h, "POST", "/api/v1/rooms/"+roomID+"/members/"+guest["userId"].(string)+"/kick", host["accessToken"].(string), nil)
+	if status != 200 || removed["networkGenerationRotated"] != true {
+		t.Fatalf("kick status=%d body=%v", status, removed)
+	}
+	status, after := call(t, h, "GET", "/api/v1/rooms/"+roomID+"/network", host["accessToken"].(string), nil)
+	if status != 200 || after["networkGeneration"] == before["networkGeneration"] || after["networkSecret"] == before["networkSecret"] {
+		t.Fatalf("kick did not rotate network credentials: status=%d after=%v before=%v", status, after, before)
+	}
+	status, _ = call(t, h, "GET", "/api/v1/rooms/"+roomID, guest["accessToken"].(string), nil)
+	if status != 401 {
+		t.Fatalf("kicked player retained API membership=%d", status)
+	}
+}
+
 func TestSharedCodeRotationRevokesExistingTokens(t *testing.T) {
 	t.Setenv("LANORA_SHARED_NETWORK_CODE", "old-code-0123456789abcdef")
 	t.Setenv("LANORA_RELAY_PEER_URL", "tcp://relay.example.org:11010")

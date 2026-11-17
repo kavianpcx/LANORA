@@ -57,7 +57,7 @@ function localDeviceId() {
 export default function App() {
   const [startupReady, setStartupReady] = useState(false);
   const [showStartupSkeleton, setShowStartupSkeleton] = useState(false);
-  const [appVersion, setAppVersion] = useState("0.2.0-alpha.6");
+  const [appVersion, setAppVersion] = useState("0.2.0-alpha.7");
   const [lang, setLang] = useState<Lang>(() =>
     localStorage.getItem("lanora.language") === "fa" ? "fa" : "en",
   );
@@ -84,12 +84,16 @@ export default function App() {
   const [passwordError, setPasswordError] = useState("");
   const [connectionStage, setConnectionStage] = useState<ConnectionStage>("idle");
   const [peerStatuses, setPeerStatuses] = useState<PeerStatus[]>([]);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [reconnecting, setReconnecting] = useState(false);
   const {
     server,
     reachable: serverReachable,
+    latencyMs: serverLatencyMs,
     checking,
     phase,
     connect: connectServer,
+    setLatencyMonitoring,
     clear: clearServer,
     failure,
   } = useServer();
@@ -97,8 +101,11 @@ export default function App() {
   const connectionBusy = useRef(false);
   const roomsBusy = useRef(false);
   const roomsVersion = useRef(0);
+  const networkGenerationRef = useRef<{ roomId: string; generation: number | null }>({ roomId: "", generation: null });
   const [publicRooms, setPublicRooms] = useState<ListedRoom[]>([]);
   const [room, setRoom] = useState<ActiveRoom | null>(null);
+  const [presenceUpdatedAt, setPresenceUpdatedAt] = useState(0);
+  const [presenceClock, setPresenceClock] = useState(Date.now());
   const [tunnel, setTunnel] = useState<EngineStatus>({
     running: false,
     virtualIp: null,
@@ -124,7 +131,10 @@ export default function App() {
     roomActive: Boolean(room),
     tunnelRunning: tunnel.running,
     virtualIp: tunnel.virtualIp,
-    reachablePeerCount: peerStatuses.length,
+    reachablePeerCount: room?.members?.some((member) =>
+      member.userId !== room.selfUserId && Boolean(member.virtualIp) &&
+      peerStatuses.some((peer) => peer.virtualIp === member.virtualIp && Date.now() - (peer.observedAt ?? 0) < 15000),
+    ) ? 1 : 0,
   });
   const [onboarding, setOnboarding] = useState(
     () => !localStorage.getItem("lanora.playerName"),
@@ -188,6 +198,20 @@ export default function App() {
     setSettingsError("");
     setMode("settings");
   }
+  useEffect(() => {
+    const timer = window.setInterval(() => setPresenceClock(Date.now()), 5000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    setLatencyMonitoring(Boolean(room));
+  }, [room?.roomId, setLatencyMonitoring]);
+  useEffect(() => {
+    if (onboarding && room && tunnel.state === "tunnel_ready" && tunnel.virtualIp) {
+      setOnboarding(false);
+      setSettingsError("");
+      setMode((current) => current === "settings" ? null : current);
+    }
+  }, [onboarding, room?.roomId, tunnel.state, tunnel.virtualIp]);
   function updateServerAddress(raw: string) {
     setServerInput(raw);
     setError("");
@@ -217,8 +241,11 @@ export default function App() {
     localStorage.setItem("lanora.theme", theme);
   }, [lang, theme]);
   useEffect(() => {
-    if (failure) setError(friendlyError(failure, lang));
-  }, [failure, lang]);
+    if (!failure) return;
+    const message = friendlyError(failure, lang);
+    if (onboarding && mode === "settings") setSettingsError(message);
+    else setError(message);
+  }, [failure, lang, onboarding, mode]);
   async function loadRooms(url = server) {
     if (roomsBusy.current) return;
     roomsBusy.current = true;
@@ -254,7 +281,7 @@ export default function App() {
       if (inFlight) return;
       inFlight = true;
       try {
-        const current = await api<{ members: Member[] }>(
+        const current = await api<{ members: Member[]; networkGeneration: number }>(
           server,
           `/api/v1/rooms/${room.roomId}`,
           room.accessToken,
@@ -262,11 +289,32 @@ export default function App() {
           undefined,
           { signal: controller.signal },
         );
-        if (active)
-          setRoom((old) => (old ? { ...old, members: current.members } : null));
+        if (active) {
+          if (networkGenerationRef.current.roomId !== room.roomId) {
+            networkGenerationRef.current = {
+              roomId: room.roomId,
+              generation: room.networkGeneration ?? null,
+            };
+          }
+          const previousGeneration = networkGenerationRef.current.generation;
+          const rotate = previousGeneration != null && current.networkGeneration !== previousGeneration;
+          networkGenerationRef.current.generation = current.networkGeneration;
+          setRoom((old) => (old ? { ...old, members: current.members, networkGeneration: current.networkGeneration } : null));
+          setPresenceUpdatedAt(Date.now());
+          if (rotate && room.status === "approved") {
+            try {
+              await invoke("engine_stop");
+              if (active) await startTunnel(room.roomId, room.accessToken, server);
+            } catch (rotationError) {
+              if (active) setError(friendlyError(rotationError, lang));
+            }
+          }
+        }
       } catch (e) {
         if (active) {
-          setError(friendlyError(e, lang));
+          if (!(e instanceof RequestError && ["network", "timeout", "cancelled"].includes(e.code))) {
+            setError(friendlyError(e, lang));
+          }
           setRoom((old) =>
             old ? { ...old, members: old.members ?? [] } : null,
           );
@@ -375,6 +423,31 @@ export default function App() {
     };
   }, [room?.roomId, tunnel.running, tunnel.state]);
   useEffect(() => {
+    const recoverableEngineExit = tunnel.error?.startsWith("EasyTier exited:") === true;
+    if (!room || room.status !== "approved" || !recoverableEngineExit || reconnectAttempt >= 3) {
+      if (tunnel.state === "tunnel_ready" && tunnel.virtualIp) {
+        setReconnectAttempt(0);
+        setReconnecting(false);
+      }
+      return;
+    }
+    const attempt = reconnectAttempt + 1;
+    const delay = Math.min(8000, 1000 * 2 ** reconnectAttempt) + Math.floor(Math.random() * 500);
+    setReconnecting(true);
+    const timer = window.setTimeout(async () => {
+      setReconnectAttempt(attempt);
+      setReconnecting(true);
+      setTunnel({ running: false, virtualIp: null, state: "connecting", error: null });
+      try {
+        await invoke("engine_stop").catch(() => {});
+        await startTunnel(room.roomId, room.accessToken, server, undefined, true);
+      } finally {
+        setReconnecting(false);
+      }
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [room?.roomId, room?.accessToken, room?.status, server, tunnel.error, tunnel.state, tunnel.virtualIp, reconnectAttempt]);
+  useEffect(() => {
     if (!room || room.roomId !== "shared" || !server) return;
     let active = true;
     let inFlight = false;
@@ -388,8 +461,10 @@ export default function App() {
           room.accessToken,
           { virtualIp: tunnel.virtualIp || "" },
         );
-        if (active)
+        if (active) {
           setRoom((old) => (old ? { ...old, members: current.members } : null));
+          setPresenceUpdatedAt(Date.now());
+        }
       } catch (e) {
         if (
           active &&
@@ -431,7 +506,10 @@ export default function App() {
       inFlight = true;
       try {
         const peers = await invoke<PeerStatus[]>("engine_peers");
-        if (active) setPeerStatuses(peers);
+        if (active) {
+          const observedAt = Date.now();
+          setPeerStatuses(peers.map((peer) => ({ ...peer, observedAt })));
+        }
       } catch {
         if (active) setPeerStatuses([]);
       } finally {
@@ -531,7 +609,9 @@ export default function App() {
       setPasswordPromptMode(playerAuth);
       setConnectionStage("idle");
     } catch (e) {
-      setError(friendlyError(e, lang));
+      const message = friendlyError(e, lang);
+      if (onboarding && mode === "settings") setSettingsError(message);
+      else setError(message);
       setConnectionStage(e instanceof RequestError && e.status === 401 ? "auth-failed" : "failed");
     } finally {
       connectionBusy.current = false;
@@ -554,6 +634,7 @@ export default function App() {
       ...playerJoinCredentials(mode, password),
       deviceId: localDeviceId(),
       username: name.trim(),
+      avatar,
     });
     const active: ActiveRoom = {
       roomId: "shared",
@@ -564,6 +645,7 @@ export default function App() {
       status: "approved",
       members: joined.members,
     };
+    setPresenceUpdatedAt(Date.now());
     setConnectionStage("authorized");
     setRoom(active);
     await startTunnel("shared", active.accessToken, url, joined.network);
@@ -600,8 +682,13 @@ export default function App() {
     token: string,
     serverUrl = server,
     configuredNetwork?: Network,
+    automaticRecovery = false,
   ) {
     if (tunnelBusy.current) return;
+    if (!automaticRecovery) {
+      setReconnectAttempt(0);
+      setReconnecting(false);
+    }
     tunnelBusy.current = true;
     setTunnel({
       running: false,
@@ -610,7 +697,7 @@ export default function App() {
       error: null,
     });
     try {
-      const cfg =
+      const cfg: Network =
         configuredNetwork ??
         (await api<Network>(
           serverUrl,
@@ -619,6 +706,10 @@ export default function App() {
             : `/api/v1/rooms/${id}/network`,
           token,
         ));
+      if (id !== "shared" && cfg.networkGeneration != null) {
+        networkGenerationRef.current = { roomId: id, generation: cfg.networkGeneration };
+        setRoom((old) => old && old.roomId === id ? { ...old, networkGeneration: cfg.networkGeneration } : old);
+      }
       if (id === "shared") setConnectionStage("tunnel");
       await invoke("engine_start", { cfg });
       setTunnel({
@@ -634,7 +725,9 @@ export default function App() {
         state: "failed",
         error: "Engine initialization failed",
       });
-      setError(friendlyError(e, lang));
+      const message = friendlyError(e, lang);
+      if (onboarding && mode === "settings") setSettingsError(message);
+      else setError(message);
     } finally {
       tunnelBusy.current = false;
     }
@@ -653,6 +746,41 @@ export default function App() {
         localStorage.setItem("lanora.playerName", next);
         localStorage.setItem("lanora.avatar", avatar);
         setName(next);
+        if (room && server) {
+          try {
+            if (room.roomId === "shared") {
+              const result = await api<{ members: Member[] }>(
+                server,
+                "/api/v1/network/profile",
+                room.accessToken,
+                { username: next, avatar },
+                "PATCH",
+              );
+              setRoom((old) => old ? { ...old, members: result.members } : null);
+            } else {
+              await api(
+                server,
+                `/api/v1/rooms/${room.roomId}/profile`,
+                room.accessToken,
+                { username: next, avatar },
+                "PATCH",
+              );
+              const current = await api<{ members: Member[]; networkGeneration: number }>(
+                server,
+                `/api/v1/rooms/${room.roomId}`,
+                room.accessToken,
+              );
+              setRoom((old) => old ? { ...old, members: current.members, networkGeneration: current.networkGeneration } : null);
+            }
+            setPresenceUpdatedAt(Date.now());
+          } catch {
+            setNotice(
+              lang === "fa"
+                ? "پروفایل روی این دستگاه ذخیره شد، اما همگام‌سازی با سرور انجام نشد."
+                : "Profile saved on this device, but server sync failed.",
+            );
+          }
+        }
         if (onboarding && onboardingStep === "profile") {
           setOnboardingStep("server");
           return;
@@ -665,8 +793,6 @@ export default function App() {
             setMode(null);
             return;
           }
-          setOnboarding(false);
-          setMode(null);
           await connect(address);
           return;
         }
@@ -684,6 +810,7 @@ export default function App() {
           roomId: string;
           accessToken: string;
           inviteCode: string;
+          userId: string;
           room: { name: string };
         }>(server, "/api/v1/rooms", undefined, {
           name: String(data.get("roomName")),
@@ -693,16 +820,20 @@ export default function App() {
           password: String(data.get("password") || ""),
           requireApproval: Boolean(data.get("approval")),
           username: name,
+          deviceId: localDeviceId(),
+          avatar,
         });
         const active: ActiveRoom = {
           roomId: created.roomId,
           name: created.room.name,
           accessToken: created.accessToken,
           inviteCode: created.inviteCode,
+          selfUserId: created.userId,
           role: "host",
           status: "approved",
         };
         setRoom(active);
+        setPresenceUpdatedAt(Date.now());
         await startTunnel(active.roomId, active.accessToken);
       } else if (mode === "join") {
         const joined = await api<{
@@ -710,8 +841,11 @@ export default function App() {
           roomName: string;
           accessToken: string;
           status: string;
+          userId: string;
         }>(server, "/api/v1/rooms/join", undefined, {
           username: name,
+          deviceId: localDeviceId(),
+          avatar,
           password: String(data.get("password") || ""),
           ...(selectedRoom
             ? { roomId: selectedRoom.id }
@@ -721,9 +855,11 @@ export default function App() {
           roomId: joined.roomId,
           name: joined.roomName,
           accessToken: joined.accessToken,
+          selfUserId: joined.userId,
           role: "member",
           status: joined.status,
         });
+        setPresenceUpdatedAt(Date.now());
         if (joined.status === "approved")
           await startTunnel(joined.roomId, joined.accessToken);
       }
@@ -748,6 +884,8 @@ export default function App() {
   async function leave() {
     if (!room || tunnelBusy.current) return;
     setBusy(true);
+    setReconnectAttempt(0);
+    setReconnecting(false);
     setError("");
     try {
       // Stop locally first. Never report a stopped tunnel after a failed stop.
@@ -828,7 +966,7 @@ export default function App() {
         lang={lang}
         appVersion={appVersion}
         status={
-          checking || busy || tunnel.state === "connecting"
+          checking || busy || reconnecting || tunnel.state === "connecting"
             ? "checking"
             : room && tunnel.running && tunnel.state === "tunnel_ready" && tunnel.virtualIp
               ? "connected"
@@ -917,7 +1055,7 @@ export default function App() {
             {tunnel.virtualIp && <Check size={15} />}
           </div>
           <div className="side-spacer" />
-          <div className="side-tip">
+          {!room && <div className="side-tip">
             <Gamepad2 size={21} />
             <b>{lang === "fa" ? "برای بازی آماده شوید" : "Ready to play?"}</b>
             <p>
@@ -925,11 +1063,13 @@ export default function App() {
                 ? "آی‌پی مجازی میزبان بازی را در گزینهٔ Direct IP وارد کنید."
                 : "Use the game host’s virtual IP in the game’s Direct IP option."}
             </p>
-          </div>
+          </div>}
           <div className="side-footer">
             <span className={connectionStatus === "peer-connected" ? "online" : ""} />
             {connectionStatus === "server-unreachable"
               ? t.disconnected
+              : connectionStatus === "connection-interrupted"
+                ? t.connectionInterrupted
               : connectionStatus === "server-reachable"
                 ? t.serverReachable
                 : connectionStatus === "authentication-pending"
@@ -949,7 +1089,8 @@ export default function App() {
         </aside>
         <div className="app-workspace">
           <main className="app-main">
-            <div className="app-main-content" key={room?.roomId ?? "connect"}>
+            <div className={`app-main-content ${room ? "connected" : ""}`} key={room?.roomId ?? "connect"}>
+            {!room && <>
             <section className="app-hero">
               <div className="app-eyebrow">
                 <span className="app-brand-dot" />
@@ -1022,6 +1163,7 @@ export default function App() {
                 <ConnectionJourney stage={connectionStage} lang={lang} />
               )}
             </section>
+            </>}
             {!room && server && (
               <details
                 className="app-advanced"
@@ -1123,10 +1265,16 @@ export default function App() {
               <RoomView
                 room={room}
                 serverAddress={server}
+                serverLatencyMs={serverLatencyMs}
+                serverReachable={serverReachable}
+                presenceFresh={presenceUpdatedAt > 0 && presenceClock - presenceUpdatedAt < 35000}
+                reconnecting={reconnecting}
+                reconnectAttempt={reconnectAttempt}
                 tunnel={tunnel}
                 peerStatuses={peerStatuses}
                 lang={lang}
                 avatar={avatar}
+                playerName={name}
                 busy={busy || tunnelBusy.current}
                 onCopy={(value) =>
                   void navigator.clipboard
@@ -1139,6 +1287,12 @@ export default function App() {
                           : "Copy failed. Select the address manually.",
                       ),
                     )
+                }
+                onCopyDiagnostics={(value) =>
+                  void navigator.clipboard
+                    .writeText(value)
+                    .then(() => setNotice(t.copied))
+                    .catch(() => setError(lang === "fa" ? "کپی گزارش انجام نشد." : "Could not copy diagnostics."))
                 }
                 onRetry={() =>
                   void invoke("engine_stop")
@@ -1191,108 +1345,107 @@ export default function App() {
               }
               onClose={closeModal}
             >
-              <div className="app-dialog">
-                <button
-                  className="app-dialog-close"
-                  onClick={closeModal}
-                  aria-label={t.cancel}
-                >
-                  <X size={19} />
-                </button>
-                <span className="app-eyebrow">
-                  {mode === "settings"
-                    ? onboarding
-                      ? lang === "fa"
-                        ? onboardingStep === "profile"
-                          ? "پروفایل شما"
-                          : "سرور شما"
-                        : onboardingStep === "profile"
-                          ? "YOUR PROFILE"
-                          : "YOUR SERVER"
-                      : lang === "fa"
-                        ? "تنظیمات برنامه"
-                        : "APP SETTINGS"
-                    : lang === "fa"
-                      ? "فضای بازی"
-                      : "GAME ROOM"}
-                </span>
-                <h2>
-                  {mode === "settings"
-                    ? onboarding
-                      ? onboardingStep === "profile"
-                        ? lang === "fa"
-                          ? "به LANORA خوش آمدید"
-                          : "Welcome to LANORA"
-                        : lang === "fa"
-                          ? "به سرور خودتان وصل شوید"
-                          : "Connect to your server"
-                      : t.settings
-                    : mode === "create"
-                      ? t.create
-                      : t.join}
-                </h2>
-                {mode === "settings" && onboarding && (
-                  <div
-                    className="onboarding-progress"
-                    aria-label={lang === "fa" ? "مرحله از دو" : "Onboarding step"}
+              <div
+                className={`app-dialog ${mode === "settings" ? "app-dialog-profile" : ""}`}
+                dir="ltr"
+              >
+                <header className="app-dialog-header">
+                  <button
+                    className="app-dialog-close"
+                    type="button"
+                    onClick={closeModal}
+                    aria-label={t.cancel}
                   >
-                    <span
-                      className={
-                        onboardingStep === "profile" ? "active" : "done"
-                      }
-                    >
-                      {lang === "fa" ? "۱" : "1"}
-                    </span>
-                    <i />
-                    <span
-                      className={onboardingStep === "server" ? "active" : ""}
-                    >
-                      {lang === "fa" ? "۲" : "2"}
-                    </span>
-                    <small>
-                      {onboardingStep === "profile"
+                    <X size={19} />
+                  </button>
+                  <span className="app-eyebrow" dir={lang === "fa" ? "rtl" : "ltr"}>
+                    {mode === "settings"
+                      ? onboarding
                         ? lang === "fa"
-                          ? "پروفایل شما"
-                          : "Your profile"
+                          ? onboardingStep === "profile"
+                            ? "پروفایل شما"
+                            : "سرور شما"
+                          : onboardingStep === "profile"
+                            ? "YOUR PROFILE"
+                            : "YOUR SERVER"
                         : lang === "fa"
-                          ? "سرور شما"
-                          : "Your server"}
-                    </small>
-                  </div>
-                )}
-                <form className="app-form" onSubmit={submit}>
+                          ? "تنظیمات برنامه"
+                          : "APP SETTINGS"
+                      : lang === "fa"
+                        ? "فضای بازی"
+                        : "GAME ROOM"}
+                  </span>
+                  <h2 dir={lang === "fa" ? "rtl" : "ltr"}>
+                    {mode === "settings"
+                      ? onboarding
+                        ? onboardingStep === "profile"
+                          ? lang === "fa"
+                            ? "به LANORA خوش آمدید"
+                            : "Welcome to LANORA"
+                          : lang === "fa"
+                            ? "به سرور خودتان وصل شوید"
+                            : "Connect to your server"
+                        : t.settings
+                      : mode === "create"
+                        ? t.create
+                        : t.join}
+                  </h2>
+                  {mode === "settings" && onboarding && (
+                    <>
+                      <p className="app-dialog-description" dir={lang === "fa" ? "rtl" : "ltr"}>
+                        {onboardingStep === "profile"
+                          ? lang === "fa"
+                            ? "یک نام نمایشی انتخاب کنید؛ حساب کاربری لازم نیست."
+                            : "Choose a display name to get started. No account is needed."
+                          : lang === "fa"
+                            ? "نشانی سروری را وارد کنید که صاحبش برایتان فرستاده است."
+                            : "Enter the server address shared by its owner."}
+                      </p>
+                      <div
+                        className="onboarding-progress"
+                        aria-label={lang === "fa" ? "مراحل راه‌اندازی" : "Setup steps"}
+                      >
+                        <div className={`onboarding-step ${onboardingStep === "profile" ? "active" : "done"}`}>
+                          <span>{lang === "fa" ? "۱" : "1"}</span>
+                          <small dir={lang === "fa" ? "rtl" : "ltr"}>{lang === "fa" ? "پروفایل" : "Profile"}</small>
+                        </div>
+                        <i aria-hidden="true" />
+                        <div className={`onboarding-step ${onboardingStep === "server" ? "active" : ""}`}>
+                          <span>{lang === "fa" ? "۲" : "2"}</span>
+                          <small dir={lang === "fa" ? "rtl" : "ltr"}>{lang === "fa" ? "سرور" : "Server"}</small>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </header>
+                <form className="app-form app-dialog-form" onSubmit={submit}>
+                  <div
+                    className="app-dialog-body"
+                    role="region"
+                    tabIndex={0}
+                    aria-label={mode === "settings" ? t.settings : mode === "create" ? t.create : t.join}
+                  >
                   {mode === "settings" &&
                     onboarding &&
                     onboardingStep === "profile" && (
-                      <>
-                        <p className="onboarding-copy">
-                          {lang === "fa"
-                            ? "برای شروع فقط یک نام نمایشی انتخاب کنید؛ حساب کاربری لازم نیست."
-                            : "Choose a display name to get started. No account is needed."}
-                        </p>
-                        <ProfileFields
-                          {...{
-                            lang,
-                            theme,
-                            name,
-                            avatar,
-                            setLang,
-                            setTheme,
-                            setAvatar,
-                          }}
-                        />
-                      </>
+                      <ProfileFields
+                        {...{
+                          lang,
+                          theme,
+                          name,
+                          avatar,
+                          setLang,
+                          setTheme,
+                          setAvatar,
+                        }}
+                        autoFocusAvatar
+                      />
                     )}
                   {mode === "settings" &&
                     onboarding &&
                     onboardingStep === "server" && (
                       <>
-                        <p className="onboarding-copy">
-                          {lang === "fa"
-                            ? "نشانی سروری را وارد کنید که صاحبش برایتان فرستاده است."
-                            : "Enter the server address shared by its owner."}
-                        </p>
-                        <label>
+                        <label dir={lang === "fa" ? "rtl" : "ltr"}>
                           {lang === "fa" ? "نشانی سرور" : "Server address"}
                           <input
                             name="serverAddress"
@@ -1300,7 +1453,8 @@ export default function App() {
                             inputMode="url"
                             autoComplete="url"
                             value={serverInput}
-                            disabled={checking || busy}
+                            required
+                            disabled={Boolean(room) || checking || busy}
                             onChange={(event) =>
                               updateServerAddress(event.target.value)
                             }
@@ -1308,6 +1462,21 @@ export default function App() {
                             autoFocus
                           />
                         </label>
+                        {room && (
+                          <div className="app-connection-progress" role="status" dir={lang === "fa" ? "rtl" : "ltr"}>
+                            {tunnel.state === "failed" ? t.networkFailed : t.starting}
+                            {tunnel.state === "failed" && (
+                              <button
+                                className="app-button subtle"
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void invoke("engine_stop").then(() => startTunnel(room.roomId, room.accessToken)).catch((e) => setSettingsError(friendlyError(e, lang)))}
+                              >
+                                {t.retry}
+                              </button>
+                            )}
+                          </div>
+                        )}
                         <button
                           className="app-help-toggle"
                           type="button"
@@ -1337,14 +1506,6 @@ export default function App() {
                             </code>
                           </div>
                         )}
-                        <button
-                          className="app-button subtle onboarding-back"
-                          type="button"
-                          disabled={checking}
-                          onClick={() => setOnboardingStep("profile")}
-                        >
-                          {lang === "fa" ? "بازگشت به پروفایل" : "Back to profile"}
-                        </button>
                       </>
                     )}
                   {mode === "settings" && !onboarding && (
@@ -1358,6 +1519,7 @@ export default function App() {
                         setTheme,
                         setAvatar,
                       }}
+                    autoFocusAvatar
                     />
                   )}
                   {mode === "create" && (
@@ -1434,144 +1596,155 @@ export default function App() {
                       <small>{t.noPassword}</small>
                     </>
                   )}
-                  <button
-                    className="app-button primary"
-                    type="submit"
-                    disabled={busy}
-                  >
-                    {busy ? (
-                      <RefreshCw className="spin" size={17} />
-                    ) : (
-                      <Check size={17} />
-                    )}{" "}
-                    {busy
-                      ? lang === "fa"
-                        ? "در حال انجام…"
-                        : "Working…"
-                      : mode === "settings" &&
-                          onboarding &&
-                          onboardingStep === "profile"
-                        ? lang === "fa"
-                          ? "ادامه"
-                          : "Continue"
-                        : mode === "settings" &&
-                            onboarding &&
-                            onboardingStep === "server"
-                          ? lang === "fa"
-                            ? checking
-                              ? "در حال اتصال…"
-                              : "اتصال به سرور"
-                            : checking
-                              ? "Connecting…"
-                              : "Connect to server"
-                          : mode === "settings"
-                            ? t.save
-                        : mode === "create"
-                          ? t.create
-                          : t.join}
-                  </button>
-                  {mode === "settings" &&
-                    onboarding &&
-                    onboardingStep === "server" && (
+                  {mode === "settings" && settingsError && (
+                    <p className="app-error" role="alert" dir={lang === "fa" ? "rtl" : "ltr"}>
+                      {settingsError}
+                    </p>
+                  )}
+                  {mode !== "settings" && error && (
+                    <p className="app-error" role="alert" dir={lang === "fa" ? "rtl" : "ltr"}>
+                      {error}
+                    </p>
+                  )}
+                  </div>
+                  <footer className="app-dialog-footer" dir="ltr">
+                    {mode === "settings" && onboarding && onboardingStep === "server" && (
                       <button
                         className="app-button subtle"
                         type="button"
                         disabled={busy || checking}
-                        onClick={() => {
-                          try {
-                            localStorage.setItem("lanora.playerName", name);
-                            localStorage.setItem("lanora.avatar", avatar);
-                            setOnboarding(false);
-                            setSettingsError("");
-                            setMode(null);
-                          } catch {
-                            setSettingsError(
-                              lang === "fa"
-                                ? "ذخیرهٔ پروفایل روی این دستگاه ناموفق بود. فضای ذخیره‌سازی را بررسی کنید."
-                                : "Could not save the profile on this device. Check local storage and try again.",
-                            );
-                          }
-                        }}
+                        onClick={() => setOnboardingStep("profile")}
                       >
-                        {lang === "fa" ? "فعلاً بعداً وصل می‌شوم" : "I’ll connect later"}
+                        {lang === "fa" ? "بازگشت" : "Back"}
                       </button>
                     )}
+                    <div className="app-dialog-footer-actions">
+                      {mode === "settings" && onboarding && onboardingStep === "server" && (
+                        <button
+                          className="app-button subtle"
+                          type="button"
+                          disabled={busy || checking}
+                          onClick={() => {
+                            try {
+                              localStorage.setItem("lanora.playerName", name);
+                              localStorage.setItem("lanora.avatar", avatar);
+                              setOnboarding(false);
+                              setSettingsError("");
+                              setMode(null);
+                            } catch {
+                              setSettingsError(
+                                lang === "fa"
+                                  ? "ذخیرهٔ پروفایل روی این دستگاه ناموفق بود. فضای ذخیره‌سازی را بررسی کنید."
+                                  : "Could not save the profile on this device. Check local storage and try again.",
+                              );
+                            }
+                          }}
+                        >
+                          {lang === "fa" ? "فعلاً بعداً" : "Connect later"}
+                        </button>
+                      )}
+                      <button
+                        className="app-button primary"
+                        type="submit"
+                        disabled={busy || Boolean(room)}
+                      >
+                        {busy ? (
+                          <RefreshCw className="spin" size={17} />
+                        ) : (
+                          <Check size={17} />
+                        )}{" "}
+                        {busy
+                          ? lang === "fa"
+                            ? "در حال انجام…"
+                            : "Working…"
+                          : mode === "settings" && onboarding && onboardingStep === "profile"
+                            ? lang === "fa" ? "ادامه" : "Continue"
+                            : mode === "settings" && onboarding && onboardingStep === "server"
+                              ? room
+                                ? lang === "fa" ? "در حال راه‌اندازی شبکه…" : "Starting network…"
+                                : lang === "fa"
+                                ? checking ? "در حال اتصال…" : "اتصال به سرور"
+                                : checking ? "Connecting…" : "Connect to server"
+                              : mode === "settings"
+                                ? t.save
+                                : mode === "create"
+                                  ? t.create
+                                  : t.join}
+                      </button>
+                    </div>
+                  </footer>
                 </form>
-                {mode === "settings" && settingsError && (
-                  <p className="app-error" role="alert" dir={lang === "fa" ? "rtl" : "ltr"}>
-                    {settingsError}
-                  </p>
-                )}
-                {mode !== "settings" && error && (
-                  <p className="app-error" role="alert">
-                    {error}
-                  </p>
-                )}
               </div>
             </Modal>
           )}
           {passwordPromptMode && (
             <Modal label={t.serverPassword} onClose={cancelPasswordPrompt}>
               <div className="app-dialog" dir="ltr">
-                <span className="app-eyebrow">{t.server}</span>
-                <h2 dir={lang === "fa" ? "rtl" : "ltr"}>{t.serverPassword}</h2>
-                <p className="app-password-help" dir={lang === "fa" ? "rtl" : "ltr"}>
-                  {passwordPromptMode === "legacy_password"
-                    ? t.legacyPasswordHelp
-                    : t.passwordRequiredHelp}
-                </p>
-                <form className="app-form" onSubmit={submitServerPassword}>
-                  <div className="app-password-group">
-                    <label htmlFor="player-server-password" dir={lang === "fa" ? "rtl" : "ltr"}>
-                      {t.passwordInput}
-                    </label>
-                    <span className="app-password-field" dir="ltr">
-                      <input
-                        id="player-server-password"
-                        autoFocus
-                        required
-                        type={passwordVisible ? "text" : "password"}
-                        dir="ltr"
-                        autoComplete="off"
-                        value={playerPassword}
-                        disabled={busy}
-                        onChange={(event) => {
-                          setPlayerPassword(event.target.value);
-                          setPasswordError("");
-                        }}
-                        placeholder={t.passwordPlaceholder}
-                      />
-                      <button
-                        className="app-password-toggle"
-                        type="button"
-                        aria-label={passwordVisible ? t.hidePassword : t.showPassword}
-                        title={passwordVisible ? t.hidePassword : t.showPassword}
-                        disabled={busy}
-                        onClick={() => setPasswordVisible((visible) => !visible)}
-                      >
-                        {passwordVisible ? <EyeOff size={17} /> : <Eye size={17} />}
-                      </button>
-                    </span>
-                  </div>
-                  {passwordError && (
-                    <p className="app-error" role="alert" dir={lang === "fa" ? "rtl" : "ltr"}>
-                      {passwordError}
+                <header className="app-dialog-header">
+                  <span className="app-eyebrow">{t.server}</span>
+                  <h2 dir={lang === "fa" ? "rtl" : "ltr"}>{t.serverPassword}</h2>
+                </header>
+                <form className="app-form app-dialog-form" onSubmit={submitServerPassword}>
+                  <div className="app-dialog-body" role="region" tabIndex={0} aria-label={t.serverPassword}>
+                    <p className="app-password-help" dir={lang === "fa" ? "rtl" : "ltr"}>
+                      {passwordPromptMode === "legacy_password"
+                        ? t.legacyPasswordHelp
+                        : t.passwordRequiredHelp}
                     </p>
-                  )}
-                  <div className="app-dialog-actions" dir="ltr">
-                    <button className="app-button primary" type="submit" disabled={busy}>
-                      {busy ? <RefreshCw className="spin" size={17} /> : <ArrowRight size={17} />}
-                      {t.connect}
-                    </button>
-                    <button
-                      className="app-button subtle"
-                      type="button"
-                      disabled={busy}
-                      onClick={cancelPasswordPrompt}
-                    >
-                      {t.cancel}
-                    </button>
+                    <div className="app-password-group">
+                      <label htmlFor="player-server-password" dir={lang === "fa" ? "rtl" : "ltr"}>
+                        {t.passwordInput}
+                      </label>
+                      <span className="app-password-field" dir="ltr">
+                        <input
+                          id="player-server-password"
+                          autoFocus
+                          required
+                          type={passwordVisible ? "text" : "password"}
+                          dir="ltr"
+                          autoComplete="off"
+                          value={playerPassword}
+                          disabled={busy}
+                          onChange={(event) => {
+                            setPlayerPassword(event.target.value);
+                            setPasswordError("");
+                          }}
+                          placeholder={t.passwordPlaceholder}
+                        />
+                        <button
+                          className="app-password-toggle"
+                          type="button"
+                          aria-label={passwordVisible ? t.hidePassword : t.showPassword}
+                          title={passwordVisible ? t.hidePassword : t.showPassword}
+                          disabled={busy}
+                          onClick={() => setPasswordVisible((visible) => !visible)}
+                        >
+                          {passwordVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+                        </button>
+                      </span>
+                    </div>
+                    {passwordError && (
+                      <p className="app-error" role="alert" dir={lang === "fa" ? "rtl" : "ltr"}>
+                        {passwordError}
+                      </p>
+                    )}
                   </div>
+                  <footer className="app-dialog-footer" dir="ltr">
+                    <div className="app-dialog-footer-actions">
+                      <button className="app-button primary" type="submit" disabled={busy}>
+                        {busy ? <RefreshCw className="spin" size={17} /> : <ArrowRight size={17} />}
+                        {t.connect}
+                      </button>
+                      <button
+                        className="app-button subtle"
+                        type="button"
+                        disabled={busy}
+                        onClick={cancelPasswordPrompt}
+                      >
+                        {t.cancel}
+                      </button>
+                    </div>
+                  </footer>
                 </form>
               </div>
             </Modal>

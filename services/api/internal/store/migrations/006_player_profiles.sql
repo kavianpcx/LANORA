@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS player_profiles (
+ device_id TEXT PRIMARY KEY,
+ username TEXT NOT NULL,
+ avatar TEXT NOT NULL DEFAULT 'fox',
+ updated_at INTEGER NOT NULL
+);
+ALTER TABLE members ADD COLUMN device_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE members ADD COLUMN last_seen INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE rooms ADD COLUMN network_generation INTEGER NOT NULL DEFAULT 1;

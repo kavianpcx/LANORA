@@ -57,10 +57,13 @@ Run:
 
 ~~~sh
 bash scripts/server.sh status
+bash scripts/server.sh doctor
 bash scripts/server.sh player-auth status
 ~~~
 
 The status output reports container health, local API health, the player password policy, address, and port mappings. It never prints passwords, hashes, administrator tokens, or relay credentials. These local checks do not prove public internet reachability.
+
+`doctor` adds an authenticated database/player summary and recent API error types with only the sanitized error category shown. It reports the relay container state and actual Docker port mappings, and explicitly marks public HTTPS and relay reachability as not checked. Use a second internet connection to verify the public address and relay ports.
 
 When Caddy has obtained its HTTPS certificate, test from a different network:
 

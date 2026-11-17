@@ -42,23 +42,26 @@ type principal struct {
 	RoomID                 string
 }
 type room struct {
-	ID         string   `json:"id"`
-	Name       string   `json:"name"`
-	HostID     string   `json:"hostId"`
-	MaxPlayers int      `json:"maxPlayers"`
-	Visibility string   `json:"visibility"`
-	GameName   string   `json:"gameName,omitempty"`
-	Approval   bool     `json:"requireApproval"`
-	Accepting  bool     `json:"acceptingMembers"`
-	CreatedAt  string   `json:"createdAt"`
-	Members    []member `json:"members"`
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	HostID            string   `json:"hostId"`
+	MaxPlayers        int      `json:"maxPlayers"`
+	Visibility        string   `json:"visibility"`
+	GameName          string   `json:"gameName,omitempty"`
+	Approval          bool     `json:"requireApproval"`
+	Accepting         bool     `json:"acceptingMembers"`
+	CreatedAt         string   `json:"createdAt"`
+	NetworkGeneration int64    `json:"networkGeneration"`
+	Members           []member `json:"members"`
 }
 type member struct {
 	UserID   string `json:"userId"`
 	Username string `json:"username"`
+	Avatar   string `json:"avatar"`
 	Role     string `json:"role"`
 	Status   string `json:"status"`
 	JoinedAt string `json:"joinedAt"`
+	Online   *bool  `json:"online,omitempty"`
 }
 type errBody struct {
 	Error errorInfo `json:"error"`
@@ -86,6 +89,7 @@ func New(db *store.DB, log *slog.Logger, admin string) http.Handler {
 	mux.HandleFunc("POST /api/v1/network/join", a.joinSharedNetwork)
 	mux.HandleFunc("GET /api/v1/network/config", a.sharedNetworkConfig)
 	mux.HandleFunc("POST /api/v1/network/heartbeat", a.sharedNetworkHeartbeat)
+	mux.HandleFunc("PATCH /api/v1/network/profile", a.updateSharedProfile)
 	mux.HandleFunc("POST /api/v1/network/leave", a.leaveSharedNetwork)
 	mux.HandleFunc("POST /api/v1/rooms", a.createRoom)
 	mux.HandleFunc("GET /api/v1/rooms", a.listRooms)
@@ -93,6 +97,7 @@ func New(db *store.DB, log *slog.Logger, admin string) http.Handler {
 	mux.HandleFunc("GET /api/v1/rooms/{id}", a.getRoom)
 	mux.HandleFunc("GET /api/v1/rooms/{id}/membership", a.membership)
 	mux.HandleFunc("GET /api/v1/rooms/{id}/network", a.networkConfig)
+	mux.HandleFunc("PATCH /api/v1/rooms/{id}/profile", a.updateRoomProfile)
 	mux.HandleFunc("POST /api/v1/rooms/{id}/leave", a.leaveRoom)
 	mux.HandleFunc("POST /api/v1/rooms/{id}/approve", a.approve)
 	mux.HandleFunc("POST /api/v1/rooms/{id}/invite/rotate", a.rotateInvite)
@@ -155,6 +160,8 @@ type createRequest struct {
 	GameName        string `json:"gameName"`
 	RequireApproval bool   `json:"requireApproval"`
 	Username        string `json:"username"`
+	DeviceID        string `json:"deviceId"`
+	Avatar          string `json:"avatar"`
 }
 
 func (a *API) createRoom(w http.ResponseWriter, r *http.Request) {
@@ -164,6 +171,12 @@ func (a *API) createRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Name = strings.TrimSpace(in.Name)
 	in.Username = strings.TrimSpace(in.Username)
+	deviceID, avatar, profileErr := normalizeProfile(in.DeviceID, in.Avatar)
+	if profileErr != nil {
+		writeErr(w, 400, "invalid_profile", "Player device or avatar is invalid")
+		return
+	}
+	in.DeviceID, in.Avatar = deviceID, existingAvatar(a.db, deviceID, avatar)
 	if runeLen(in.Name) < 2 || runeLen(in.Name) > 64 || runeLen(in.Username) < 2 || runeLen(in.Username) > 32 || runeLen(in.GameName) > 64 || len(in.Password) > 128 {
 		writeErr(w, 400, "invalid_input", "نام روم باید ۲ تا ۶۴، نام بازی تا ۶۴، نام کاربر ۲ تا ۳۲ و رمز حداکثر ۱۲۸ نویسه باشد")
 		return
@@ -225,8 +238,12 @@ func (a *API) createRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := "approved"
-	_, e = tx.Exec(`INSERT INTO members(room_id,user_id,username,token_hash,role,status,joined_at) VALUES(?,?,?,?,?,?,?)`, id, userID, in.Username, hash(token), "host", status, ts)
+	_, e = tx.Exec(`INSERT INTO members(room_id,user_id,username,token_hash,role,status,joined_at,device_id,last_seen) VALUES(?,?,?,?,?,?,?,?,?)`, id, userID, in.Username, hash(token), "host", status, ts, in.DeviceID, time.Now().Unix())
 	if e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = storePlayerProfile(tx, in.DeviceID, in.Username, in.Avatar); e != nil {
 		serverError(w, e)
 		return
 	}
@@ -269,6 +286,8 @@ type joinRequest struct {
 	RoomID     string `json:"roomId"`
 	Password   string `json:"password"`
 	Username   string `json:"username"`
+	DeviceID   string `json:"deviceId"`
+	Avatar     string `json:"avatar"`
 }
 
 func (a *API) joinRoom(w http.ResponseWriter, r *http.Request) {
@@ -279,6 +298,12 @@ func (a *API) joinRoom(w http.ResponseWriter, r *http.Request) {
 	a.joinMu.Lock()
 	defer a.joinMu.Unlock()
 	in.Username = strings.TrimSpace(in.Username)
+	deviceID, avatar, profileErr := normalizeProfile(in.DeviceID, in.Avatar)
+	if profileErr != nil {
+		writeErr(w, 400, "invalid_profile", "Player device or avatar is invalid")
+		return
+	}
+	in.DeviceID, in.Avatar = deviceID, existingAvatar(a.db, deviceID, avatar)
 	in.InviteCode = strings.ToUpper(strings.TrimSpace(in.InviteCode))
 	if (in.InviteCode == "" && in.RoomID == "") || (in.InviteCode != "" && !codeRE.MatchString(in.InviteCode)) || runeLen(in.Username) < 2 || runeLen(in.Username) > 32 || len(in.Password) > 128 {
 		writeErr(w, 400, "invalid_input", "نام، روم یا کد دعوت معتبر نیست")
@@ -332,8 +357,21 @@ func (a *API) joinRoom(w http.ResponseWriter, r *http.Request) {
 	if approval == 1 {
 		status = "pending"
 	}
-	_, e = a.db.Exec(`INSERT INTO members(room_id,user_id,username,token_hash,role,status,joined_at) VALUES(?,?,?,?,?,?,?)`, rm.ID, uid, in.Username, hash(token), "member", status, ts)
+	tx, e := a.db.Begin()
 	if e != nil {
+		serverError(w, e)
+		return
+	}
+	defer tx.Rollback()
+	_, e = tx.Exec(`INSERT INTO members(room_id,user_id,username,token_hash,role,status,joined_at,device_id,last_seen) VALUES(?,?,?,?,?,?,?,?,?)`, rm.ID, uid, in.Username, hash(token), "member", status, ts, in.DeviceID, time.Now().Unix())
+	if e == nil {
+		e = storePlayerProfile(tx, in.DeviceID, in.Username, in.Avatar)
+	}
+	if e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = tx.Commit(); e != nil {
 		serverError(w, e)
 		return
 	}
@@ -349,6 +387,10 @@ func (a *API) getRoom(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if p.RoomID != id {
 		writeErr(w, 403, "forbidden", "دسترسی به این روم مجاز نیست")
+		return
+	}
+	if _, err := a.db.Exec(`UPDATE members SET last_seen=? WHERE room_id=? AND user_id=?`, time.Now().Unix(), id, p.UserID); err != nil {
+		serverError(w, err)
 		return
 	}
 	rm := a.loadRoom(id)
@@ -376,6 +418,10 @@ func (a *API) membership(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 403, "forbidden", "دسترسی مجاز نیست")
 		return
 	}
+	if _, e := a.db.Exec(`UPDATE members SET last_seen=? WHERE room_id=? AND user_id=?`, time.Now().Unix(), p.RoomID, p.UserID); e != nil {
+		serverError(w, e)
+		return
+	}
 	// Membership polling is used frequently to observe approval/rejection. Keep
 	// tunnel credentials on the dedicated network endpoint so they are not
 	// copied into routine status responses or client caches.
@@ -401,11 +447,12 @@ func (a *API) networkConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var secret string
-	if e = a.db.QueryRow(`SELECT network_secret FROM rooms WHERE id=?`, id).Scan(&secret); e != nil {
+	var generation int64
+	if e = a.db.QueryRow(`SELECT network_secret,network_generation FROM rooms WHERE id=?`, id).Scan(&secret, &generation); e != nil {
 		writeErr(w, 404, "room_not_found", "روم پیدا نشد")
 		return
 	}
-	writeJSON(w, 200, map[string]string{"networkName": "lanora-" + id, "networkSecret": secret, "peerUrl": peer})
+	writeJSON(w, 200, map[string]any{"networkName": "lanora-" + id, "networkSecret": secret, "peerUrl": peer, "networkGeneration": generation})
 }
 
 func (a *API) leaveRoom(w http.ResponseWriter, r *http.Request) {
@@ -525,7 +572,18 @@ func (a *API) kick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uid := r.PathValue("userId")
-	res, e := a.db.Exec(`DELETE FROM members WHERE room_id=? AND user_id=? AND role='member'`, id, uid)
+	newSecret, e := randomHex(32)
+	if e != nil {
+		serverError(w, e)
+		return
+	}
+	tx, e := a.db.Begin()
+	if e != nil {
+		serverError(w, e)
+		return
+	}
+	defer tx.Rollback()
+	res, e := tx.Exec(`DELETE FROM members WHERE room_id=? AND user_id=? AND role='member'`, id, uid)
 	if e != nil {
 		serverError(w, e)
 		return
@@ -535,8 +593,16 @@ func (a *API) kick(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "member_not_found", "عضو پیدا نشد")
 		return
 	}
+	if _, e = tx.Exec(`UPDATE rooms SET network_secret=?,network_generation=network_generation+1 WHERE id=?`, newSecret, id); e != nil {
+		serverError(w, e)
+		return
+	}
+	if e = tx.Commit(); e != nil {
+		serverError(w, e)
+		return
+	}
 	a.publish(id, "member.kicked", map[string]string{"userId": uid})
-	writeJSON(w, 200, map[string]string{"status": "removed"})
+	writeJSON(w, 200, map[string]any{"status": "removed", "networkGenerationRotated": true})
 }
 
 func (a *API) setAccepting(w http.ResponseWriter, r *http.Request) {
@@ -582,18 +648,21 @@ func (a *API) authenticate(w http.ResponseWriter, r *http.Request) (principal, b
 func (a *API) loadRoom(id string) room {
 	var x room
 	var approval, accept int
-	e := a.db.QueryRow(`SELECT id,name,host_id,max_players,visibility,game_name,approval,accepting,created_at FROM rooms WHERE id=?`, id).Scan(&x.ID, &x.Name, &x.HostID, &x.MaxPlayers, &x.Visibility, &x.GameName, &approval, &accept, &x.CreatedAt)
+	e := a.db.QueryRow(`SELECT id,name,host_id,max_players,visibility,game_name,approval,accepting,created_at,network_generation FROM rooms WHERE id=?`, id).Scan(&x.ID, &x.Name, &x.HostID, &x.MaxPlayers, &x.Visibility, &x.GameName, &approval, &accept, &x.CreatedAt, &x.NetworkGeneration)
 	if e != nil {
 		return x
 	}
 	x.Approval = approval == 1
 	x.Accepting = accept == 1
-	rows, e := a.db.Query(`SELECT user_id,username,role,status,joined_at FROM members WHERE room_id=? AND status IN ('approved','pending') ORDER BY joined_at`, id)
+	cutoff := time.Now().Add(-30 * time.Second).Unix()
+	rows, e := a.db.Query(`SELECT m.user_id,COALESCE(p.username,m.username),COALESCE(p.avatar,'fox'),m.role,m.status,m.joined_at,(m.last_seen>=?) FROM members m LEFT JOIN player_profiles p ON p.device_id=m.device_id WHERE m.room_id=? AND m.status IN ('approved','pending') ORDER BY m.joined_at`, cutoff, id)
 	if e == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var m member
-			if rows.Scan(&m.UserID, &m.Username, &m.Role, &m.Status, &m.JoinedAt) == nil {
+			var online bool
+			if rows.Scan(&m.UserID, &m.Username, &m.Avatar, &m.Role, &m.Status, &m.JoinedAt, &online) == nil {
+				m.Online = &online
 				x.Members = append(x.Members, m)
 			}
 		}
@@ -686,10 +755,20 @@ func (a *API) adminSummary(w http.ResponseWriter, r *http.Request) {
 	if !a.authorizeAdmin(w, r) {
 		return
 	}
-	var rooms, members int
-	_ = a.db.QueryRow(`SELECT COUNT(*) FROM rooms`).Scan(&rooms)
-	_ = a.db.QueryRow(`SELECT COUNT(*) FROM members WHERE status='approved'`).Scan(&members)
-	writeJSON(w, 200, map[string]any{"activeRooms": rooms, "approvedMemberships": members, "service": "lanora-api"})
+	var rooms, members, sharedPlayers int
+	if err := a.db.QueryRow(`SELECT COUNT(*) FROM rooms`).Scan(&rooms); err != nil {
+		serverError(w, err)
+		return
+	}
+	if err := a.db.QueryRow(`SELECT COUNT(*) FROM members WHERE status='approved'`).Scan(&members); err != nil {
+		serverError(w, err)
+		return
+	}
+	if err := a.db.QueryRow(`SELECT COUNT(*) FROM shared_members WHERE last_seen>=?`, time.Now().Add(-30*time.Second).Unix()).Scan(&sharedPlayers); err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{"activeRooms": rooms, "approvedMemberships": members, "activeSharedPlayers": sharedPlayers, "service": "lanora-api"})
 }
 
 func (a *API) authorizeAdmin(w http.ResponseWriter, r *http.Request) bool {

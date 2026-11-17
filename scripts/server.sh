@@ -95,6 +95,72 @@ set_player_password() {
 }
 
 case "$command_name" in
+  doctor)
+    validate_compose
+    failed=0
+    echo 'LANORA — server health report'
+    api_id="$(docker compose ps -a -q api)"
+    if [[ -n "$api_id" ]] && docker compose exec -T api /lanora-api healthcheck >/dev/null 2>&1; then
+      echo 'API: PASS (health endpoint responds)'
+    else
+      echo 'API: FAIL (start or inspect the API service; try: bash scripts/server.sh logs)'
+      failed=1
+    fi
+
+    relay_id="$(docker compose ps -a -q easytier)"
+    if [[ -z "$relay_id" ]]; then
+      echo 'Relay: FAIL (container not created)'
+      failed=1
+    else
+      relay_state="$(docker inspect --format '{{.State.Status}}' "$relay_id")"
+      if [[ "$relay_state" == running ]]; then
+        echo 'Relay: PASS (container is running; external reachability is not verified)'
+      else
+        printf 'Relay: FAIL (container state: %s)\n' "$relay_state"
+        failed=1
+      fi
+    fi
+
+    if policy_output="$(player_auth_cli status 2>/dev/null)"; then
+      printf '%s\n' "$policy_output"
+      if grep -Fxq 'Player password: disabled' <<<"$policy_output"; then
+        echo 'WARNING: anyone who can reach this server may join its shared gaming network.'
+      fi
+    else
+      echo 'Player password policy: UNKNOWN (API/admin check failed)'
+      failed=1
+    fi
+
+    public_host="$(sed -n 's/^LANORA_PUBLIC_HOST=//p' .env | head -n 1)"
+    if [[ "$public_host" =~ ^[A-Za-z0-9.-]+$ ]]; then
+      printf 'Public player URL: https://%s\n' "$public_host"
+    else
+      echo 'Public player URL: FAIL (LANORA_PUBLIC_HOST is invalid)'
+      failed=1
+    fi
+    echo 'Configured host port mappings:'
+    printf '  HTTP:     %s\n' "$(docker compose port caddy 80 2>/dev/null || echo 'unavailable')"
+    printf '  HTTPS:    %s\n' "$(docker compose port caddy 443 2>/dev/null || echo 'unavailable')"
+    printf '  Relay:    %s (TCP/UDP)\n' "$(docker compose port easytier 11010 2>/dev/null || echo 'unavailable')"
+
+    if [[ -n "$api_id" ]] && summary_output="$(docker compose exec -T api /lanora-api admin-summary 2>/dev/null)"; then
+      printf '%s\n' "$summary_output"
+    else
+      echo 'Database and active-player counts: FAIL (authenticated API summary unavailable)'
+      failed=1
+    fi
+
+    recent_errors="$(docker compose logs --tail=100 api 2>&1 | sed -n 's/.*"error_type":"\([^"]*\)".*/\1/p' | tail -n 5)"
+    echo 'Recent sanitized API failure types:'
+    if [[ -n "$recent_errors" ]]; then
+      while IFS= read -r error_type; do printf '  %s\n' "$error_type"; done <<<"$recent_errors"
+    else
+      echo '  None found in the latest 100 API log lines.'
+    fi
+    echo 'Public HTTPS and relay reachability: NOT CHECKED from another network.'
+    echo 'For a public server, verify HTTPS /api/v1/health and UDP/TCP relay access from another connection.'
+    exit "$failed"
+    ;;
   start)
     validate_compose
     docker compose up -d --build
@@ -192,7 +258,7 @@ case "$command_name" in
     migrate_legacy_player_code
     ;;
   *)
-    echo 'Usage: bash scripts/server.sh {status|start|restart|stop|logs|update|player-auth}'
+    echo 'Usage: bash scripts/server.sh {status|start|restart|stop|logs|update|doctor|player-auth}'
     exit 2
     ;;
 esac

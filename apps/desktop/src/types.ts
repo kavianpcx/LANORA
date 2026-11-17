@@ -8,6 +8,7 @@ export type EngineStatus = {
 export type Member = {
   userId: string;
   username: string;
+  avatar?: string;
   role: string;
   status: string;
   virtualIp?: string;
@@ -17,6 +18,8 @@ export type Member = {
 export type PeerStatus = {
   virtualIp: string;
   latencyMs: number | null;
+  routeType?: "direct" | "relay" | null;
+  observedAt?: number;
 };
 export type ListedRoom = {
   id: string;
@@ -36,9 +39,11 @@ export type ActiveRoom = {
   role: "host" | "member";
   status: string;
   members?: Member[];
+  networkGeneration?: number;
 };
 export type Network = {
   networkName: string;
   networkSecret: string;
   peerUrl: string;
+  networkGeneration?: number;
 };
