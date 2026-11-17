@@ -28,10 +28,10 @@ export function deriveConnectionStatus(input: {
   virtualIp: string | null;
   reachablePeerCount: number;
 }): ConnectionStatus {
+  if (!input.serverReachable) return "server-unreachable";
   if (input.stage === "auth-failed") return "authentication-failed";
   if (input.stage === "authenticating") return "authentication-pending";
   if (input.stage === "failed") return "connection-failed";
-  if (!input.serverReachable) return "server-unreachable";
   if (!input.roomActive) return "server-reachable";
   if (input.stage === "authorized") return "authorized";
   if (!input.tunnelRunning) return "tunnel-starting";
