@@ -257,7 +257,7 @@ func TestSharedNetworkAuthorizationPresenceAndCleanup(t *testing.T) {
 	h := testAPI(t)
 
 	invalidStatus, _ := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
-		"code": "000000000000000000000000",
+		"code":     "000000000000000000000000",
 		"deviceId": strings.Repeat("a", 32),
 		"username": "Player A",
 	})
@@ -266,7 +266,7 @@ func TestSharedNetworkAuthorizationPresenceAndCleanup(t *testing.T) {
 	}
 
 	status, first := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
-		"code": "c7a0c4d9b071ec35f8bc1d2a",
+		"code":     "c7a0c4d9b071ec35f8bc1d2a",
 		"deviceId": strings.Repeat("a", 32),
 		"username": "Player A",
 	})
@@ -292,7 +292,7 @@ func TestSharedNetworkAuthorizationPresenceAndCleanup(t *testing.T) {
 	}
 
 	status, second := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
-		"code": "c7a0c4d9b071ec35f8bc1d2a",
+		"code":     "c7a0c4d9b071ec35f8bc1d2a",
 		"deviceId": strings.Repeat("b", 32),
 		"username": "Player B",
 	})
@@ -344,7 +344,6 @@ func TestSharedNetworkAuthorizationPresenceAndCleanup(t *testing.T) {
 	}
 }
 
-
 func TestSharedCodeRotationRevokesExistingTokens(t *testing.T) {
 	t.Setenv("LANORA_SHARED_NETWORK_CODE", "old-code-0123456789abcdef")
 	t.Setenv("LANORA_RELAY_PEER_URL", "tcp://relay.example.org:11010")
@@ -356,7 +355,7 @@ func TestSharedCodeRotationRevokesExistingTokens(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	before := New(db, logger, "admin-test-token")
 	status, joined := call(t, before, "POST", "/api/v1/network/join", "", map[string]any{
-		"code": "old-code-0123456789abcdef",
+		"code":     "old-code-0123456789abcdef",
 		"deviceId": strings.Repeat("c", 32),
 		"username": "Player C",
 	})
@@ -371,7 +370,7 @@ func TestSharedCodeRotationRevokesExistingTokens(t *testing.T) {
 		t.Fatalf("old token remained authorized after code rotation: %d", status)
 	}
 	status, rejoined := call(t, after, "POST", "/api/v1/network/join", "", map[string]any{
-		"code": "new-code-fedcba9876543210",
+		"code":     "new-code-fedcba9876543210",
 		"deviceId": strings.Repeat("c", 32),
 		"username": "Player C",
 	})

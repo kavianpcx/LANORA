@@ -169,9 +169,9 @@ func (a *API) joinSharedNetwork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{
-		"userId":     userID,
+		"userId":      userID,
 		"accessToken": token,
-		"status":     "approved",
+		"status":      "approved",
 		"network": map[string]string{
 			"networkName":   a.sharedNetworkName,
 			"networkSecret": a.sharedNetworkSecret,

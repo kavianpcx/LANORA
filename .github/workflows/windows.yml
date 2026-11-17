@@ -199,7 +199,12 @@ jobs:
       - name: Verify Go formatting, dependencies and API tests
         working-directory: services/api
         run: |
-          test -z "$(gofmt -l cmd internal)"
+          unformatted="$(gofmt -l cmd internal)"
+          if [[ -n "$unformatted" ]]; then
+            echo "Go files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
           GOWORK=off go mod verify
           GOWORK=off go test -mod=readonly -race ./...
       - name: Verify server commands, repository, and Compose
