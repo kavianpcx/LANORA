@@ -202,6 +202,7 @@ jobs:
       - name: Verify Go formatting, dependencies and API tests
         working-directory: services/api
         run: |
+          gofmt -d cmd internal
           unformatted="$(gofmt -l cmd internal)"
           if [[ -n "$unformatted" ]]; then
             echo "Go files need gofmt:"
