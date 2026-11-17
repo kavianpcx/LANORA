@@ -218,14 +218,8 @@ select {
 .app-server-form {
   margin-top: 21px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.7fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-}
-.app-server-form .app-server-code {
-  flex: initial;
-  min-width: 0;
-  font: 650 13px ui-monospace, SFMono-Regular, Consolas, monospace;
-  letter-spacing: 0.04em;
 }
 .app-server-form input,
 .app-form input,
@@ -598,6 +592,51 @@ select {
 }
 .app-form > .app-button {
   margin-top: 5px;
+}
+.app-password-help {
+  color: var(--muted);
+  margin: -5px 0 19px;
+  line-height: 1.6;
+}
+.app-password-group {
+  display: grid;
+  gap: 6px;
+}
+.app-password-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.app-password-field input {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.app-password-toggle {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.app-password-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 5px;
+}
+.app-dialog-actions .app-button {
+  margin-top: 0;
 }
 .app-pref {
   display: flex;

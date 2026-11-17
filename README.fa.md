@@ -1,15 +1,15 @@
-<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.4/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.5/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
 <p align="center"><a href="README.md">English</a> · <a href="README.fa.md">فارسی</a></p>
 
 # LANORA
 
 **به شبکهٔ بازی وصل شو، آی‌پی مجازی میزبان را کپی کن و بازی کن.**
 
-LANORA برنامه‌ای متن‌باز و خودمیزبان برای بازی‌های دارای قابلیت LAN است. یک نفر سرور را روی VPS لینوکس اجرا می‌کند. بازیکنان برنامه را نصب می‌کنند، نشانی سرور و کد خصوصی را می‌زنند و خودکار وارد شبکهٔ مشترک می‌شوند. حساب کاربری یا وب‌سایت لازم نیست.
+LANORA برنامه‌ای متن‌باز و خودمیزبان برای بازی‌های دارای قابلیت LAN است. یک نفر سرور را روی VPS لینوکس اجرا می‌کند. بازیکنان برنامه را نصب می‌کنند، نشانی سرور را وارد می‌کنند و فقط اگر صاحب سرور لازم بداند رمز می‌زنند. حساب کاربری یا وب‌سایت لازم نیست.
 
-> **وضعیت: آلفای آزمایشی.** نسخهٔ 0.2.0-alpha.4 تست‌های خودکار API، استقرار، بسته‌های دسکتاپ و شبکهٔ رله در محیط ایزوله را گذرانده است. اتصال دو رایانه روی اینترنت‌های جدا، ترافیک بازی از تونل ویندوز، اتصال مستقیم P2P و کشف خودکار بازی‌ها هنوز تأیید نشده‌اند.
+> **وضعیت: آلفای آزمایشی.** نسخهٔ 0.2.0-alpha.5 امکان اختیاری‌کردن رمز بازیکنان را اضافه می‌کند. اتصال رایانه‌های مستقل ویندوز روی اینترنت عمومی، ترافیک بازی از تونل ویندوز، اتصال مستقیم P2P و کشف خودکار بازی‌ها هنوز تأیید نشده‌اند.
 >
-> **محدودیت امنیتی:** چرخاندن کد دسترسی، هویت شبکه را عوض می‌کند اما نمی‌تواند کلاینتی را که راز EasyTier قبلی را دارد مجبور به قطع کند. کد را عوض کنید و از همهٔ بازیکنان مورداعتماد بخواهید قطع شوند و دوباره وصل شوند؛ تا پایان مهاجرت، شبکهٔ قبلی را افشاشده فرض کنید.
+> **محدودیت امنیتی:** تغییر سیاست رمز، نشست‌های API را باطل و هویت شبکهٔ فعلی را عوض می‌کند؛ اما نمی‌تواند کلاینت تغییریافته‌ای را که به شبکهٔ قدیمی EasyTier وصل است مجبور به قطع کند. پس از تغییر سیاست از همهٔ بازیکنان بخواهید کامل قطع شوند و دوباره وصل شوند.
 
 [![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![ساخت برنامه](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![مجوز MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE) [![آخرین آلفا](https://img.shields.io/github/v/release/kavianpcx/LANORA?include_prereleases&label=alpha)](https://github.com/kavianpcx/LANORA/releases)
 
@@ -25,25 +25,33 @@ cd LANORA
 bash scripts/setup-server.sh
 ```
 
-وقتی پرسید، دامنه را وارد کنید. اسکریپت کلیدهای خصوصی را می‌سازد، سرویس‌ها را اجرا می‌کند و نشانی سرور و کد دسترسی شبکه را نشان می‌دهد. هر دو را فقط برای بازیکنان مورداعتماد بفرستید.
+وقتی پرسید، دامنه را وارد کنید. در نصب تازه، اسکریپت می‌پرسد که بازیکنان باید رمز داشته باشند یا نه. گزینهٔ پیش‌فرض **بله** است؛ رمز را دو بار وارد می‌کنید و در ترمینال نمایش داده نمی‌شود. برای سرور عمومی، محافظت با رمز پیشنهاد می‌شود. با انتخاب **خیر**، هر کسی که بتواند به سرور دسترسی پیدا کند می‌تواند وارد شبکهٔ بازی شود.
 
-برای بررسی وضعیت یا دیدن دوبارهٔ کد:
+برای بررسی وضعیت و سیاست رمز بازیکنان:
 
 ```sh
 bash scripts/server.sh status
-bash scripts/server.sh code
+bash scripts/server.sh player-auth status
 ```
 
-دستور وضعیت اطلاعات محرمانه را نشان نمی‌دهد. سرور عمومی باید HTTPS داشته باشد؛ HTTP فقط برای نشانی‌های loopback مثل `127.0.0.1` مجاز است. راهنمای [کامل VPS](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/SELF_HOSTING.md) تنظیم DNS، پورت‌ها و TLS را توضیح می‌دهد.
+بدون نصب دوباره، محافظت با رمز را مدیریت کنید:
+
+```sh
+bash scripts/server.sh player-auth enable
+bash scripts/server.sh player-auth change
+bash scripts/server.sh player-auth disable
+```
+
+با غیرفعال‌کردن رمز، هر کسی که به سرور دسترسی داشته باشد می‌تواند وارد شبکه شود. این کار احراز هویت مدیر یا اعتبارنامه‌های رلهٔ EasyTier را غیرفعال نمی‌کند. تغییر سیاست، نشست‌های فعلی API را باطل می‌کند؛ محدودیت نشست‌های EasyTier در [راهنمای VPS](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/SELF_HOSTING.md) توضیح داده شده است. سرور عمومی باید HTTPS داشته باشد؛ HTTP فقط برای نشانی‌های loopback مجاز است.
 
 ## دانلود و اتصال بازیکنان
 
-- **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.4/LANORA_0.2.0-alpha.4_x64-setup.exe)
-- **لینوکس x64 (Debian/Ubuntu):** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.4/LANORA_0.2.0-alpha.4_amd64.deb)
-- [یادداشت انتشار و کدهای SHA-256](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.4)
+- **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_x64-setup.exe)
+- **لینوکس x64 (Debian/Ubuntu):** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_amd64.deb)
+- [یادداشت انتشار و کدهای SHA-256](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.5)
 
 ۱. برنامه را نصب و باز کنید. نام نمایشی انتخاب کنید؛ ثبت‌نام لازم نیست.
-۲. نشانی سرور و کد دسترسی را وارد کنید و **Connect** را بزنید.
+۲. نشانی سرور را وارد کنید و **Connect** را بزنید. فقط اگر سرور رمز بخواهد، LANORA آن را می‌پرسد.
 ۳. وقتی برنامه IP مجازی را نشان داد، آن را برای دوستی که میزبان بازی است بفرستید.
 ۴. بقیهٔ بازیکنان IP مجازی میزبان را در گزینهٔ Direct IP بازی وارد کنند. IP سرور VPS برای اتصال به LANORA است، نه برای ورود به بازی.
 
@@ -57,7 +65,7 @@ bash scripts/server.sh code
 
 ## LANORA چطور کار می‌کند؟
 
-API خودمیزبان Go کد دسترسی را بررسی و عضویت‌ها را هماهنگ می‌کند. EasyTier ترافیک بازی را از شبکهٔ مجازی جداگانه عبور می‌دهد؛ API مسیر ترافیک بازی نیست. LANORA دروازهٔ پیش‌فرض اینترنت یا پراکسی سراسری سیستم را تغییر نمی‌دهد. وضعیت و تأخیر همتا فقط وقتی نمایش داده می‌شود که موتور شبکه اطلاعات واقعی ارائه کند.
+API خودمیزبان Go مشخص می‌کند که سرور برای بازیکنان رمز می‌خواهد یا نه، سپس دسترسی و عضویت هر بازیکن را مدیریت می‌کند. رمزها با PBKDF2-SHA256 به‌صورت Hash ذخیره می‌شوند. سرور بدون رمز هم نشست معتبر بازیکن می‌سازد، اما هر کسی که به آن دسترسی داشته باشد می‌تواند درخواست عضویت بدهد. احراز هویت مدیر و اعتبارنامه‌های داخلی رلهٔ EasyTier جداگانه محافظت می‌شوند. EasyTier ترافیک بازی را از شبکهٔ مجازی جداگانه عبور می‌دهد؛ LANORA دروازهٔ پیش‌فرض اینترنت یا پراکسی سراسری سیستم را تغییر نمی‌دهد. وضعیت همتا فقط با شواهد واقعی موتور شبکه نمایش داده می‌شود.
 
 ## ساختار پروژه
 

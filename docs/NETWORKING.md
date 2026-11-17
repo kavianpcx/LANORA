@@ -4,13 +4,13 @@ LANORA uses a control plane and a separate game-traffic data plane.
 
 ## Default connection
 
-1. The client requests the HTTPS health endpoint.
-2. The player enters the shared access code. The API validates it, creates a per-device bearer token, and returns this server's persistent EasyTier network identity.
+1. The client requests the HTTPS health endpoint and public connection-info endpoint. Discovery reports whether this server requires a player password; it does not authorize access or return secrets.
+2. For a protected server, the player enters a password in the client dialog. For a passwordless server, the client sends no player credential. The API enforces its configured policy, creates a per-device bearer token, and returns this server's current EasyTier network identity only after authorization.
 3. The desktop starts the bundled EasyTier process with DHCP enabled, the server's relay address as a peer, encryption enabled, and exit nodes disabled.
 4. The app reads the adapter's actual virtual IP from EasyTier. It sends that IP with a heartbeat every five seconds.
 5. The server reports app presence while a heartbeat is fresh (30 seconds). The client separately asks EasyTier for its peer routes. A route and its latency are shown only when EasyTier provides them.
 
-Every player authorized by one server joins the same network. The access code is not the EasyTier network secret. The server stores the network secret in SQLite and only returns it to authorized clients over the API. Each device token is stored hashed server-side. Changing the shared code and restarting the API rotates the data-plane network identity and revokes existing device tokens. Standard clients stop their EasyTier process when the next heartbeat is rejected.
+Every player authorized by one server joins the same network. A passwordless server authorizes any reachable player but still creates bearer sessions; the player password is not the EasyTier network secret. The server stores the network secret in SQLite and only returns it after a successful join. Each device token is stored hashed server-side. Changing the player policy or password rotates the data-plane network identity and revokes existing device tokens. Standard clients stop their EasyTier process when the next heartbeat is rejected; a modified client may keep using an already-delivered secret until it exits.
 
 Legacy room endpoints remain available. The desktop exposes them as advanced tools; they are not required for the default connection.
 

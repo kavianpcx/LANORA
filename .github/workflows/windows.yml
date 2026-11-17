@@ -251,7 +251,7 @@ jobs:
         run: |
           (cd dist/windows && sha256sum --check ./*.sha256)
           (cd dist/linux && sha256sum --check ./*.sha256)
-          tag=v0.2.0-alpha.4
+          tag=v0.2.0-alpha.5
           if git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null; then
             echo "Refusing to overwrite existing tag $tag"
             exit 1
@@ -264,10 +264,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.2.0-alpha.4 \
+          gh release create v0.2.0-alpha.5 \
             dist/windows/*.exe dist/windows/*.sha256 \
             dist/linux/*.deb dist/linux/*.sha256 \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "LANORA 0.2.0-alpha.4" \
-            --notes-file docs/releases/0.2.0-alpha.4.md
+            --title "LANORA 0.2.0-alpha.5" \
+            --notes-file docs/releases/0.2.0-alpha.5.md

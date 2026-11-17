@@ -1,16 +1,21 @@
-# Run LANORA on a Linux VPS
+# Set up a LANORA server
 
-LANORA's control API, SQLite database, HTTPS proxy, and EasyTier relay run in Docker Compose. Players need only the desktop app, the server address, and the private shared-network code.
+This guide follows what the server owner does and sees. LANORA's API, database, HTTPS endpoint, and EasyTier relay run on the owner's Linux VPS. Players need the desktop app and the server address. The app asks for a player password only if the owner turns password protection on.
 
-## Before you start
+## 1. Prepare the VPS
 
-You need a Linux VPS, a domain whose DNS A record points to it, Git, OpenSSL, Docker Engine, and the Docker Compose plugin. Open inbound TCP 80 and 443 and TCP/UDP 11010 in both the VPS firewall and the VPS provider firewall. Leave API port 8080 private; do not expose it directly.
+You need a Linux VPS, a domain whose DNS A record points to it, Git, OpenSSL, Docker Engine, and the Docker Compose plugin. Install Docker using its official instructions: https://docs.docker.com/engine/install/
 
-Install Docker using its official instructions: https://docs.docker.com/engine/install/
+Open these inbound ports in both the VPS firewall and the VPS provider firewall:
 
-## Install
+- TCP 80 and TCP 443 for HTTPS setup and the API.
+- TCP and UDP 11010 for the EasyTier relay.
 
-Copy these commands into the VPS terminal:
+Keep API port 8080 private. Do not expose it directly to the internet.
+
+## 2. Download and start LANORA
+
+Run these commands on the VPS:
 
 ~~~sh
 git clone --branch release/0.2.x https://github.com/kavianpcx/LANORA.git
@@ -18,56 +23,86 @@ cd LANORA
 bash scripts/setup-server.sh
 ~~~
 
-Enter the DNS name when asked, for example games.example.com. The setup script creates a restricted .env file with separate random administrator, relay, and shared-network secrets, then builds and starts the services. It prints the configured player address and shared-network access code. Send both privately to the players.
+The installer asks for the domain pointed at the VPS. Enter it without `https://`, for example `games.example.com`.
 
-If HTTPS is not ready when the script finishes, check DNS and ports 80/443, then wait for Caddy to obtain its certificate. From a different network, verify the public API:
+On a fresh installation, it then asks:
+
+~~~text
+Require a password for players? [Y/n]:
+~~~
+
+Press Enter or type `yes` to require a password. This is the default and is recommended for public servers. The installer starts the services, then asks for the password twice:
+
+~~~text
+Enter player password:
+Confirm player password:
+~~~
+
+Input stays hidden while you type. Passwords need at least 12 characters and either 16 characters or three character types (lowercase, uppercase, digits, symbols), with a maximum of 128 bytes. LANORA stores a PBKDF2-SHA256 password hash; it does not print or save the plain password in `.env`.
+
+Type `no` to allow passwordless player joins. The installer warns that anyone who can reach the server may join its shared gaming network. This choice affects player access only; administrator authentication and EasyTier relay credentials remain protected.
+
+At the end, the installer shows the service status and a player address such as:
+
+~~~text
+Players connect to: https://games.example.com
+Player password protection is enabled. Share your chosen password privately.
+~~~
+
+For passwordless setup, it instead says that anyone who can reach the server may join. Share the HTTPS address with players. Share the password privately only when protection is enabled.
+
+## 3. Check the server from the VPS
+
+Run:
+
+~~~sh
+bash scripts/server.sh status
+bash scripts/server.sh player-auth status
+~~~
+
+The status output reports container health, local API health, the player password policy, address, and port mappings. It never prints passwords, hashes, administrator tokens, or relay credentials. These local checks do not prove public internet reachability.
+
+When Caddy has obtained its HTTPS certificate, test from a different network:
 
 ~~~sh
 curl --fail https://games.example.com/api/v1/health
 ~~~
 
-The response should include status "ok". Do not bypass TLS checks with -k.
+The response should include `"status":"ok"`. Do not bypass TLS verification with `-k`.
 
-## Check and manage
+## 4. Change player access later
 
-Run these commands from the LANORA checkout:
+Run these commands from the LANORA checkout on the VPS:
 
 ~~~sh
-bash scripts/server.sh status
-bash scripts/server.sh code
-bash scripts/server.sh logs
-bash scripts/server.sh restart
-bash scripts/server.sh stop
-bash scripts/server.sh start
+bash scripts/server.sh player-auth status
+bash scripts/server.sh player-auth enable
+bash scripts/server.sh player-auth change
+bash scripts/server.sh player-auth disable
+~~~
+
+`enable` turns protection on and asks for a new password twice. `change` replaces the current password. `disable` turns off the player password and prints the open-access warning. A password cannot be recovered or displayed; set a new one if it is lost. You do not need to reinstall LANORA.
+
+Every policy change deletes current API memberships and rotates the shared EasyTier network identity. Standard LANORA clients stop after the next rejected heartbeat and must connect again. A modified client can keep using an EasyTier secret already delivered to its running process, so ask all players to fully disconnect and rejoin. Administrator authentication and relay credentials are unchanged.
+
+## Updating an existing installation
+
+If `.env` already exists, setup keeps its settings and does not ask the fresh-install questions. The database and Docker volumes are preserved. Existing alpha servers with `LANORA_SHARED_NETWORK_CODE` remain password-protected: the API migrates the code into the password hash and the setup/update command removes the old environment value after successful migration. Do not delete `.env` or the Docker volumes during an update.
+
+To update from the current branch:
+
+~~~sh
 bash scripts/server.sh update
 ~~~
 
-The status command shows container state, local API health, configured address, and port mappings. These are checks from inside the VPS; they do not prove that the address is reachable from a player's network. Test public HTTPS with curl from another network. Status and logs do not print the access code, administrator token, or relay secret. The explicit code command reveals only the shared access code to the local operator.
+The command pulls changes and rebuilds the services without deleting persistent data. Keep a protected backup of `.env`; it contains the server's private configuration. Do not run `docker compose down --volumes` if you need to keep the database and certificates.
 
-Update pulls the current branch and rebuilds services without deleting Docker volumes. Do not run docker compose down --volumes if you want to keep the database and certificates.
+## Services and persistent data
 
-## Change or recover the access code
-
-The code is stored in .env with mode 0600. If you need to show the existing code, run:
-
-~~~sh
-bash scripts/server.sh code
-~~~
-
-To rotate it, edit LANORA_SHARED_NETWORK_CODE in .env to a new random value of 16–128 characters and restart:
-
-~~~sh
-docker compose up -d --build
-~~~
-
-The API rotates the EasyTier network name and secret and revokes existing shared-network tokens when it starts with the new code. Standard LANORA clients disconnect on their next rejected heartbeat and must reconnect. Keep the old code private; this does not forcibly stop a modified client that deliberately keeps an old EasyTier process running. Keep a backup of .env in a protected place; it contains the server's private configuration.
-
-## Ports and data
-
-- TCP 80: Caddy certificate challenge and redirect.
+- TCP 80: Caddy certificate setup and redirect.
 - TCP 443: HTTPS API.
 - TCP and UDP 11010: EasyTier relay.
-- SQLite: persistent lanora_data Docker volume.
-- Caddy certificates: persistent caddy_data and caddy_config volumes.
+- `lanora_data`: SQLite database and player policy.
+- `caddy_data` and `caddy_config`: TLS certificates and Caddy settings.
 
-LANORA does not provide a public website or hosted service. Each server owner operates their own instance.
+LANORA does not provide a hosted service or public website. Each server owner operates their own instance.

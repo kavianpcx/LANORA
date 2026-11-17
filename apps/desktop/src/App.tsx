@@ -4,6 +4,8 @@ import {
   Activity,
   ArrowRight,
   Check,
+  Eye,
+  EyeOff,
   Gamepad2,
   Link2,
   LockKeyhole,
@@ -16,6 +18,11 @@ import {
 import brand from "./brand.svg";
 import { labels } from "./labels";
 import { api, friendlyError, normalize, RequestError } from "./api";
+import {
+  discoverPlayerAuth,
+  playerJoinCredentials,
+  type PlayerAuthMode,
+} from "./serverAuth";
 import { deriveConnectionStatus, type ConnectionStage } from "./connectionStatus";
 import { avatars, type AvatarKind } from "./components/Avatar";
 import { ProfileFields } from "./components/ProfileFields";
@@ -65,8 +72,10 @@ export default function App() {
   const [serverInput, setServerInput] = useState(
     () => localStorage.getItem("lanora.desktopServer") || "",
   );
-  // Access codes are session-only and are never persisted in browser storage.
-  const [accessCode, setAccessCode] = useState("");
+  const [passwordPromptMode, setPasswordPromptMode] = useState<PlayerAuthMode | null>(null);
+  const [playerPassword, setPlayerPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
   const [connectionStage, setConnectionStage] = useState<ConnectionStage>("idle");
   const [peerStatuses, setPeerStatuses] = useState<PeerStatus[]>([]);
   const {
@@ -130,7 +139,11 @@ export default function App() {
     } catch {
       sameServer = false;
     }
-    if (!sameServer) setAccessCode("");
+    if (!sameServer) {
+      setPlayerPassword("");
+      setPasswordPromptMode(null);
+      setPasswordError("");
+    }
   }
  
   useEffect(() => {
@@ -333,7 +346,6 @@ export default function App() {
               error: null,
             });
             setRoom(null);
-            setAccessCode("");
             setError(friendlyError(e, lang));
           }
         }
@@ -436,25 +448,29 @@ export default function App() {
       window.clearTimeout(timer);
     };
   }, [room?.roomId, room?.status, tunnel.running, tunnel.state, lang]);
-  async function connect() {
-    if (connectionBusy.current || checking || busy || room) return;
+  async function connect(rawAddress = serverInput) {
+    if (connectionBusy.current || checking || room) return;
     connectionBusy.current = true;
     setBusy(true);
     setError("");
+    setPasswordError("");
     setConnectionStage("server");
     try {
-      const url = await connectServer(serverInput);
+      const url = await connectServer(rawAddress);
       if (!url) {
         setConnectionStage("failed");
         return;
       }
       localStorage.setItem("lanora.desktopServer", url);
-      if (!accessCode.trim()) {
-        setError(t.accessCodeRequired);
-        setConnectionStage("failed");
+      const playerAuth = await discoverPlayerAuth(url, api);
+      if (playerAuth === "passwordless") {
+        await joinSharedNetwork(url, "", playerAuth);
         return;
       }
-      await joinSharedNetwork(url, accessCode);
+      setPlayerPassword("");
+      setPasswordVisible(false);
+      setPasswordPromptMode(playerAuth);
+      setConnectionStage("idle");
     } catch (e) {
       setError(friendlyError(e, lang));
       setConnectionStage(e instanceof RequestError && e.status === 401 ? "auth-failed" : "failed");
@@ -463,8 +479,11 @@ export default function App() {
       setBusy(false);
     }
   }
-  async function joinSharedNetwork(url: string, rawCode: string) {
-    const code = rawCode.trim();
+  async function joinSharedNetwork(
+    url: string,
+    password: string,
+    mode: PlayerAuthMode,
+  ) {
     setConnectionStage("authenticating");
     const joined = await api<{
       userId: string;
@@ -473,11 +492,10 @@ export default function App() {
       network: Network;
       members: Member[];
     }>(url, "/api/v1/network/join", undefined, {
-      code,
+      ...playerJoinCredentials(mode, password),
       deviceId: localDeviceId(),
       username: name.trim(),
     });
-    setAccessCode(code);
     const active: ActiveRoom = {
       roomId: "shared",
       name: labels[lang].sharedNetwork,
@@ -489,6 +507,33 @@ export default function App() {
     setRoom(active);
     setConnectionStage("tunnel");
     await startTunnel("shared", active.accessToken, url, joined.network);
+  }
+  async function submitServerPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!server || !passwordPromptMode || busy) return;
+    setBusy(true);
+    setPasswordError("");
+    setConnectionStage("authenticating");
+    try {
+      await joinSharedNetwork(server, playerPassword, passwordPromptMode);
+      setPasswordPromptMode(null);
+      setPlayerPassword("");
+      setPasswordVisible(false);
+    } catch (e) {
+      setPasswordError(friendlyError(e, lang));
+      setConnectionStage(e instanceof RequestError && e.status === 401 ? "auth-failed" : "failed");
+      if (e instanceof RequestError && e.status === 401) setPlayerPassword("");
+    } finally {
+      setBusy(false);
+    }
+  }
+  function cancelPasswordPrompt() {
+    if (busy) return;
+    setPasswordPromptMode(null);
+    setPlayerPassword("");
+    setPasswordVisible(false);
+    setPasswordError("");
+    setConnectionStage("idle");
   }
   async function startTunnel(
     id: string,
@@ -552,25 +597,15 @@ export default function App() {
         }
         if (onboarding && onboardingStep === "server") {
           const address = String(data.get("serverAddress") || "").trim();
-          const code = String(data.get("accessCode") || "").trim();
           setServerInput(address);
-          setAccessCode(code);
           if (!address) {
             setOnboarding(false);
             setMode(null);
             return;
           }
-          const url = await connectServer(address);
-          if (url) {
-            localStorage.setItem("lanora.desktopServer", url);
-            if (code) {
-              await joinSharedNetwork(url, code);
-            } else {
-              setError(t.accessCodeRequired);
-            }
-            setOnboarding(false);
-            setMode(null);
-          }
+          setOnboarding(false);
+          setMode(null);
+          await connect(address);
           return;
         }
         setOnboarding(false);
@@ -672,9 +707,6 @@ export default function App() {
         ) {
           revokeWarning = true;
         }
-      }
-      if (room.roomId === "shared") {
-        setAccessCode("");
       }
       setRoom(null);
       setConnectionStage("idle");
@@ -791,8 +823,8 @@ export default function App() {
                       ? t.sharedNetwork
                       : room.name
                   : lang === "fa"
-                    ? "کد دسترسی را وارد کنید"
-                    : "Enter the access code"}
+                    ? t.connect
+                    : "Connect to your server"}
               </small>
             </div>
             {room?.status === "approved" && <Check size={15} />}
@@ -827,9 +859,9 @@ export default function App() {
               : connectionStatus === "server-reachable"
                 ? t.serverReachable
                 : connectionStatus === "authentication-pending"
-                  ? lang === "fa" ? "در حال بررسی کد دسترسی" : "Checking access code"
+                  ? t.authenticating
                   : connectionStatus === "authentication-failed"
-                    ? lang === "fa" ? "کد دسترسی نامعتبر است" : "Access code rejected"
+                    ? t.authorizationFailed
                     : connectionStatus === "authorized"
                       ? lang === "fa" ? "دسترسی تأیید شد" : "Authorized"
                       : connectionStatus === "tunnel-starting"
@@ -884,23 +916,6 @@ export default function App() {
                     if (e.key === "Enter") void connect();
                   }}
                 />
-                <input
-                  className="app-server-code"
-                  type="password"
-                  dir="ltr"
-                  aria-label={t.accessCode}
-                  autoComplete="off"
-                  value={accessCode}
-                  placeholder={t.accessCodePlaceholder}
-                  disabled={Boolean(room) || checking || busy}
-                  onChange={(e) => {
-                    setAccessCode(e.target.value);
-                    setError("");
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void connect();
-                  }}
-                />
                 <button
                   className="app-button primary"
                   onClick={() => void connect()}
@@ -926,7 +941,7 @@ export default function App() {
                 <ShieldCheck size={15} />
                 <span dir={lang === "fa" ? "rtl" : "ltr"}>{t.backendOnly}</span>
               </p>
-              {connectionStage !== "idle" && connectionStage !== "failed" && !room && (
+              {connectionStage !== "idle" && connectionStage !== "failed" && !room && !passwordPromptMode && (
                 <p className="app-connection-progress" role="status" aria-live="polite">
                   <RefreshCw size={15} className="spin" />
                   <span dir={lang === "fa" ? "rtl" : "ltr"}>
@@ -1077,8 +1092,8 @@ export default function App() {
                 <span>03</span>
                 <div dir={lang === "fa" ? "rtl" : "ltr"}>
                   {lang === "fa"
-                    ? "کد دسترسی را وارد کنید تا خودکار به شبکه وصل شوید."
-                    : "Enter the access code to join the shared network."}
+                    ? "سرور رمز بخواهد، پنجرهٔ ورود رمز را نشان می‌دهیم."
+                    : "If the server requires a password, LANORA will ask for it."}
                 </div>
               </div>
             )}
@@ -1220,19 +1235,6 @@ export default function App() {
                             }
                             placeholder="https://games.example.com"
                             autoFocus
-                          />
-                        </label>
-                        <label>
-                          {t.accessCode}
-                          <input
-                            name="accessCode"
-                            type="password"
-                            dir="ltr"
-                            autoComplete="off"
-                            value={accessCode}
-                            disabled={checking || busy}
-                            onChange={(event) => setAccessCode(event.target.value)}
-                            placeholder={t.accessCodePlaceholder}
                           />
                         </label>
                         <button
@@ -1420,6 +1422,72 @@ export default function App() {
                     {error}
                   </p>
                 )}
+              </div>
+            </Modal>
+          )}
+          {passwordPromptMode && (
+            <Modal label={t.serverPassword} onClose={cancelPasswordPrompt}>
+              <div className="app-dialog" dir="ltr">
+                <span className="app-eyebrow">{t.server}</span>
+                <h2 dir={lang === "fa" ? "rtl" : "ltr"}>{t.serverPassword}</h2>
+                <p className="app-password-help" dir={lang === "fa" ? "rtl" : "ltr"}>
+                  {passwordPromptMode === "legacy_password"
+                    ? t.legacyPasswordHelp
+                    : t.passwordRequiredHelp}
+                </p>
+                <form className="app-form" onSubmit={submitServerPassword}>
+                  <div className="app-password-group">
+                    <label htmlFor="player-server-password" dir={lang === "fa" ? "rtl" : "ltr"}>
+                      {t.passwordInput}
+                    </label>
+                    <span className="app-password-field" dir="ltr">
+                      <input
+                        id="player-server-password"
+                        autoFocus
+                        required
+                        type={passwordVisible ? "text" : "password"}
+                        dir="ltr"
+                        autoComplete="off"
+                        value={playerPassword}
+                        disabled={busy}
+                        onChange={(event) => {
+                          setPlayerPassword(event.target.value);
+                          setPasswordError("");
+                        }}
+                        placeholder={t.passwordPlaceholder}
+                      />
+                      <button
+                        className="app-password-toggle"
+                        type="button"
+                        aria-label={passwordVisible ? t.hidePassword : t.showPassword}
+                        title={passwordVisible ? t.hidePassword : t.showPassword}
+                        disabled={busy}
+                        onClick={() => setPasswordVisible((visible) => !visible)}
+                      >
+                        {passwordVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+                      </button>
+                    </span>
+                  </div>
+                  {passwordError && (
+                    <p className="app-error" role="alert" dir={lang === "fa" ? "rtl" : "ltr"}>
+                      {passwordError}
+                    </p>
+                  )}
+                  <div className="app-dialog-actions" dir="ltr">
+                    <button className="app-button primary" type="submit" disabled={busy}>
+                      {busy ? <RefreshCw className="spin" size={17} /> : <ArrowRight size={17} />}
+                      {t.connect}
+                    </button>
+                    <button
+                      className="app-button subtle"
+                      type="button"
+                      disabled={busy}
+                      onClick={cancelPasswordPrompt}
+                    >
+                      {t.cancel}
+                    </button>
+                  </div>
+                </form>
               </div>
             </Modal>
           )}

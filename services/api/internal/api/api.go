@@ -36,10 +36,6 @@ type API struct {
 	joinMu                sync.Mutex
 	attempts              map[string][]time.Time
 	events                map[string]map[chan []byte]bool
-	sharedNetworkReady    bool
-	sharedNetworkCodeHash string
-	sharedNetworkName     string
-	sharedNetworkSecret   string
 }
 type principal struct {
 	UserID, Username, Role string
@@ -86,6 +82,7 @@ func New(db *store.DB, log *slog.Logger, admin string) http.Handler {
 	a.configureSharedNetwork(env("LANORA_SHARED_NETWORK_CODE", ""))
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/health", a.health)
+	mux.HandleFunc("GET /api/v1/connection-info", a.connectionInfo)
 	mux.HandleFunc("POST /api/v1/network/join", a.joinSharedNetwork)
 	mux.HandleFunc("GET /api/v1/network/config", a.sharedNetworkConfig)
 	mux.HandleFunc("POST /api/v1/network/heartbeat", a.sharedNetworkHeartbeat)
@@ -104,6 +101,8 @@ func New(db *store.DB, log *slog.Logger, admin string) http.Handler {
 	mux.HandleFunc("PATCH /api/v1/rooms/{id}/accepting", a.setAccepting)
 	mux.HandleFunc("GET /api/v1/events", a.eventsWS)
 	mux.HandleFunc("GET /api/v1/admin/summary", a.adminSummary)
+	mux.HandleFunc("GET /api/v1/admin/player-auth", a.adminPlayerAuth)
+	mux.HandleFunc("PATCH /api/v1/admin/player-auth", a.updateAdminPlayerAuth)
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "not_found", "مسیر پیدا نشد")
 	})
@@ -684,14 +683,22 @@ func (a *API) publish(id, kind string, data any) {
 	}
 }
 func (a *API) adminSummary(w http.ResponseWriter, r *http.Request) {
-	if a.adminToken == "" || r.Header.Get("Authorization") != "Bearer "+a.adminToken {
-		writeErr(w, 401, "unauthorized", "دسترسی مدیر سرور لازم است")
+	if !a.authorizeAdmin(w, r) {
 		return
 	}
 	var rooms, members int
 	_ = a.db.QueryRow(`SELECT COUNT(*) FROM rooms`).Scan(&rooms)
 	_ = a.db.QueryRow(`SELECT COUNT(*) FROM members WHERE status='approved'`).Scan(&members)
 	writeJSON(w, 200, map[string]any{"activeRooms": rooms, "approvedMemberships": members, "service": "lanora-api"})
+}
+
+func (a *API) authorizeAdmin(w http.ResponseWriter, r *http.Request) bool {
+	provided := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	if a.adminToken == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(a.adminToken)) != 1 {
+		writeErr(w, 401, "unauthorized", "دسترسی مدیر سرور لازم است")
+		return false
+	}
+	return true
 }
 
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
@@ -730,7 +737,7 @@ func makePasswordHash(password string) (string, error) {
 	if _, e := rand.Read(salt); e != nil {
 		return "", e
 	}
-	const rounds = 120000
+	const rounds = 600000
 	derived := pbkdf2([]byte(password), salt, rounds, 32)
 	return fmt.Sprintf("pbkdf2-sha256$%d$%s$%s", rounds, hex.EncodeToString(salt), hex.EncodeToString(derived)), nil
 }
