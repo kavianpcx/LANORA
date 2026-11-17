@@ -1,0 +1,34 @@
+# Post-review audit
+
+Review branch: `review/evidence-audit-fixes`  
+Baseline examined: `release/0.2.x` at `1e14eabfd1b99739950661f73a332b9a64104390`  
+Latest repository `main` at review start: `f0cab1bd7fceb982c2ccc8633fd8a47594c375a6`  
+Latest published release at review start: `v0.2.0-alpha.3`
+
+## Evidence boundary
+
+The attached review ZIP could not be opened in this execution environment. Its Markdown reports, PDF, and eight screenshots were therefore **not reviewed**. The findings below are from repository source and the prior checked-in `docs/AUDIT_0.2.0.md`; they do not claim to reproduce screenshot-only behavior or the external relay failure. Reattach the reports as readable files or make the ZIP available in a filesystem-enabled run to complete evidence-by-evidence triage.
+
+No source tests, Docker commands, native app, Windows installer, or network experiment could be executed in this run. New automated tests are pending GitHub Actions.
+
+## Findings
+
+| Category | Evidence and affected component | Severity / root cause | Fix and regression test | Result |
+|---|---|---|---|---|
+| Confirmed defect | `services/api/cmd/lanora-api/main.go` healthcheck called fixed `127.0.0.1:8080` while the server uses `LANORA_LISTEN_ADDR`. | P1. A valid custom listener port could make the container healthcheck fail. | Added `healthcheckURL` that derives the port from the listener and maps wildcard binds to loopback. Added default, custom port, IPv6 wildcard, and invalid-address unit cases. | Code changed; test execution pending CI. |
+| Confirmed deployment gap | `deploy/docker/Caddyfile` previously always proxied to `api:8080`. | P1. A custom listener port could pass a matching healthcheck while Caddy still targeted the default. | Caddy now uses `LANORA_API_INTERNAL_PORT`; Compose and `.env.example` expose it with the 8080 default. For a custom port, set it equal to the port in `LANORA_LISTEN_ADDR`. | Code changed; Compose validation pending CI. |
+| Confirmed defect | `apps/desktop/src/App.tsx` footer derived its “connected” label and green indicator from API reachability. | P1. A reachable API plus rejected access code could appear to be a ready network. | Added a small connection-status model separating API reachability, auth, tunnel startup, assigned IP and verified peer evidence; footer now uses that model. Added transition tests. | Code changed; tests pending CI. |
+| Confirmed security weakness | `apps/desktop/src/App.tsx` persisted `lanora.sharedCode` in browser `localStorage` and reused it for automatic join at next launch. | P1. Another process or person with access to the same browser profile could read the server access code; silent reuse also obscured whether the player intended to reconnect. | Access code is now held in memory for the current run and is not restored or written to `localStorage`. Profile and server URL preferences remain local. | Code changed; frontend build/test pending CI. |
+| Security risk, not fixed | `services/api/internal/api/shared_network.go` returns the same EasyTier network name and secret to every admitted client. Removing a row/token blocks later API calls, but cannot erase credentials already delivered to a client. Changing the server access code rotates the network identity and secret, but existing peers may remain on the old overlay until they stop or migrate. | P0. Control-plane revocation is not data-plane revocation. The current pinned EasyTier v2.6.4 shared-secret architecture has no verified per-device revocation mechanism here. | No unsafe protocol or EasyTier upgrade was attempted. A future fix needs a validated credential/peer-isolation design and tests that prove the removed client loses overlay access while authorized peers recover. | Limitation remains. Do not claim immediate member revocation or publish as production-ready. |
+| External relay timeout | The attached report’s independent relay scenario cannot be inspected or reproduced here. Existing checked-in Linux namespace coverage uses EasyTier v2.6.4, a real relay process and TCP/UDP traffic; it is not an external VPS/two-Internet-provider test. | Environmental limitation versus defect is undetermined. A listening TCP socket alone does not prove an EasyTier handshake. | No conclusion about the reported failure is claimed. Next reproduction should capture exact core/CLI versions, sanitized launch args and config identity (never secrets), peer URL, TCP+UDP reachability, logs and peer table on both ends. | NOT VERIFIED. |
+| Missing real multiplayer coverage | Existing repository audit documents Linux namespace TCP/UDP relay coverage, but not two physical Windows clients on independent networks or a real game session. | P0 validation gap. CI namespaces do not exercise consumer NAT, Windows adapter permissions, firewall or game discovery. | No simulated result is counted. A manual two-PC procedure is required; see the checklist below. | NOT VERIFIED. |
+| Credential at-rest risk | Rust writes EasyTier configuration containing the network secret under app-local data; Unix permissions are restricted, but the Windows ACL behavior and force-kill cleanup were not tested here. | P1 residual risk. The secret exists in plaintext while the native sidecar needs it. | Not changed in this patch. Do not describe all client secrets as protected. Evaluate Windows DPAPI/protected storage and encrypted temporary-config lifecycle in a native Windows test. | NOT VERIFIED / not fixed. |
+| Localization and layout | The app sets the document direction to LTR and uses local RTL text direction for Persian copy; source review indicates the layout intent is present. | No code-level defect confirmed, but no screenshot or visual test ran. | No visual changes in this patch. Verify every main screen in both languages at minimum and narrow window widths. | NOT VERIFIED visually. |
+
+## Required manual network validation
+
+On a disposable VPS, deploy the server using the documented installer. Install the current Windows prerelease on two separate Windows PCs connected through different internet providers. Join with the same authorized server code. Record the exact app and EasyTier versions, each assigned virtual IP, sanitized route tables before/during/after connection, peer status and measured latency. Run TCP and UDP echo traffic between the virtual IPs, check ordinary IPv4/IPv6 web access and system proxy/DNS settings, disconnect/reconnect, and repeat with one peer removed. Test the game’s Direct IP path separately. Keep the logs and mark each result PASS, FAIL, or NOT VERIFIED; never include access codes, tokens, or network secrets.
+
+## Status of this patch
+
+The healthcheck, Caddy port, access-code persistence, and misleading footer status have code changes and focused regression tests on this branch. These tests have **not yet run**. Revocation and real cross-internet multiplayer remain open blockers. No new installer or release is produced by this audit.
