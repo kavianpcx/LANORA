@@ -17,11 +17,3 @@ export const avatarNames: Record<"en" | "fa", Record<AvatarKind, string>> = {
     duck: "اردک", axolotl: "اکسولوتل", raccoon: "راکون", dragon: "اژدها", robot: "ربات", ghost: "روح",
   },
 };
-
-export function avatarForPlayer(userId: string): AvatarKind {
-  let hash = 0;
-  for (let index = 0; index < userId.length; index++) {
-    hash = (hash * 31 + userId.charCodeAt(index)) | 0;
-  }
-  return avatars[(hash >>> 0) % avatars.length];
-}

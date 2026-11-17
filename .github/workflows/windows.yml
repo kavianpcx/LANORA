@@ -251,7 +251,14 @@ jobs:
         run: |
           (cd dist/windows && sha256sum --check ./*.sha256)
           (cd dist/linux && sha256sum --check ./*.sha256)
-          tag=v0.2.0-alpha.7
+          version="$(node -p "require('./apps/desktop/package.json').version")"
+          if [[ ! "$version" =~ -(alpha|beta|rc)\.[0-9]+$ ]]; then
+            echo "Refusing to publish a non-prerelease version from this workflow: $version"
+            exit 1
+          fi
+          tag="v$version"
+          notes="docs/releases/$version.md"
+          test -s "$notes"
           if git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null; then
             echo "Refusing to overwrite existing tag $tag"
             exit 1
@@ -264,10 +271,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create v0.2.0-alpha.7 \
+          version="$(node -p "require('./apps/desktop/package.json').version")"
+          gh release create "v$version" \
             dist/windows/*.exe dist/windows/*.sha256 \
             dist/linux/*.deb dist/linux/*.sha256 \
             --target "$GITHUB_SHA" \
             --prerelease \
-            --title "LANORA 0.2.0-alpha.7" \
-            --notes-file docs/releases/0.2.0-alpha.7.md
+            --title "LANORA $version" \
+            --notes-file "docs/releases/$version.md"

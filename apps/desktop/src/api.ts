@@ -6,34 +6,54 @@ export class RequestError extends Error {
     super(code);
   }
 }
+
+function isLoopbackHost(hostname: string) {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const ipv4Parts = host.split(".");
+  const ipv4Loopback =
+    ipv4Parts.length === 4 &&
+    ipv4Parts[0] === "127" &&
+    ipv4Parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
+  return host === "localhost" || host === "::1" || ipv4Loopback;
+}
+
 export function normalize(raw: string) {
+  const input = raw.trim();
+  if (!input) throw new RequestError("empty_address");
+
+  const explicitScheme = input.match(/^([a-z][a-z0-9+.-]*):\/\//i)?.[1]?.toLowerCase();
+  if (explicitScheme && explicitScheme !== "http" && explicitScheme !== "https")
+    throw new RequestError("unsupported_protocol");
+
   try {
-    const url = new URL(
-      /^https?:\/\//i.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`,
-    );
-    const hostname = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
-    const ipv4Parts = hostname.split(".");
-    const ipv4Loopback =
-      ipv4Parts.length === 4 &&
-      ipv4Parts[0] === "127" &&
-      ipv4Parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
-    const loopback =
-      hostname === "localhost" || hostname === "::1" || ipv4Loopback;
+    // Use HTTP only for explicit development loopback addresses. Bare public
+    // addresses remain HTTPS, and a non-loopback HTTP URL is rejected below.
+    const inferred = explicitScheme ? null : new URL(`https://${input}`);
+    const protocol = explicitScheme ?? (inferred && isLoopbackHost(inferred.hostname) ? "http" : "https");
+    const url = new URL(explicitScheme ? input : `${protocol}://${input}`);
+    const loopback = isLoopbackHost(url.hostname);
     if (
       !url.hostname ||
       url.username ||
       url.password ||
       url.hash ||
       url.search ||
-      url.pathname !== "/" ||
-      (url.protocol !== "https:" &&
-        !(url.protocol === "http:" && loopback))
-    )
-      throw new Error();
+      url.pathname !== "/"
+    ) throw new RequestError("invalid_address");
+    if (url.protocol !== "https:" && url.protocol !== "http:")
+      throw new RequestError("unsupported_protocol");
+    if (url.protocol === "http:" && !loopback)
+      throw new RequestError("insecure_http");
     return url.origin;
-  } catch {
-    throw new RequestError("address");
+  } catch (error) {
+    if (error instanceof RequestError) throw error;
+    throw new RequestError("invalid_address");
   }
+}
+
+function looksLikeTlsCertificateError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ERR_CERT|CERTIFICATE|SSL_ERROR|TLS HANDSHAKE|CERT_AUTHORITY/i.test(message);
 }
 export async function api<T>(
   server: string,
@@ -66,13 +86,14 @@ export async function api<T>(
     return body as T;
   } catch (error) {
     if (error instanceof RequestError) throw error;
-    throw new RequestError(
-      options.signal?.aborted
-        ? "cancelled"
-        : controller.signal.aborted
-          ? "timeout"
-          : "network",
-    );
+    const code = options.signal?.aborted
+      ? "cancelled"
+      : controller.signal.aborted
+        ? "timeout"
+        : looksLikeTlsCertificateError(error)
+          ? "tls_certificate"
+          : "network";
+    throw new RequestError(code);
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", cancel);
@@ -81,6 +102,22 @@ export async function api<T>(
 export function friendlyError(error: unknown, lang: "en" | "fa") {
   const code = error instanceof RequestError ? error.code : "native";
   const messages: Record<string, [string, string]> = {
+    empty_address: [
+      "Enter a server address to continue.",
+      "برای ادامه، نشانی سرور را وارد کنید.",
+    ],
+    invalid_address: [
+      "That does not look like a valid server address. Check the host and port.",
+      "این نشانی سرور معتبر به نظر نمی‌رسد. میزبان و درگاه را بررسی کنید.",
+    ],
+    unsupported_protocol: [
+      "Use an HTTPS server address, or HTTP for localhost only.",
+      "از نشانی HTTPS استفاده کنید؛ HTTP فقط برای localhost مجاز است.",
+    ],
+    insecure_http: [
+      "Public servers must use HTTPS. Plain HTTP is allowed only for localhost.",
+      "سرورهای عمومی باید HTTPS داشته باشند. HTTP ساده فقط برای localhost مجاز است.",
+    ],
     address: [
       "Use HTTPS for public servers. HTTP is allowed only for localhost.",
       "برای سرور عمومی HTTPS لازم است. HTTP فقط برای localhost مجاز است.",
@@ -90,8 +127,20 @@ export function friendlyError(error: unknown, lang: "en" | "fa") {
       "پاسخ سرور بیش از حد طول کشید. وضعیت VPS را بررسی و دوباره تلاش کنید.",
     ],
     network: [
-      "Couldn’t reach the server. Check the address, internet, VPS and HTTPS certificate.",
-      "سرور در دسترس نیست. نشانی، اینترنت، VPS و گواهی HTTPS را بررسی کنید.",
+      "Could not reach the server. Check the address, port, internet connection, and server status.",
+      "سرور در دسترس نیست. نشانی، درگاه، اینترنت و وضعیت سرور را بررسی کنید.",
+    ],
+    tls_certificate: [
+      "The server’s HTTPS certificate could not be validated. Check its certificate and system clock.",
+      "گواهی HTTPS سرور تأیید نشد. گواهی و ساعت دستگاه را بررسی کنید.",
+    ],
+    response: [
+      "This address did not return a valid LANORA API response. Check the server address, port, and version.",
+      "این نشانی پاسخ معتبر API لانورا را برنگرداند. نشانی، درگاه و نسخهٔ سرور را بررسی کنید.",
+    ],
+    lanora_api_invalid: [
+      "This server did not return a valid LANORA health response. Check the address and port.",
+      "این سرور پاسخ سلامت معتبر لانورا را برنگرداند. نشانی و درگاه را بررسی کنید.",
     ],
     network_code_invalid: [
       "That server password or existing access code is incorrect. Check it and try again.",
@@ -160,5 +209,5 @@ export async function health(server: string, signal?: AbortSignal) {
     { signal },
   );
   if (result.service !== "lanora-api" || result.status !== "ok")
-    throw new RequestError("response");
+    throw new RequestError("lanora_api_invalid");
 }

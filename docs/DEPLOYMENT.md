@@ -2,7 +2,7 @@
 
 Follow [Self-hosting](SELF_HOSTING.md) for the VPS. GitHub Pages and a website are not part of this product. The API, database and relay stay on the owner's VPS; desktop downloads are served by GitHub.
 
-`0.2.0-alpha.2` is the current experimental prerelease version in npm, Cargo and Tauri configuration. The CI workflows build and test pull-request changes, then store Windows and Linux packages as run artifacts. They do not create tags or publish releases automatically.
+`0.2.0-alpha.8` is the current experimental prerelease version in npm, Cargo and Tauri configuration. Pull-request workflows build and test Windows and Linux packages and run API, Docker and namespace checks. A push to `release/0.2.x` publishes both installer packages and their SHA-256 sidecars only after all required jobs pass. The workflow refuses to reuse an existing version tag.
 
 After an authorized maintainer approves a release:
 

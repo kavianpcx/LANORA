@@ -130,8 +130,10 @@ select {
   color: var(--success);
 }
 .app-icon {
-  width: 35px;
-  height: 35px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
   display: inline-grid;
   place-items: center;
   border: 1px solid var(--line);
@@ -139,6 +141,18 @@ select {
   background: var(--surface);
   color: var(--ink);
   cursor: pointer;
+  transition: background-color 130ms ease, border-color 130ms ease, color 130ms ease;
+}
+.app-icon:hover:not(:disabled) {
+  background: var(--surface-quiet);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.app-icon:active:not(:disabled) {
+  background: var(--accent-soft);
+}
+.app-icon:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .app-main {
   max-width: 1040px;
@@ -243,6 +257,7 @@ select {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 .app-button {
+  min-height: 44px;
   height: 44px;
   border: 1px solid transparent;
   border-radius: 11px;
@@ -254,21 +269,24 @@ select {
   cursor: pointer;
   font-weight: 650;
   white-space: nowrap;
-  transition:
-    transform 0.15s,
-    background 0.15s;
+  transition: background-color 130ms ease, border-color 130ms ease, color 130ms ease, box-shadow 130ms ease;
 }
 .app-button:hover:not(:disabled) {
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
 }
+.app-button:active:not(:disabled) { transform: translateY(1px); }
 .app-button:disabled {
-  opacity: 0.5;
+  opacity: 0.58;
   cursor: not-allowed;
 }
 .app-button.primary {
   background: var(--accent);
   color: var(--button-fg);
   box-shadow: 0 5px 13px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.app-button.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 88%, var(--ink));
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .app-button.secondary {
   background: var(--surface);
@@ -279,11 +297,20 @@ select {
   background: transparent;
   color: var(--muted);
 }
+.app-button.subtle:hover:not(:disabled) {
+  background: var(--surface-quiet);
+  color: var(--ink);
+}
 .app-button.danger {
   color: var(--danger);
-  border-color: var(--line);
-  background: transparent;
-  margin-top: 19px;
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  margin-top: 0;
+}
+.app-button.danger:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 70%, var(--line));
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
 }
 .app-hint {
   display: flex;
@@ -484,8 +511,8 @@ select {
   font: 600 12px ui-monospace, SFMono-Regular, Consolas, monospace;
 }
 .app-member-copy-ip {
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   flex: none;
 }
 .app-no-players {
@@ -504,15 +531,6 @@ select {
   padding: 5px 10px;
   cursor: pointer;
 }
-.app-avatar {
-  width: 33px;
-  height: 33px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
 .app-error {
   padding: 12px 14px;
   border-radius: 10px;
@@ -522,6 +540,18 @@ select {
   gap: 9px;
   align-items: center;
   margin-top: 16px;
+}
+.app-field-error {
+  display: block;
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app-server-form input[aria-invalid="true"],
+.app-form input[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 14%, transparent);
 }
 .app-notice {
   color: var(--success);
@@ -1105,8 +1135,8 @@ select {
   min-width: 0;
 }
 .app-ip-value .app-icon {
-  width: 29px;
-  height: 29px;
+  width: 44px;
+  height: 44px;
 }
 .app-button:focus-visible,
 .app-icon:focus-visible,
@@ -1386,6 +1416,11 @@ button:focus-visible {
   object-fit: contain;
   user-select: none;
 }
+.avatar-owl img {
+  /* Owl art has the largest transparent inset among the unchanged 256px assets. */
+  transform: scale(1.15);
+  transform-origin: center;
+}
 .titlebar-profile > .avatar-shell {
   border-radius: 10px;
 }
@@ -1452,9 +1487,13 @@ button:focus-visible {
   background: color-mix(in srgb, var(--success) 10%, var(--surface));
 }
 .app-server-latency {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
+  white-space: nowrap;
 }
 .app-network-summary {
   display: flex;
@@ -1515,8 +1554,8 @@ button:focus-visible {
   font-size: 12px;
 }
 .app-invite.compact .app-icon {
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
 }
 .app-player-section {
   margin-top: 18px;
@@ -1553,7 +1592,7 @@ button:focus-visible {
   background: color-mix(in srgb, var(--accent) 4%, transparent);
 }
 .app-player-section .app-member-copy {
-  min-width: 120px;
+  min-width: 0;
 }
 .app-player-section .app-member-copy b {
   overflow: hidden;
@@ -1565,6 +1604,10 @@ button:focus-visible {
   margin: 4px 0 0;
   font-size: 11px;
   white-space: normal;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
 }
 .app-you-label {
   color: var(--accent);
@@ -1572,6 +1615,18 @@ button:focus-visible {
 }
 .app-peer-quality {
   unicode-bidi: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-inline-start: 7px;
+}
+.app-peer-rtt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  direction: ltr;
+  color: var(--ink);
+  white-space: nowrap;
 }
 .app-player-section .app-member code {
   margin-inline-start: auto;
@@ -1583,6 +1638,18 @@ button:focus-visible {
   display: flex;
   gap: 5px;
 }
+.app-player-section .app-member:hover {
+  background: color-mix(in srgb, var(--surface-quiet) 58%, transparent);
+}
+.app-presence-stale {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 8px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.app-presence-stale svg { flex: none; }
 .app-network-help {
   margin-top: 15px;
   color: var(--muted);
@@ -1618,8 +1685,9 @@ button:focus-visible {
 .app-diagnostics dd {
   margin: 0;
   color: var(--ink);
-  font: 700 10px Inter, ui-monospace, monospace;
-  white-space: nowrap;
+  font: 650 12px/1.4 Inter, sans-serif;
+  text-align: end;
+  overflow-wrap: anywhere;
 }
 .app-sidebar .side-step {
   padding: 9px 6px;
@@ -1672,12 +1740,13 @@ button:focus-visible {
   transition:
     border-color 150ms ease,
     background 150ms ease,
-    transform 150ms ease,
     box-shadow 150ms ease;
 }
 .avatar-picker button:hover {
-  transform: translateY(-2px);
   background: var(--surface-quiet);
+}
+.avatar-picker button:active {
+  background: var(--accent-soft);
 }
 .avatar-picker button[aria-pressed="true"] {
   border-color: var(--accent);

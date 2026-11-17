@@ -30,7 +30,9 @@ assert version in (root/'CHANGELOG.md').read_text()
 assert version in (root/'README.md').read_text()
 assert version in (root/'README.fa.md').read_text()
 assert (root/f'docs/releases/{version}.md').is_file()
-assert f'v{version}' in (root/'.github/workflows/windows.yml').read_text()
+release_workflow=(root/'.github/workflows/windows.yml').read_text()
+assert 'tag="v$version"' in release_workflow
+assert 'notes="docs/releases/$version.md"' in release_workflow
 assert "release/0.2.x" in (root/'README.md').read_text()
 app_source=(root/'apps/desktop/src/App.tsx').read_text()
 assert f'useState("{version}")' in app_source

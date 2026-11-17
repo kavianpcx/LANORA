@@ -15,6 +15,8 @@ On a fresh installation, setup asks whether players must enter a password. **Yes
 
 ## Player
 
-Install LANORA from the [alpha release](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.7). Enter the server's HTTPS address and your display name. Connect; LANORA asks for a password only when the server requires it. Wait for the EasyTier virtual IP, then give the game host's IP to the other players. Use Direct IP if the game does not discover LAN games automatically.
+Install [LANORA 0.2.0-alpha.8](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.8) and verify the installer checksum shown beside the download. Enter the server's HTTPS address and your display name. Connect; LANORA asks for a password only when the server requires it. Wait for the EasyTier virtual IP, then give the game host's IP to the other players. Use Direct IP if the game does not discover LAN games automatically.
+
+For local development, use `http://localhost:8080` or `http://127.0.0.1:8080` when the backend runs on the same computer. The Vite/Tauri UI port is 1420 and is not the API port. Do not use `localhost` to reach a backend on a remote VPS; use that server's HTTPS domain.
 
 The app online label reflects API heartbeat; EasyTier peer status is shown separately.

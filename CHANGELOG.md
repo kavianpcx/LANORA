@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0-alpha.8 — Connection UX and diagnostic accuracy — 2026-11-17
+
+- Reject empty and malformed server addresses before connecting and show localized inline validation with focus returned to the address field.
+- Infer HTTP for bare localhost/loopback development addresses, retain HTTPS for public hosts, and reject plaintext HTTP to non-loopback hosts.
+- Improve timeout, network, invalid-response, unsupported-protocol, and exposed TLS-certificate error messages in English and Persian.
+- Refine player rows with compact real peer RTT, separate measured server RTT, a red-accented Power Disconnect action, accessible copy controls, and transient copy feedback.
+- Mark player presence and peer route data stale after their freshness windows without treating one missed API call as a reason to stop EasyTier.
+- Report partial peer reachability as a count, separate observed relay routes from independent relay checks, and whitelist fields copied in diagnostics.
+- Keep all 17 existing avatar IDs and WebP artworks. Remove an unused player-avatar fallback helper and unused avatar CSS; normalize the owl's visual scale for its larger transparent inset.
+- Keep this experimental prerelease. Native Windows, real localhost backend, multi-PC internet, game TCP/UDP, P2P, and relay fallback remain unverified in this environment.
+
 ## 0.2.0-alpha.7 — Compact profile dialogs — 2026-11-17
 
 - Constrain profile setup and Settings dialogs to the available window height, with a persistent header and action footer and one scrollable content area.
