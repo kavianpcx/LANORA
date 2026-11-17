@@ -94,8 +94,20 @@ export function friendlyError(error: unknown, lang: "en" | "fa") {
       "سرور در دسترس نیست. نشانی، اینترنت، VPS و گواهی HTTPS را بررسی کنید.",
     ],
     network_code_invalid: [
-      "That access code does not match this server. Check it and try again.",
-      "این کد دسترسی برای این سرور نیست. کد را بررسی و دوباره تلاش کنید.",
+      "That server password or existing access code is incorrect. Check it and try again.",
+      "رمز سرور یا کد دسترسی قبلی درست نیست. آن را بررسی و دوباره تلاش کنید.",
+    ],
+    network_password_invalid: [
+      "The server password is incorrect. Check it and try again.",
+      "رمز سرور درست نیست. آن را بررسی و دوباره تلاش کنید.",
+    ],
+    player_auth_unconfigured: [
+      "Player access is not configured yet. Ask the server owner to finish setup.",
+      "دسترسی بازیکنان هنوز تنظیم نشده است. از صاحب سرور بخواهید راه‌اندازی را کامل کند.",
+    ],
+    connection_info_invalid: [
+      "The server returned invalid connection information. Update the server and try again.",
+      "اطلاعات اتصال سرور معتبر نیست. سرور را به‌روزرسانی کنید و دوباره تلاش کنید.",
     ],
     shared_network_unconfigured: [
       "Shared access is not set up on this server yet. Ask its owner to run the latest server setup command.",

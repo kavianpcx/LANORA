@@ -11,6 +11,7 @@ import subprocess as sp
 import sys
 import tempfile
 import time
+from urllib.error import HTTPError
 import urllib.request
 
 core, cli, api_binary = [str(Path(p).resolve()) for p in sys.argv[1:]]
@@ -26,12 +27,23 @@ def launch(args, **kwargs):
     processes.append(process)
     return process
 
-def request(path, data=None, token=None):
+def request(path, data=None, token=None, method=None):
+    req = urllib.request.Request('http://127.0.0.1:18080/api/v1'+path,
+        data=json.dumps(data).encode() if data is not None else None,
+        headers={'Content-Type':'application/json', **({'Authorization':'Bearer '+token} if token else {})},
+        method=method or ('POST' if data is not None else 'GET'))
+    with urllib.request.urlopen(req, timeout=3) as response:
+        return json.load(response)
+
+def rejected(path, data=None, token=None):
     req = urllib.request.Request('http://127.0.0.1:18080/api/v1'+path,
         data=json.dumps(data).encode() if data is not None else None,
         headers={'Content-Type':'application/json', **({'Authorization':'Bearer '+token} if token else {})})
-    with urllib.request.urlopen(req, timeout=3) as response:
-        return json.load(response)
+    try:
+        urllib.request.urlopen(req, timeout=3)
+    except HTTPError as error:
+        return error.code, json.load(error)
+    raise AssertionError('request unexpectedly succeeded: '+path)
 
 def until(check, timeout=60):
     deadline = time.monotonic()+timeout
@@ -57,13 +69,27 @@ with tempfile.TemporaryDirectory(prefix='lanora-test-') as directory:
             run('ip','-n',ns,'link','set','lo','up');run('ip','-n',ns,'link','set','eth0','up')
             run('ip','-n',ns,'addr','add',f'192.0.2.{index+2}/24','dev','eth0')
             run('ip','-n',ns,'route','add','default','via','192.0.2.1')
-        shared_code='8f30b8dca26e48dd29c1967a'
         api_process=launch([api_binary],env={**os.environ,'LANORA_LISTEN_ADDR':'127.0.0.1:18080',
             'LANORA_DB_PATH':str(root/'api.db'),'LANORA_RELAY_PEER_URL':'tcp://192.0.2.1:11010',
-            'LANORA_SHARED_NETWORK_CODE':shared_code})
+            'LANORA_ADMIN_TOKEN':'smoke-test-admin-token'})
         until(lambda:request('/health'),10)
-        host=request('/network/join',{'code':shared_code,'deviceId':secrets.token_hex(16),'username':'Host'})
-        guest=request('/network/join',{'code':shared_code,'deviceId':secrets.token_hex(16),'username':'Guest'})
+        info=request('/connection-info')
+        assert info['playerAuth']=='password_required', 'fresh servers must default to password protection'
+        assert not ({'passwordHash','networkSecret','adminToken','accessToken'} & info.keys()), 'connection info exposed a secret'
+        status, body=rejected('/network/join',{'deviceId':secrets.token_hex(16),'username':'No Password'})
+        assert status==503 and body['error']['code']=='player_auth_unconfigured', 'unconfigured server did not fail closed'
+        password='CorrectHorse9!Relay'
+        request('/admin/player-auth', {'playerAuth':'password_required','password':password}, 'smoke-test-admin-token','PATCH')
+        status, body=rejected('/network/join',{'password':'WrongPassword9!Relay','deviceId':secrets.token_hex(16),'username':'Wrong Password'})
+        assert status==401 and body['error']['code']=='network_password_invalid', 'wrong player password was not rejected'
+        protected=request('/network/join',{'password':password,'deviceId':secrets.token_hex(16),'username':'Protected Player'})
+        assert protected['status']=='approved', 'correct player password was not authorized'
+        request('/admin/player-auth', {'playerAuth':'passwordless'}, 'smoke-test-admin-token','PATCH')
+        status, _=rejected('/network/config',token=protected['accessToken'])
+        assert status==401, 'policy change did not revoke an existing player session'
+        assert request('/connection-info')['playerAuth']=='passwordless', 'passwordless policy was not discoverable'
+        host=request('/network/join',{'deviceId':secrets.token_hex(16),'username':'Host'})
+        guest=request('/network/join',{'deviceId':secrets.token_hex(16),'username':'Guest'})
         configs=[host['network'],guest['network']]
         assert configs[0]==configs[1], 'Authorized players received different shared networks'
         assert request('/network/config',token=host['accessToken'])==configs[0], 'Authorized config did not match join response'
@@ -97,7 +123,7 @@ with tempfile.TemporaryDirectory(prefix='lanora-test-') as directory:
         for entry, address in zip([host,guest], ips):
             result=request('/network/heartbeat',{'virtualIp':address},entry['accessToken'])
         assert len(result['members']) == 2 and all(m['online'] and m['virtualIp'] for m in result['members']), 'heartbeat presence or virtual IP missing'
-        print('PASS: shared access code authorized both clients; API reports their assigned virtual IPs',flush=True)
+        print('PASS: passwordless authorization established two player sessions and reports their assigned virtual IPs',flush=True)
         ready=root/'ready'
         receiver="""
 import socket,sys,threading,pathlib

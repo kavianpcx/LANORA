@@ -1,15 +1,15 @@
-<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.4/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/kavianpcx/LANORA/v0.2.0-alpha.5/apps/desktop/src-tauri/icons/icon.png" alt="LANORA desktop app icon" width="128"></p>
 <p align="center"><a href="README.md">English</a> · <a href="README.fa.md">فارسی</a></p>
 
 # LANORA
 
 **Connect to your private game network, copy the host’s virtual IP, and play.**
 
-LANORA is an open-source, self-hosted virtual LAN app for friends playing LAN-supported games over the internet. One person runs the server on a Linux VPS. Players install the desktop app, enter the server address and private access code, and connect to the same shared network. There is no account and no website.
+LANORA is an open-source, self-hosted virtual LAN app for friends playing LAN-supported games over the internet. One person runs the server on a Linux VPS. Players install the desktop app, enter the server address, and provide a password only when the server owner requires one. There is no account and no website.
 
-> **Status: experimental alpha.** LANORA 0.2.0-alpha.4 has passed automated API, deployment, desktop package, and isolated relay-network tests. Two computers on separate public networks, Windows game traffic, direct P2P, and game-specific LAN discovery have not been verified.
+> **Status: experimental alpha.** LANORA 0.2.0-alpha.5 adds optional player-password protection. Independent Windows PCs on public networks, Windows game traffic, direct P2P, and game-specific LAN discovery have not been verified.
 >
-> **Security limit:** Access-code rotation changes the network identity, but cannot force a client that already has the old EasyTier secret to disconnect. Rotate the code and have every trusted player leave and rejoin; treat the old overlay as compromised until migration is complete.
+> **Security limit:** Changing the player-password policy revokes API sessions and rotates the current network identity, but cannot force a modified client already connected to the old EasyTier overlay to disconnect. Ask all players to fully disconnect and rejoin after a policy change.
 
 [![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![Desktop builds](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE) [![Latest alpha](https://img.shields.io/github/v/release/kavianpcx/LANORA?include_prereleases&label=alpha)](https://github.com/kavianpcx/LANORA/releases)
 
@@ -25,25 +25,33 @@ cd LANORA
 bash scripts/setup-server.sh
 ```
 
-Enter your domain when asked. The script creates the private keys, starts LANORA, and prints the server address and network access code. Send both to your players privately.
+Enter your domain when asked. Fresh installations ask whether players need a password. The default is **Yes**; the password is entered twice without being shown. Password protection is recommended for public internet servers. Choosing **No** lets anyone who can reach the server join its gaming network.
 
-Check the services or reveal the access code later:
+Check the services and player policy later:
 
 ```sh
 bash scripts/server.sh status
-bash scripts/server.sh code
+bash scripts/server.sh player-auth status
 ```
 
-The status output does not reveal secrets. Public servers use HTTPS; plain HTTP is accepted only for loopback addresses. Read the [full VPS guide](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/SELF_HOSTING.md) if you need help with DNS, firewall ports, or TLS.
+Manage player password protection without reinstalling:
+
+```sh
+bash scripts/server.sh player-auth enable
+bash scripts/server.sh player-auth change
+bash scripts/server.sh player-auth disable
+```
+
+Disabling protection opens player access to anyone who can reach the server. This does not disable administrator authentication or EasyTier relay credentials. Policy changes revoke current API sessions; see the [full VPS guide](https://github.com/kavianpcx/LANORA/blob/release/0.2.x/docs/SELF_HOSTING.md) for the EasyTier session limitation. Public servers use HTTPS; plain HTTP is accepted only for loopback addresses.
 
 ## Download and connect as a player
 
-- **Windows 10/11 x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.4/LANORA_0.2.0-alpha.4_x64-setup.exe)
-- **Linux x64 (Debian/Ubuntu):** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.4/LANORA_0.2.0-alpha.4_amd64.deb)
-- [View release notes and SHA-256 checksums](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.4)
+- **Windows 10/11 x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_x64-setup.exe)
+- **Linux x64 (Debian/Ubuntu):** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.5/LANORA_0.2.0-alpha.5_amd64.deb)
+- [View release notes and SHA-256 checksums](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.5)
 
 1. Install and open LANORA. Choose a display name; no signup is needed.
-2. Enter the server address and access code from the server owner, then press **Connect**.
+2. Enter the server address and press **Connect**. LANORA asks for a password only when that server requires one.
 3. When LANORA reports your virtual IP, share it with the friend hosting the game.
 4. Other players enter the host’s **virtual IP** in the game’s Direct IP / Join by address option. The VPS address is only for connecting LANORA.
 
@@ -57,7 +65,7 @@ This does **not** verify two separate internet connections, a Windows tunnel car
 
 ## How LANORA works
 
-The self-hosted Go API authenticates the shared access code and coordinates membership. EasyTier carries game traffic on a separate virtual network; the API is not the game-data path. LANORA does not change the system default gateway or global proxy. Peer latency and reachability are shown only when the native engine provides evidence.
+The self-hosted Go API publishes whether player passwords are required, then authorizes each player and coordinates membership. Passwords are stored as PBKDF2-SHA256 hashes. A passwordless server still creates authenticated player sessions, but anyone who can reach it can request membership. Administrator authentication and internal EasyTier relay credentials remain separate and protected. EasyTier carries game traffic on a separate virtual network; LANORA does not change the system default gateway or global proxy. Peer reachability is shown only when the native engine provides evidence.
 
 ## Project layout
 

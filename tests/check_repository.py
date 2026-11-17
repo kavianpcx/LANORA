@@ -30,6 +30,8 @@ assert version in (root/'CHANGELOG.md').read_text()
 assert version in (root/'README.md').read_text()
 assert version in (root/'README.fa.md').read_text()
 assert version in (root/'apps/desktop/src/components/TitleBar.tsx').read_text()
+assert (root/f'docs/releases/{version}.md').is_file()
+assert f'v{version}' in (root/'.github/workflows/windows.yml').read_text()
 assert "release/0.2.x" in (root/'README.md').read_text()
 app_source=(root/'apps/desktop/src/App.tsx').read_text()
 assert 'document.documentElement.dir = "ltr"' in app_source

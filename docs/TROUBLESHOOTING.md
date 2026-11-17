@@ -13,15 +13,15 @@ bash scripts/server.sh logs
 
 To verify from outside the VPS, run curl -f https://YOUR_DOMAIN/api/v1/health from another computer.
 
-## The access code is rejected
+## The server password is rejected
 
-Ask the server owner to confirm the code. It is case-sensitive and server-specific. The owner can reveal the configured code on the VPS with:
+Check the spelling and try again. The password is case-sensitive. The server owner can check the current policy with `bash scripts/server.sh player-auth status`, or set a new password with `bash scripts/server.sh player-auth change`. Passwords are not displayed or recoverable. Older alpha servers may still request their existing shared access code; the same dialog accepts that code.
 
-~~~sh
-bash scripts/server.sh code
-~~~
+After the owner changes or disables the password, the app's existing player sessions are revoked and players must reconnect. A modified client may retain the old EasyTier overlay until it exits; see [Security](SECURITY.md#changing-player-access).
 
-If the code was rotated, all players need to reconnect with the new value. A network code must contain 16–128 characters.
+## The app says the server's password policy is unavailable
+
+The client fails closed if the server cannot provide authentication discovery. Update the server using `bash scripts/server.sh update`. If an older alpha server returns 404 for the discovery endpoint, the client falls back to the previous access-code prompt; other discovery failures are shown as errors and never treated as passwordless access.
 
 ## The app says relay is not configured
 

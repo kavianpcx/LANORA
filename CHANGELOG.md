@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0-alpha.5 — Optional player passwords — 2026-11-17
+
+- Let server owners choose required or passwordless player access during fresh setup; protected access remains the default.
+- Discover the player policy before join. The desktop asks for a password only when required and keeps it out of localStorage.
+- Store player passwords with PBKDF2-SHA256, retain the existing access-code path for older servers, and fail closed when discovery is unavailable.
+- Add administrator-authenticated `player-auth` management commands. Policy changes revoke API sessions and rotate the shared EasyTier network identity.
+- Migrate existing server codes into the SQLite password hash without replacing `.env` settings or deleting the database.
+- Document that passwordless access is open to reachable players and does not remove administrator or relay security; retain the existing EasyTier overlay revocation limitation.
+
 ## 0.2.0-alpha.4 — Status and deployment reliability — 2026-11-17
 
 - Derive API healthcheck targets from `LANORA_LISTEN_ADDR`; align Caddy with `LANORA_API_INTERNAL_PORT` for custom internal ports.

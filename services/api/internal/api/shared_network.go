@@ -11,14 +11,24 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 var sharedDeviceIDPattern = regexp.MustCompile("^[a-f0-9]{32}$")
 
 type sharedJoinRequest struct {
-	Code     string `json:"code"`
+	Code     string `json:"code"` // Kept for clients from the previous alpha releases.
+	Password string `json:"password"`
 	DeviceID string `json:"deviceId"`
 	Username string `json:"username"`
+}
+
+type sharedNetworkState struct {
+	Name         string
+	Secret       string
+	PlayerAuth   string
+	PasswordHash string
 }
 
 type sharedHeartbeatRequest struct {
@@ -35,102 +45,275 @@ type sharedNetworkMember struct {
 	PeerStatus string `json:"peerStatus"`
 }
 
-func (a *API) configureSharedNetwork(code string) {
-	code = strings.TrimSpace(code)
-	if len(code) < 16 || len(code) > 128 {
-		if code != "" {
-			a.log.Error("shared network disabled: access code must contain 16 to 128 bytes")
-		}
-		return
-	}
-
-	var name, secret, previousHash string
-	err := a.db.QueryRow("SELECT network_name, network_secret, code_hash FROM shared_network WHERE id=1").Scan(&name, &secret, &previousHash)
+func (a *API) configureSharedNetwork(legacyCode string) {
+	legacyCode = strings.TrimSpace(legacyCode)
+	var state sharedNetworkState
+	var legacyHash string
+	err := a.db.QueryRow(`SELECT network_name, network_secret, code_hash, player_auth, password_hash
+		FROM shared_network WHERE id=1`).Scan(&state.Name, &state.Secret, &legacyHash, &state.PlayerAuth, &state.PasswordHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		id, randomErr := randomHex(16)
 		if randomErr != nil {
 			a.log.Error("shared network initialization failed", "error_type", "random")
 			return
 		}
-		name = "lanora-" + id
-		secret, randomErr = randomHex(32)
+		state.Name = "lanora-" + id
+		state.Secret, randomErr = randomHex(32)
 		if randomErr != nil {
 			a.log.Error("shared network initialization failed", "error_type", "random")
 			return
 		}
-		_, err = a.db.Exec(
-			"INSERT INTO shared_network(id, network_name, network_secret, code_hash, created_at) VALUES(1, ?, ?, ?, ?)",
-			name, secret, hash(code), time.Now().Unix(),
-		)
+		state.PlayerAuth = "password_required"
+		legacyHash := ""
+		if validLegacyCode(legacyCode) {
+			state.PasswordHash, randomErr = makePasswordHash(legacyCode)
+			if randomErr != nil {
+				a.log.Error("shared network initialization failed", "error_type", "password_hash")
+				return
+			}
+		}
+		_, err = a.db.Exec(`INSERT INTO shared_network(id, network_name, network_secret, code_hash, created_at, player_auth, password_hash)
+			VALUES(1, ?, ?, ?, ?, ?, ?)`, state.Name, state.Secret, legacyHash, time.Now().Unix(), state.PlayerAuth, state.PasswordHash)
 	} else if err == nil {
-		newHash := hash(code)
-		if subtle.ConstantTimeCompare([]byte(previousHash), []byte(newHash)) != 1 {
-			id, randomErr := randomHex(16)
-			if randomErr != nil {
-				a.log.Error("shared network rotation failed", "error_type", "random")
+		if state.PlayerAuth == "" {
+			state.PlayerAuth = "password_required"
+		}
+		// Existing alpha servers stored SHA-256(code) in code_hash and kept the
+		// high-entropy code in .env. Upgrade it once to the password hash format
+		// without changing the current network when the code still matches.
+		legacyCodeChanged := false
+		if validLegacyCode(legacyCode) {
+			if legacyHash != "" {
+				legacyCodeChanged = subtle.ConstantTimeCompare([]byte(legacyHash), []byte(hash(legacyCode))) != 1
+			} else if state.PasswordHash != "" {
+				legacyCodeChanged = !checkPasswordHash(state.PasswordHash, legacyCode)
+			}
+		}
+		if state.PlayerAuth == "password_required" && validLegacyCode(legacyCode) &&
+			(state.PasswordHash == "" || legacyCodeChanged) {
+			passwordHash, hashErr := makePasswordHash(legacyCode)
+			if hashErr != nil {
+				a.log.Error("shared network migration failed", "error_type", "password_hash")
 				return
 			}
-			rotatedName := "lanora-" + id
-			rotatedSecret, randomErr := randomHex(32)
-			if randomErr != nil {
-				a.log.Error("shared network rotation failed", "error_type", "random")
-				return
+			if legacyCodeChanged {
+				id, randomErr := randomHex(16)
+				if randomErr != nil {
+					a.log.Error("shared network rotation failed", "error_type", "random")
+					return
+				}
+				state.Name = "lanora-" + id
+				state.Secret, randomErr = randomHex(32)
+				if randomErr != nil {
+					a.log.Error("shared network rotation failed", "error_type", "random")
+					return
+				}
 			}
+			state.PasswordHash = passwordHash
 			tx, txErr := a.db.Begin()
-			if txErr != nil {
-				a.log.Error("shared network rotation failed", "error_type", "database")
-				return
+			if txErr == nil && legacyCodeChanged {
+				_, txErr = tx.Exec("DELETE FROM shared_members")
 			}
-			if _, txErr = tx.Exec("DELETE FROM shared_members"); txErr == nil {
-				_, txErr = tx.Exec(
-					"UPDATE shared_network SET network_name=?, network_secret=?, code_hash=? WHERE id=1",
-					rotatedName, rotatedSecret, newHash,
-				)
+			if txErr == nil {
+				_, txErr = tx.Exec(`UPDATE shared_network SET network_name=?, network_secret=?, code_hash='',
+					player_auth='password_required', password_hash=? WHERE id=1`, state.Name, state.Secret, passwordHash)
 			}
 			if txErr != nil {
-				_ = tx.Rollback()
-				a.log.Error("shared network rotation failed", "error_type", "database")
+				if tx != nil {
+					_ = tx.Rollback()
+				}
+				a.log.Error("shared network migration failed", "error_type", "database")
 				return
 			}
-			if txErr = tx.Commit(); txErr != nil {
-				a.log.Error("shared network rotation failed", "error_type", "database")
-				return
-			}
-			name, secret = rotatedName, rotatedSecret
+			err = tx.Commit()
+		} else if state.PlayerAuth == "passwordless" && legacyHash != "" {
+			_, err = a.db.Exec("UPDATE shared_network SET code_hash='' WHERE id=1")
 		}
 	}
 	if err != nil {
 		a.log.Error("shared network initialization failed", "error_type", "database")
+	}
+}
+
+func validLegacyCode(code string) bool { return len(code) >= 16 && len(code) <= 128 }
+
+func (a *API) loadSharedNetwork() (sharedNetworkState, error) {
+	var state sharedNetworkState
+	err := a.db.QueryRow(`SELECT network_name, network_secret, player_auth, password_hash
+		FROM shared_network WHERE id=1`).Scan(&state.Name, &state.Secret, &state.PlayerAuth, &state.PasswordHash)
+	if err != nil {
+		return sharedNetworkState{}, err
+	}
+	if state.PlayerAuth != "password_required" && state.PlayerAuth != "passwordless" {
+		return sharedNetworkState{}, errors.New("invalid player authentication policy")
+	}
+	return state, nil
+}
+
+func (a *API) connectionInfo(w http.ResponseWriter, r *http.Request) {
+	state, err := a.loadSharedNetwork()
+	if err != nil {
+		writeErr(w, 503, "shared_network_unconfigured", "Server connection information is unavailable")
+		return
+	}
+	writeJSON(w, 200, map[string]string{
+		"serverName": "LANORA Server",
+		"playerAuth": state.PlayerAuth,
+		"apiVersion": "v1",
+	})
+}
+
+type playerAuthUpdate struct {
+	PlayerAuth string `json:"playerAuth"`
+	Password   string `json:"password"`
+}
+
+func (a *API) adminPlayerAuth(w http.ResponseWriter, r *http.Request) {
+	if !a.authorizeAdmin(w, r) {
+		return
+	}
+	state, err := a.loadSharedNetwork()
+	if err != nil {
+		writeErr(w, 503, "shared_network_unconfigured", "Player authentication policy is unavailable")
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"playerAuth": state.PlayerAuth,
+		"configured": state.PlayerAuth == "passwordless" || state.PasswordHash != "",
+	})
+}
+
+func (a *API) updateAdminPlayerAuth(w http.ResponseWriter, r *http.Request) {
+	if !a.authorizeAdmin(w, r) {
+		return
+	}
+	var in playerAuthUpdate
+	if !decode(w, r, &in) {
+		return
+	}
+	var passwordHash string
+	switch in.PlayerAuth {
+	case "password_required":
+		if !validPlayerPassword(in.Password) {
+			writeErr(w, 400, "weak_password", "Use at least 12 characters and either 16 characters or at least three character types")
+			return
+		}
+		var err error
+		passwordHash, err = makePasswordHash(in.Password)
+		if err != nil {
+			serverError(w, err)
+			return
+		}
+	case "passwordless":
+		if in.Password != "" {
+			writeErr(w, 400, "invalid_input", "A password must not be included when disabling player password protection")
+			return
+		}
+	default:
+		writeErr(w, 400, "invalid_input", "Player authentication must be password_required or passwordless")
 		return
 	}
 
-	a.sharedNetworkCodeHash = hash(code)
-	a.sharedNetworkName = name
-	a.sharedNetworkSecret = secret
-	a.sharedNetworkReady = true
+	a.joinMu.Lock()
+	defer a.joinMu.Unlock()
+	id, err := randomHex(16)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	secret, err := randomHex(32)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	tx, err := a.db.Begin()
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+	if _, err = tx.Exec("DELETE FROM shared_members"); err == nil {
+		_, err = tx.Exec(`UPDATE shared_network SET network_name=?, network_secret=?, code_hash='',
+			player_auth=?, password_hash=? WHERE id=1`, "lanora-"+id, secret, in.PlayerAuth, passwordHash)
+	}
+	if err != nil {
+		_ = tx.Rollback()
+		serverError(w, err)
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		serverError(w, err)
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"playerAuth":      in.PlayerAuth,
+		"configured":      true,
+		"sessionsRevoked": true,
+	})
+}
+
+func validPlayerPassword(password string) bool {
+	if !utf8.ValidString(password) || len(password) > 128 || runeLen(password) < 12 {
+		return false
+	}
+	var lower, upper, digit, other bool
+	for _, char := range password {
+		switch {
+		case unicode.IsLower(char):
+			lower = true
+		case unicode.IsUpper(char):
+			upper = true
+		case unicode.IsDigit(char):
+			digit = true
+		default:
+			other = true
+		}
+	}
+	classes := 0
+	for _, present := range []bool{lower, upper, digit, other} {
+		if present {
+			classes++
+		}
+	}
+	return runeLen(password) >= 16 || classes >= 3
 }
 
 func (a *API) joinSharedNetwork(w http.ResponseWriter, r *http.Request) {
-	if !a.sharedNetworkReady {
-		writeErr(w, 503, "shared_network_unconfigured", "Shared network access is not configured")
-		return
-	}
+	a.joinMu.Lock()
+	defer a.joinMu.Unlock()
 	var in sharedJoinRequest
 	if !decode(w, r, &in) {
 		return
 	}
 	in.Code = strings.TrimSpace(in.Code)
-	in.DeviceID = strings.ToLower(strings.TrimSpace(in.DeviceID))
-	in.Username = strings.TrimSpace(in.Username)
-	if len(in.Code) < 16 || len(in.Code) > 128 ||
-		!sharedDeviceIDPattern.MatchString(in.DeviceID) ||
-		runeLen(in.Username) < 2 || runeLen(in.Username) > 32 {
-		writeErr(w, 400, "invalid_input", "Access code, device id, or player name is invalid")
+	if len(in.Password) > 128 || len(in.Code) > 128 || (in.Password != "" && in.Code != "") {
+		writeErr(w, 400, "invalid_input", "Password, access code, or player name is invalid")
 		return
 	}
-	if subtle.ConstantTimeCompare([]byte(hash(in.Code)), []byte(a.sharedNetworkCodeHash)) != 1 {
-		writeErr(w, 401, "network_code_invalid", "The shared network access code is incorrect")
+	in.DeviceID = strings.ToLower(strings.TrimSpace(in.DeviceID))
+	in.Username = strings.TrimSpace(in.Username)
+	if !sharedDeviceIDPattern.MatchString(in.DeviceID) ||
+		runeLen(in.Username) < 2 || runeLen(in.Username) > 32 {
+		writeErr(w, 400, "invalid_input", "Device id or player name is invalid")
 		return
+	}
+	state, err := a.loadSharedNetwork()
+	if err != nil {
+		writeErr(w, 503, "shared_network_unconfigured", "Shared network access is not configured")
+		return
+	}
+	if state.PlayerAuth == "password_required" {
+		if state.PasswordHash == "" {
+			writeErr(w, 503, "player_auth_unconfigured", "Player password protection has not been configured")
+			return
+		}
+		credential := in.Password
+		if credential == "" {
+			credential = in.Code
+		}
+		if !checkPasswordHash(state.PasswordHash, credential) {
+			writeErr(w, 401, "network_password_invalid", "The server password is incorrect")
+			return
+		}
 	}
 	peer, err := sharedRelayURL()
 	if err != nil {
@@ -173,8 +356,8 @@ func (a *API) joinSharedNetwork(w http.ResponseWriter, r *http.Request) {
 		"accessToken": token,
 		"status":      "approved",
 		"network": map[string]string{
-			"networkName":   a.sharedNetworkName,
-			"networkSecret": a.sharedNetworkSecret,
+			"networkName":   state.Name,
+			"networkSecret": state.Secret,
 			"peerUrl":       peer,
 		},
 		"members": members,
@@ -182,10 +365,13 @@ func (a *API) joinSharedNetwork(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) sharedNetworkConfig(w http.ResponseWriter, r *http.Request) {
+	a.joinMu.Lock()
+	defer a.joinMu.Unlock()
 	if _, ok := a.authenticateShared(w, r); !ok {
 		return
 	}
-	if !a.sharedNetworkReady {
+	state, err := a.loadSharedNetwork()
+	if err != nil {
 		writeErr(w, 503, "shared_network_unconfigured", "Shared network access is not configured")
 		return
 	}
@@ -195,8 +381,8 @@ func (a *API) sharedNetworkConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]string{
-		"networkName":   a.sharedNetworkName,
-		"networkSecret": a.sharedNetworkSecret,
+		"networkName":   state.Name,
+		"networkSecret": state.Secret,
 		"peerUrl":       peer,
 	})
 }

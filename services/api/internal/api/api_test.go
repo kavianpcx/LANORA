@@ -3,12 +3,14 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"lanora/services/api/internal/store"
 )
@@ -21,6 +23,16 @@ func testAPI(t *testing.T) http.Handler {
 	}
 	t.Cleanup(func() { db.Close() })
 	return New(db, slog.New(slog.NewTextHandler(io.Discard, nil)), "admin-test-token")
+}
+
+func testAPIWithDB(t *testing.T) (http.Handler, *store.DB) {
+	t.Helper()
+	db, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return New(db, slog.New(slog.NewTextHandler(io.Discard, nil)), "admin-test-token"), db
 }
 func call(t *testing.T, h http.Handler, method, path, token string, body any) (int, map[string]any) {
 	t.Helper()
@@ -381,5 +393,248 @@ func TestSharedCodeRotationRevokesExistingTokens(t *testing.T) {
 	newNetwork := rejoined["network"].(map[string]any)
 	if oldNetwork["networkName"] == newNetwork["networkName"] || oldNetwork["networkSecret"] == newNetwork["networkSecret"] {
 		t.Fatal("code rotation did not rotate the data-plane identity")
+	}
+}
+
+func TestConnectionInfoAndPasswordlessPlayerAuthorization(t *testing.T) {
+	t.Setenv("LANORA_RELAY_PEER_URL", "tcp://relay.example.org:11010")
+	h, _ := testAPIWithDB(t)
+
+	status, info := call(t, h, "GET", "/api/v1/connection-info", "", nil)
+	if status != 200 || info["playerAuth"] != "password_required" {
+		t.Fatalf("initial discovery status=%d info=%v", status, info)
+	}
+	for _, secretField := range []string{"passwordHash", "networkSecret", "adminToken", "accessToken"} {
+		if _, ok := info[secretField]; ok {
+			t.Fatalf("connection discovery exposed %q", secretField)
+		}
+	}
+	status, _ = call(t, h, "GET", "/api/v1/admin/player-auth", "", nil)
+	if status != 401 {
+		t.Fatalf("unauthenticated player policy read=%d", status)
+	}
+	status, state := call(t, h, "GET", "/api/v1/admin/player-auth", "admin-test-token", nil)
+	if status != 200 || state["configured"] != false {
+		t.Fatalf("initial admin player policy status=%d body=%v", status, state)
+	}
+	status, rejected := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"deviceId": strings.Repeat("a", 32), "username": "Passwordless Test",
+	})
+	if status != 503 || rejected["error"].(map[string]any)["code"] != "player_auth_unconfigured" {
+		t.Fatalf("unconfigured protected server did not fail closed: %d %v", status, rejected)
+	}
+	status, updated := call(t, h, "PATCH", "/api/v1/admin/player-auth", "admin-test-token", map[string]any{
+		"playerAuth": "passwordless",
+	})
+	if status != 200 || updated["sessionsRevoked"] != true {
+		t.Fatalf("disable player password status=%d body=%v", status, updated)
+	}
+	status, info = call(t, h, "GET", "/api/v1/connection-info", "", nil)
+	if status != 200 || info["playerAuth"] != "passwordless" {
+		t.Fatalf("passwordless discovery status=%d body=%v", status, info)
+	}
+	status, joined := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"deviceId": strings.Repeat("a", 32), "username": "Passwordless Test",
+	})
+	if status != 200 || joined["status"] != "approved" || joined["network"] == nil {
+		t.Fatalf("passwordless join status=%d body=%v", status, joined)
+	}
+	status, config := call(t, h, "GET", "/api/v1/network/config", joined["accessToken"].(string), nil)
+	if status != 200 || config["networkSecret"] != joined["network"].(map[string]any)["networkSecret"] {
+		t.Fatalf("authorized passwordless network config status=%d body=%v", status, config)
+	}
+	status, _ = call(t, h, "GET", "/api/v1/admin/summary", "", nil)
+	if status != 401 {
+		t.Fatalf("passwordless mode opened administrator access: %d", status)
+	}
+}
+
+func TestPasswordPolicyChangesRevokeSessionsAndPersist(t *testing.T) {
+	t.Setenv("LANORA_RELAY_PEER_URL", "tcp://relay.example.org:11010")
+	h, db := testAPIWithDB(t)
+	password := "CorrectHorse9!Lamp"
+	status, _ := call(t, h, "PATCH", "/api/v1/admin/player-auth", "admin-test-token", map[string]any{
+		"playerAuth": "password_required", "password": password,
+	})
+	if status != 200 {
+		t.Fatalf("set player password=%d", status)
+	}
+	status, _ = call(t, h, "PATCH", "/api/v1/admin/player-auth", "", map[string]any{
+		"playerAuth": "passwordless",
+	})
+	if status != 401 {
+		t.Fatalf("unauthenticated policy update=%d", status)
+	}
+	status, wrong := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"password": "WrongPassword8!Bay", "deviceId": strings.Repeat("b", 32), "username": "Protected Player",
+	})
+	if status != 401 || wrong["error"].(map[string]any)["code"] != "network_password_invalid" {
+		t.Fatalf("wrong player password status=%d body=%v", status, wrong)
+	}
+	status, oldJoin := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"password": password, "deviceId": strings.Repeat("b", 32), "username": "Protected Player",
+	})
+	if status != 200 {
+		t.Fatalf("valid player password status=%d body=%v", status, oldJoin)
+	}
+	oldToken := oldJoin["accessToken"].(string)
+	var oldName, oldSecret string
+	if err := db.QueryRow("SELECT network_name, network_secret FROM shared_network WHERE id=1").Scan(&oldName, &oldSecret); err != nil {
+		t.Fatal(err)
+	}
+	newPassword := "NewCorrectHorse7!Lake"
+	status, change := call(t, h, "PATCH", "/api/v1/admin/player-auth", "admin-test-token", map[string]any{
+		"playerAuth": "password_required", "password": newPassword,
+	})
+	if status != 200 || change["sessionsRevoked"] != true {
+		t.Fatalf("change player password status=%d body=%v", status, change)
+	}
+	status, _ = call(t, h, "GET", "/api/v1/network/config", oldToken, nil)
+	if status != 401 {
+		t.Fatalf("old session survived password change: %d", status)
+	}
+	status, _ = call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"password": password, "deviceId": strings.Repeat("c", 32), "username": "Old Password",
+	})
+	if status != 401 {
+		t.Fatalf("old password remained valid after change: %d", status)
+	}
+	status, newJoin := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"password": newPassword, "deviceId": strings.Repeat("d", 32), "username": "New Password",
+	})
+	if status != 200 {
+		t.Fatalf("new password failed after change: %d %v", status, newJoin)
+	}
+	var currentName, currentSecret, storedHash string
+	var policy string
+	if err := db.QueryRow("SELECT network_name, network_secret, player_auth, password_hash FROM shared_network WHERE id=1").Scan(&currentName, &currentSecret, &policy, &storedHash); err != nil {
+		t.Fatal(err)
+	}
+	if currentName == oldName || currentSecret == oldSecret || policy != "password_required" ||
+		!strings.HasPrefix(storedHash, "pbkdf2-sha256$") || strings.Contains(storedHash, newPassword) {
+		t.Fatal("password change did not rotate network identity or securely hash the password")
+	}
+	// Recreating the handler on the same persistent database models an API restart.
+	restarted := New(db, slog.New(slog.NewTextHandler(io.Discard, nil)), "admin-test-token")
+	status, info := call(t, restarted, "GET", "/api/v1/connection-info", "", nil)
+	if status != 200 || info["playerAuth"] != "password_required" {
+		t.Fatalf("policy did not persist after API restart: %d %v", status, info)
+	}
+	status, _ = call(t, restarted, "GET", "/api/v1/network/config", newJoin["accessToken"].(string), nil)
+	if status != 200 {
+		t.Fatalf("valid session did not survive restart: %d", status)
+	}
+	status, disabled := call(t, restarted, "PATCH", "/api/v1/admin/player-auth", "admin-test-token", map[string]any{
+		"playerAuth": "passwordless",
+	})
+	if status != 200 || disabled["sessionsRevoked"] != true {
+		t.Fatalf("disable password status=%d body=%v", status, disabled)
+	}
+	status, _ = call(t, restarted, "GET", "/api/v1/network/config", newJoin["accessToken"].(string), nil)
+	if status != 401 {
+		t.Fatalf("old session survived disabling password: %d", status)
+	}
+	status, passwordlessJoin := call(t, restarted, "POST", "/api/v1/network/join", "", map[string]any{
+		"deviceId": strings.Repeat("e", 32), "username": "Open Player",
+	})
+	if status != 200 {
+		t.Fatalf("passwordless join after policy change status=%d", status)
+	}
+	openToken := passwordlessJoin["accessToken"].(string)
+	finalPassword := "FinalStrong8!River"
+	status, _ = call(t, restarted, "PATCH", "/api/v1/admin/player-auth", "admin-test-token", map[string]any{
+		"playerAuth": "password_required", "password": finalPassword,
+	})
+	if status != 200 {
+		t.Fatalf("re-enable player password status=%d", status)
+	}
+	status, _ = call(t, restarted, "GET", "/api/v1/network/config", openToken, nil)
+	if status != 401 {
+		t.Fatalf("a revoked passwordless session regained access after re-enabling protection: %d", status)
+	}
+	status, _ = call(t, restarted, "POST", "/api/v1/network/join", "", map[string]any{
+		"deviceId": strings.Repeat("e", 32), "username": "Open Player",
+	})
+	if status != 401 {
+		t.Fatalf("passwordless join remained available after re-enabling protection: %d", status)
+	}
+	status, _ = call(t, restarted, "POST", "/api/v1/network/join", "", map[string]any{
+		"password": finalPassword, "deviceId": strings.Repeat("e", 32), "username": "Open Player",
+	})
+	if status != 200 {
+		t.Fatalf("player could not rejoin with password after re-enabling protection: %d", status)
+	}
+}
+
+func TestPasswordStrengthAndRateLimit(t *testing.T) {
+	for _, password := range []string{"short", "onlylowercase12", "123456789012"} {
+		if validPlayerPassword(password) {
+			t.Fatalf("weak password accepted: %q", password)
+		}
+	}
+	if !validPlayerPassword("CorrectHorse9!Lamp") || !validPlayerPassword("correct horse battery") {
+		t.Fatal("strong password or long passphrase rejected")
+	}
+	t.Setenv("LANORA_RELAY_PEER_URL", "tcp://relay.example.org:11010")
+	h := testAPI(t)
+	call(t, h, "PATCH", "/api/v1/admin/player-auth", "admin-test-token", map[string]any{
+		"playerAuth": "password_required", "password": "CorrectHorse9!Lamp",
+	})
+	for i := 0; i < 12; i++ {
+		status, _ := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+			"password": "WrongPassword8!Bay", "deviceId": fmt.Sprintf("%032x", i+1), "username": "Rate Limit Test",
+		})
+		if status != 401 {
+			t.Fatalf("failed attempt %d had status %d, expected 401", i+1, status)
+		}
+	}
+	status, _ := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"password": "CorrectHorse9!Lamp", "deviceId": strings.Repeat("f", 32), "username": "Rate Limit Test",
+	})
+	if status != 429 {
+		t.Fatalf("too many player attempts were not rate limited: %d", status)
+	}
+}
+
+func TestLegacyPlayerCodeMigratesToPasswordHash(t *testing.T) {
+	const legacyCode = "old-code-0123456789abcdef"
+	t.Setenv("LANORA_SHARED_NETWORK_CODE", legacyCode)
+	t.Setenv("LANORA_RELAY_PEER_URL", "tcp://relay.example.org:11010")
+	db, err := store.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	const originalName = "lanora-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const originalSecret = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	_, err = db.Exec(`INSERT INTO shared_network(id, network_name, network_secret, code_hash, created_at)
+		VALUES(1, ?, ?, ?, 1)`, originalName, originalSecret, hash(legacyCode))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO shared_members(device_id, user_id, username, token_hash, virtual_ip, last_seen)
+		VALUES(?, ?, ?, ?, '', ?)`, strings.Repeat("a", 32), "existing-user", "Existing", hash("existing-token"), time.Now().Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := New(db, slog.New(slog.NewTextHandler(io.Discard, nil)), "admin-test-token")
+	var name, secret, codeHash, passwordHash, policy string
+	if err := db.QueryRow(`SELECT network_name, network_secret, code_hash, password_hash, player_auth
+		FROM shared_network WHERE id=1`).Scan(&name, &secret, &codeHash, &passwordHash, &policy); err != nil {
+		t.Fatal(err)
+	}
+	if name != originalName || secret != originalSecret || policy != "password_required" ||
+		codeHash != "" || !checkPasswordHash(passwordHash, legacyCode) {
+		t.Fatal("legacy protected configuration was not safely migrated")
+	}
+	var members int
+	if err := db.QueryRow("SELECT COUNT(*) FROM shared_members").Scan(&members); err != nil || members != 1 {
+		t.Fatal("legacy migration unexpectedly destroyed valid sessions")
+	}
+	status, joined := call(t, h, "POST", "/api/v1/network/join", "", map[string]any{
+		"code": legacyCode, "deviceId": strings.Repeat("c", 32), "username": "Old Client",
+	})
+	if status != 200 || joined["status"] != "approved" {
+		t.Fatalf("legacy access code was not accepted after migration: %d %v", status, joined)
 	}
 }
