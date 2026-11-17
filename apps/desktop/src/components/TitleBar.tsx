@@ -85,7 +85,7 @@ export function TitleBar({
       >
         <img src={brand} alt="" data-tauri-drag-region />
         <b data-tauri-drag-region>LANORA</b>
-        <span data-tauri-drag-region>0.2.0-alpha.3</span>
+        <span data-tauri-drag-region>0.2.0-alpha.4</span>
       </div>
       <div
         className="titlebar-drag-fill"
