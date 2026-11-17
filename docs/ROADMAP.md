@@ -1,6 +1,6 @@
 # Roadmap
 
-## Current alpha: 0.2.0-alpha.5
+## Current alpha: 0.2.0-alpha.6
 
 - Default flow enters a server URL, discovers whether player passwords are required, and joins one server-wide EasyTier network after authorization.
 - Server owners can choose protected or passwordless player access; administrator and relay credentials remain separate.

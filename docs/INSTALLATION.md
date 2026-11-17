@@ -2,7 +2,7 @@
 
 ## Windows
 
-Download the LANORA NSIS installer from [GitHub Releases](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.5), check its adjacent SHA-256 file, and run it. The installer is per-user. Start LANORA from the Start menu. A real Windows virtual-network session is not verified.
+Download the LANORA NSIS installer from [GitHub Releases](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.6), check its adjacent SHA-256 file, and run it. The installer is per-user. Start LANORA from the Start menu. A real Windows virtual-network session is not verified.
 
 ## Linux
 

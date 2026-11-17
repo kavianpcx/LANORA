@@ -6,6 +6,7 @@ import { Avatar, type AvatarKind } from "./Avatar";
 import brand from "../brand.svg";
 export function TitleBar({
   lang,
+  appVersion,
   status,
   statusLabels,
   name,
@@ -14,6 +15,7 @@ export function TitleBar({
   onSettings,
 }: {
   lang: "en" | "fa";
+  appVersion: string;
   status: "idle" | "checking" | "server" | "connected" | "failed";
   statusLabels: Record<"idle" | "checking" | "server" | "connected" | "failed", string>;
   name: string;
@@ -85,7 +87,7 @@ export function TitleBar({
       >
         <img src={brand} alt="" data-tauri-drag-region />
         <b data-tauri-drag-region>LANORA</b>
-        <span data-tauri-drag-region>0.2.0-alpha.5</span>
+        <span data-tauri-drag-region>{appVersion}</span>
       </div>
       <div
         className="titlebar-drag-fill"
@@ -103,7 +105,7 @@ export function TitleBar({
           title={settingsLabel}
           onClick={onSettings}
         >
-          <Avatar kind={avatar} />
+          <Avatar kind={avatar} size={30} decorative />
           <span dir="auto">{name || settingsLabel}</span>
           <Settings2 size={16} />
         </button>

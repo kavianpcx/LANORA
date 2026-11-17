@@ -1,11 +1,14 @@
 import { Activity, Copy, Wifi, Link2, Users } from "lucide-react";
 import { labels } from "../labels";
 import type { Lang, ActiveRoom, EngineStatus, PeerStatus } from "../types";
+import { Avatar, avatarForPlayer, type AvatarKind } from "./Avatar";
 export function RoomView({
   room,
+  serverAddress,
   tunnel,
   peerStatuses,
   lang,
+  avatar,
   busy,
   onCopy,
   onRetry,
@@ -13,9 +16,11 @@ export function RoomView({
   onApprove,
 }: {
   room: ActiveRoom;
+  serverAddress: string;
   tunnel: EngineStatus;
   peerStatuses: PeerStatus[];
   lang: Lang;
+  avatar: AvatarKind;
   busy: boolean;
   onCopy: (value: string) => void;
   onRetry: () => void;
@@ -33,6 +38,10 @@ export function RoomView({
               : lang === "fa" ? "روم شما" : "YOUR ROOM"}
           </span>
           <h2>{room.roomId === "shared" ? t.sharedNetwork : room.name}</h2>
+          <p className="app-room-server" dir="ltr">
+            <span>{t.server}: </span>
+            <code>{serverAddress}</code>
+          </p>
           <p dir={lang === "fa" ? "rtl" : "ltr"}>
             {room.status === "pending"
               ? t.pending
@@ -156,9 +165,11 @@ export function RoomView({
               : t.peerUnknown;
             return (
               <div className="app-member" key={m.userId}>
-                <span className="app-avatar">
-                  {m.username.slice(0, 1).toUpperCase()}
-                </span>
+                <Avatar
+                  kind={room.selfUserId === m.userId ? avatar : avatarForPlayer(m.userId)}
+                  size={40}
+                  decorative
+                />
                 <div className="app-member-copy">
                   <b dir="auto">{m.username}</b>
                   <small dir={lang === "fa" ? "rtl" : "ltr"}>

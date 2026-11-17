@@ -31,6 +31,7 @@ export type ActiveRoom = {
   roomId: string;
   name: string;
   accessToken: string;
+  selfUserId?: string;
   inviteCode?: string;
   role: "host" | "member";
   status: string;
