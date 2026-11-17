@@ -2,7 +2,7 @@
 
 Review reference: LANORA `0.2.0-alpha.3`, `release/0.2.x`, evaluated commit `1e14eabfd1b99739950661f73a332b9a64104390`.  
 Repository state checked: `main` at `f0cab1bd7fceb982c2ccc8633fd8a47594c375a6`; latest release was `v0.2.0-alpha.3`.  
-Current review changes: PR #13, head `05361e29a83d78d59a50afba1b07adb359519667`.
+Current review changes are on PR #13, branch `audit/0.2.0-alpha.1`; use the PR for its live head SHA.
 
 ## Evidence reviewed
 
