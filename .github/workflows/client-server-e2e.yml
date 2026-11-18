@@ -1,0 +1,124 @@
+name: Windows client to API smoke test
+on:
+  push:
+    branches:
+      - codex/updater-e2e-alpha0-to-alpha1-20261119
+    paths:
+      - '.github/workflows/client-server-e2e.yml'
+permissions:
+  contents: read
+jobs:
+  windows-client-api:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.27.4'
+          cache-dependency-path: services/api/go.mod
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Start isolated LANORA API
+        shell: pwsh
+        run: |
+          $env:LANORA_LISTEN_ADDR = '127.0.0.1:8080'
+          $env:LANORA_DB_PATH = Join-Path $env:RUNNER_TEMP 'lanora-client-api.sqlite'
+          $env:LANORA_ADMIN_TOKEN = 'isolated-test-token'
+          $env:LANORA_ALLOWED_ORIGINS = 'tauri://localhost,http://tauri.localhost,https://tauri.localhost,http://localhost:1420'
+          $stdout = Join-Path $env:RUNNER_TEMP 'lanora-api.stdout.log'
+          $stderr = Join-Path $env:RUNNER_TEMP 'lanora-api.stderr.log'
+          $api = Start-Process -FilePath (Get-Command go).Source -ArgumentList @('run', './cmd/lanora-api') -WorkingDirectory "$env:GITHUB_WORKSPACE/services/api" -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          "LANORA_API_PID=$($api.Id)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+          $ready = $false
+          for ($i = 0; $i -lt 80; $i++) {
+            try {
+              $health = Invoke-RestMethod 'http://127.0.0.1:8080/api/v1/health'
+              if ($health.status -eq 'ok') { $ready = $true; break }
+            } catch {}
+            Start-Sleep -Milliseconds 250
+          }
+          if (!$ready) { throw 'Isolated LANORA API did not become healthy.' }
+      - name: Download and verify published Windows installer
+        shell: pwsh
+        run: |
+          $base = 'https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe'
+          $installer = Join-Path $env:RUNNER_TEMP 'LANORA_0.3.0-alpha.1_x64-setup.exe'
+          Invoke-WebRequest $base -OutFile $installer
+          $checksumText = (Invoke-WebRequest ($base + '.sha256')).Content
+          $expected = ($checksumText -split '\s+')[0].ToLowerInvariant()
+          $actual = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($expected -ne $actual) { throw 'Published Windows installer SHA-256 does not match its release sidecar.' }
+          $destination = Join-Path $env:RUNNER_TEMP 'LANORA-Client-API-Test'
+          $install = Start-Process $installer -ArgumentList '/S', "/D=$destination" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw 'Published LANORA installer did not complete successfully.' }
+          $app = Get-ChildItem $destination -Filter 'lanora-desktop.exe' -Recurse | Select-Object -First 1
+          if (!$app) { throw 'Installed LANORA executable was not found.' }
+          "LANORA_APP_PATH=$($app.FullName)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+      - name: Install Playwright Core
+        shell: pwsh
+        run: |
+          $pwDir = Join-Path $env:RUNNER_TEMP 'lanora-playwright'
+          npm install --prefix $pwDir --no-save --no-package-lock playwright-core@1.56.1
+          "PLAYWRIGHT_CORE_DIR=$pwDir/node_modules/playwright-core" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+      - name: Connect the installed Windows client to the isolated API
+        shell: pwsh
+        run: |
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224'
+          $app = Start-Process $env:LANORA_APP_PATH -PassThru
+          $script = @'
+          const assert = require('node:assert/strict');
+          const { chromium } = require(process.env.PLAYWRIGHT_CORE_DIR);
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+          async function main() {
+            const deadline = Date.now() + 60000;
+            let browser;
+            let page;
+            while (Date.now() < deadline && !page) {
+              try {
+                browser = await chromium.connectOverCDP('http://127.0.0.1:9224', { timeout: 2500 });
+                page = browser.contexts().flatMap(c => c.pages()).find(p => p.url().includes('tauri.localhost'));
+              } catch {}
+              if (!page) await sleep(500);
+            }
+            assert.ok(page, 'Could not attach to the installed LANORA WebView2 window.');
+            await page.getByLabel('Server address').fill('http://127.0.0.1:8080');
+            await page.getByRole('button', { name: /Connect to server/ }).click();
+            await page.locator('.app-api.ready').waitFor({ state: 'visible', timeout: 20000 });
+            await page.locator('.app-dialog[role="dialog"]').waitFor({ state: 'visible', timeout: 10000 });
+            await page.locator('input[name="name"]').fill('Cloud Test Player');
+            await page.getByRole('button', { name: 'Save', exact: true }).click();
+            await page.getByRole('heading', { name: 'Rooms on this server' }).waitFor({ state: 'visible', timeout: 15000 });
+            await page.getByText('No public rooms yet. Make the first one.', { exact: true }).waitFor({ state: 'visible', timeout: 15000 });
+            const state = await page.evaluate(() => ({
+              server: document.querySelector('.app-api.ready')?.textContent?.trim(),
+              configuredServer: localStorage.getItem('lanora.desktopServer'),
+              playerName: localStorage.getItem('lanora.playerName'),
+              roomCards: document.querySelectorAll('.app-room-card').length
+            }));
+            assert.deepEqual(state, {
+              server: 'Server reachable',
+              configuredServer: 'http://127.0.0.1:8080',
+              playerName: 'Cloud Test Player',
+              roomCards: 0
+            });
+            const health = await page.evaluate(async () => {
+              const response = await fetch('http://127.0.0.1:8080/api/v1/health');
+              return response.ok;
+            });
+            assert.equal(health, true);
+            console.log('PASS: installed LANORA connected to the isolated API, saved onboarding profile, and loaded the server room list.');
+            await browser.close();
+          }
+          main().catch(error => { console.error(error); process.exit(1); });
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'lanora-client-api-smoke.cjs'
+          [System.IO.File]::WriteAllText($path, $script, [System.Text.UTF8Encoding]::new($false))
+          node $path
+      - name: Stop isolated test processes
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:LANORA_API_PID) { Stop-Process -Id ([int]$env:LANORA_API_PID) -Force -ErrorAction SilentlyContinue }
+          Get-Process lanora-desktop -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
