@@ -33,7 +33,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
-    if not re.fullmatch(r"\\d+\\.\\d+\\.\\d+-(?:alpha|beta|rc)\\.\\d+", args.version):
+    if not re.fullmatch(r"\d+\.\d+\.\d+-(?:alpha|beta|rc)\.\d+", args.version):
         raise SystemExit(f"refusing unexpected prerelease version: {args.version}")
     windows_signature = require_artifact(args.artifact, args.signature, ".exe", "Windows")
     linux_signature = require_artifact(args.linux_artifact, args.linux_signature, ".deb", "Linux")
@@ -59,7 +59,7 @@ def main() -> None:
         },
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+    args.output.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
