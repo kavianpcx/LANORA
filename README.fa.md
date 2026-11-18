@@ -47,7 +47,7 @@ bash scripts/server.sh player-auth disable
 
 ## دانلود و اتصال بازیکنان
 
-پیوندهای زیر به نسخهٔ آزمایشی `v0.3.0-alpha.1` اشاره می‌کنند. هر دو بسته امضا شده‌اند و checksum و امضاهای جداگانه در انتشار قرار دارند. مانیفست زندهٔ به‌روزرسانی برنامه در [اینجا]( https://raw.githubusercontent.com/kavianpcx/LANORA/release/0.2.x/updates/alpha/latest.json ) منتشر شده است.
+پیوندهای زیر به نسخهٔ آزمایشی `v0.3.0-alpha.1` اشاره می‌کنند. هر دو بسته امضا شده‌اند و checksum و امضاهای جداگانه در انتشار قرار دارند. مانیفست زندهٔ به‌روزرسانی برنامه در [اینجا](https://raw.githubusercontent.com/kavianpcx/LANORA/release/0.2.x/updates/alpha/latest.json) منتشر شده است.
 
 - **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe.sha256) · [امضا](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe.sig)
 - **لینوکس x64 (Debian/Ubuntu):** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb.sha256) · [امضا](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb.sig)
