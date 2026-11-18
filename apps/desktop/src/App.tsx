@@ -119,6 +119,8 @@ export default function App() {
   const networkGenerationRef = useRef<{ roomId: string; generation: number | null }>({ roomId: "", generation: null });
   const [publicRooms, setPublicRooms] = useState<ListedRoom[]>([]);
   const [room, setRoom] = useState<ActiveRoom | null>(null);
+  const roomRef = useRef<ActiveRoom | null>(room);
+  roomRef.current = room;
   const [presenceUpdatedAt, setPresenceUpdatedAt] = useState(0);
   const [presenceClock, setPresenceClock] = useState(Date.now());
   const [tunnel, setTunnel] = useState<EngineStatus>({
@@ -307,13 +309,8 @@ export default function App() {
           setUpdateState("verifying");
         }
       }, { timeout: 180_000 });
-      // The updater plugin verifies the signature before its download promise resolves.
-      if (room) {
-        setUpdateState("ready_to_install");
-        updateInstallBusy.current = false;
-        setUpdateActionBusy(false);
-        return;
-      }
+      // Tauri verifies the signature before download() resolves. Recheck the live room
+      // state after the asynchronous download before deciding whether installation may stop it.
       await completeUpdateInstallation(nextUpdate);
     } catch {
       setUpdateState("failed");
@@ -321,8 +318,15 @@ export default function App() {
       setUpdateActionBusy(false);
     }
   }
-  async function completeUpdateInstallation(nextUpdate: Update) {
-    if (room) {
+  async function completeUpdateInstallation(nextUpdate: Update, confirmed = false) {
+    const activeRoom = roomRef.current;
+    if (activeRoom && !confirmed) {
+      setUpdateState("ready_to_install");
+      updateInstallBusy.current = false;
+      setUpdateActionBusy(false);
+      return;
+    }
+    if (activeRoom) {
       const disconnected = await leave();
       if (!disconnected) throw new Error("Could not stop the local network tunnel.");
     } else {
@@ -352,7 +356,7 @@ export default function App() {
     updateInstallBusy.current = true;
     setUpdateActionBusy(true);
     try {
-      await completeUpdateInstallation(nextUpdate);
+      await completeUpdateInstallation(nextUpdate, true);
     } catch {
       setUpdateState("failed");
       updateInstallBusy.current = false;
@@ -2161,9 +2165,9 @@ export default function App() {
                         <Download size={15} aria-hidden="true" />{t.updateInstall}
                       </button>
                     )}
-                    {updateState === "ready_to_install" && updateEntry && room && (
+                    {updateState === "ready_to_install" && updateEntry && (
                       <button className="app-button primary" type="button" onClick={() => void confirmUpdateInstall()} disabled={updaterBusy}>
-                        <Download size={15} aria-hidden="true" />{t.updateDisconnectInstall}
+                        <Download size={15} aria-hidden="true" />{room ? t.updateDisconnectInstall : t.updateInstall}
                       </button>
                     )}
                     {updateState === "restart_required" && (
