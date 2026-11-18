@@ -160,7 +160,15 @@ jobs:
           $debugKey = 'HKCU:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
           New-Item -Path $debugKey -Force | Out-Null
           New-ItemProperty -Path $debugKey -Name 'lanora-desktop.exe' -Value '--remote-debugging-port=9223 --remote-allow-origins=*' -PropertyType String -Force | Out-Null
+          New-ItemProperty -Path $debugKey -Name 'com.lanora.desktop' -Value '--remote-debugging-port=9223 --remote-allow-origins=*' -PropertyType String -Force | Out-Null
           $appProcess = Start-Process $app.FullName -PassThru
+          Start-Sleep -Seconds 5
+          $appProcess.Refresh()
+          Write-Output "LANORA_TEST_APP_PID=$($appProcess.Id);HAS_EXITED=$($appProcess.HasExited)"
+          if ($appProcess.HasExited) { Write-Output "LANORA_TEST_APP_EXIT_CODE=$($appProcess.ExitCode)" }
+          $webviewProcessCount = @(Get-Process msedgewebview2 -ErrorAction SilentlyContinue).Count
+          Write-Output "LANORA_TEST_WEBVIEW_PROCESS_COUNT=$webviewProcessCount"
+          try { $debugInfo = Invoke-RestMethod 'http://127.0.0.1:9223/json/version' -TimeoutSec 3; Write-Output "LANORA_TEST_CDP_READY=$($debugInfo.Browser)" } catch { Write-Output "LANORA_TEST_CDP_NOT_READY=$($_.Exception.GetType().Name)" }
           $testScript = @'
           const assert = require('node:assert/strict');
           const fs = require('node:fs');
