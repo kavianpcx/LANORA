@@ -7,7 +7,7 @@
 
 LANORA is an open-source, self-hosted virtual LAN app for friends playing LAN-supported games over the internet. One person runs the server on a Linux VPS. Players install the desktop app, enter the server address, and provide a password only when the server owner requires one. There is no account and no website.
 
-> **Status: experimental alpha.** The latest published download remains `v0.2.0-alpha.8`. Source version `0.3.0-alpha.1` is being prepared with a more compact Settings panel, corrected peer counts, and signed Windows and Debian in-app updates. It has not been published or tested end to end yet. Independent Windows PCs on public networks, Windows game traffic, direct P2P, and game-specific LAN discovery have not been verified.
+> **Status: experimental alpha.** The latest published version is `v0.3.0-alpha.1`, with signed Windows and Debian packages and a Tauri updater manifest. CI passed frontend and native tests, isolated Linux networking tests, API/VPS command checks, Windows installer build/install/launch, Linux package build/install/launch, checksum checks, and updater signature verification. The `v0.2.0-alpha.8` app has no updater, so this first updater-enabled version must be installed manually. Installed-version update/restart behavior, Windows-to-Windows public-network play, Windows game traffic, direct P2P, and game-specific LAN discovery remain unverified.
 >
 > **Security limit:** Changing the player-password policy revokes API sessions and rotates the current network identity, but cannot force a modified client already connected to the old EasyTier overlay to disconnect. Ask all players to fully disconnect and rejoin after a policy change.
 
@@ -47,11 +47,11 @@ Disabling protection opens player access to anyone who can reach the server. Thi
 
 ## Download and connect as a player
 
-The links below point to the latest published release. The `0.3.0-alpha.1` source candidate is not yet downloadable; links will change only after its signed Windows installer, Debian package, signatures, and updater manifest are published.
+These links point to the `v0.3.0-alpha.1` prerelease. Both installers are signed, and the release includes SHA-256 checksums and detached signatures. The app’s live updater manifest is published at the [updater manifest]( https://raw.githubusercontent.com/kavianpcx/LANORA/release/0.2.x/updates/alpha/latest.json ).
 
-- **Windows 10/11 x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe.sha256)
-- **Linux x64 (Debian/Ubuntu):** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb.sha256)
-- [View release notes and all checksums](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.8)
+- **Windows 10/11 x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe.sha256) · [Signature](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe.sig)
+- **Linux x64 (Debian/Ubuntu):** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb.sha256) · [Signature](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb.sig)
+- [View release notes and all assets](https://github.com/kavianpcx/LANORA/releases/tag/v0.3.0-alpha.1)
 
 1. Install and open LANORA. Choose a display name; no signup is needed.
 2. Enter the server address and press **Connect**. LANORA asks for a password only when that server requires one.
@@ -60,7 +60,7 @@ The links below point to the latest published release. The `0.3.0-alpha.1` sourc
 
 LAN discovery is not guaranteed for every game. Games that rely on broadcast or multicast may require Direct IP.
 
-In the candidate Settings panel, avatar, language, and appearance are kept together. Edit your display name from the titlebar profile menu. The version menu shows the installed version and provides **Check for Updates**. The first updater-enabled build must be installed manually over `v0.2.0-alpha.8`. The source candidate configures Tauri 2 updates for Windows and Debian packages: the notification starts a real download, shows byte-based progress when the server reports a size, separates verification, installation, and restart states, and confirms the running version after relaunch. An active LANORA session stays connected until you confirm disconnection for installation. These signed update paths remain unavailable until the persistent signing key is provisioned and this release build is verified.
+The Settings panel keeps avatar, language, and appearance together. Edit your display name from the titlebar profile menu. The version menu shows the installed version and provides **Check for Updates**. The first updater-enabled build must be installed manually over `v0.2.0-alpha.8`. Release CI built the Windows and Debian packages, verified their checksums and Tauri updater signatures, and published the updater manifest. The complete installed-version update, restart, and invalid-signature rejection flows have not yet been tested on physical Windows or Linux installations. Installing an update asks before disconnecting an active LANORA network.
 
 ## What has been tested
 
