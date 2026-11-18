@@ -1,0 +1,293 @@
+name: Signed updater installed-to-installed test
+on:
+  push:
+    branches:
+      - codex/updater-e2e-alpha0-to-alpha1-20261119
+    paths:
+      - '.github/workflows/updater-e2e.yml'
+permissions:
+  contents: read
+jobs:
+  updater-windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Prepare pinned EasyTier v2.6.4
+        shell: pwsh
+        run: |
+          $uri = 'https://github.com/EasyTier/EasyTier/releases/download/v2.6.4/easytier-windows-x86_64-v2.6.4.zip'
+          Invoke-WebRequest $uri -OutFile easytier.zip
+          $actual = (Get-FileHash easytier.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne '27af91e270e554709b048bd32327fefd2dfce5062ae1e8701af7550c6f525f84') { throw 'EasyTier archive hash mismatch' }
+          Expand-Archive easytier.zip -DestinationPath easytier-extracted
+          $dest = 'apps/desktop/src-tauri/resources/easytier'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Get-ChildItem easytier-extracted -File -Recurse | ForEach-Object { Copy-Item $_.FullName -Destination $dest -Force }
+          if (!(Test-Path "$dest/easytier-core.exe") -or !(Test-Path "$dest/easytier-cli.exe")) { throw 'EasyTier executables are missing' }
+          $licenseDir = 'apps/desktop/src-tauri/resources/licenses'
+          New-Item -ItemType Directory -Force -Path $licenseDir | Out-Null
+          Invoke-WebRequest 'https://raw.githubusercontent.com/EasyTier/EasyTier/v2.6.4/LICENSE' -OutFile "$licenseDir/EasyTier-LGPL-3.0.txt"
+          Copy-Item THIRD_PARTY_LICENSES.md "$licenseDir/THIRD_PARTY_LICENSES.md"
+      - name: Install desktop dependencies
+        working-directory: apps/desktop
+        run: npm ci
+      - name: Bundle font license notices
+        shell: pwsh
+        run: |
+          Copy-Item apps/desktop/node_modules/@fontsource/inter/LICENSE apps/desktop/src-tauri/resources/licenses/Inter-OFL.txt
+          Copy-Item apps/desktop/node_modules/@fontsource/vazirmatn/LICENSE apps/desktop/src-tauri/resources/licenses/Vazirmatn-OFL.txt
+      - name: Build signed updater-enabled test baseline
+        working-directory: apps/desktop
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) { throw 'TAURI_SIGNING_PRIVATE_KEY is unavailable to this test workflow.' }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY)) { throw 'TAURI_UPDATER_PUBLIC_KEY is unavailable to this test workflow.' }
+          $config = @{
+            version = '0.3.0-alpha.0'
+            bundle = @{ createUpdaterArtifacts = $true }
+            plugins = @{
+              updater = @{
+                pubkey = $env:TAURI_UPDATER_PUBLIC_KEY
+                endpoints = @('http://127.0.0.1:8765/latest.json')
+                requireSignedVersion = $true
+                dangerousInsecureTransportProtocol = $true
+                windows = @{ installMode = 'passive' }
+              }
+            }
+          } | ConvertTo-Json -Depth 8 -Compress
+          $configPath = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e-config.json'
+          [System.IO.File]::WriteAllText($configPath, $config, [System.Text.UTF8Encoding]::new($false))
+          $env:VITE_LANORA_UPDATES_ENABLED = 'true'
+          npm run tauri build -- --bundles nsis --config $configPath
+          $installer = Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe -File | Where-Object { $_.Name -like '*0.3.0-alpha.0*' } | Select-Object -First 1
+          if (!$installer) { throw 'Signed alpha.0 test installer was not produced.' }
+          if (!(Test-Path "$($installer.FullName).sig")) { throw 'Tauri did not produce the signed baseline artifact.' }
+      - name: Prepare published alpha.1 target and loopback update server
+        shell: pwsh
+        run: |
+          $assetDir = Join-Path $env:RUNNER_TEMP 'lanora-update-e2e'
+          New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
+          $targetName = 'LANORA_0.3.0-alpha.1_x64-setup.exe'
+          $targetUrl = 'https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/' + $targetName
+          Invoke-WebRequest $targetUrl -OutFile (Join-Path $assetDir $targetName)
+          Invoke-WebRequest ($targetUrl + '.sig') -OutFile (Join-Path $assetDir ($targetName + '.sig'))
+          $signature = [System.IO.File]::ReadAllText((Join-Path $assetDir ($targetName + '.sig'))).Trim()
+          if ([string]::IsNullOrWhiteSpace($signature)) { throw 'Published target signature is empty.' }
+          $manifest = @{
+            version = '0.3.0-alpha.1'
+            notes = 'Temporary loopback test manifest. No release asset is modified.'
+            pub_date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            platforms = @{
+              'windows-x86_64' = @{
+                url = "http://127.0.0.1:8765/$targetName"
+                signature = 'invalid-signature-for-rejection-test'
+              }
+            }
+          } | ConvertTo-Json -Depth 8
+          [System.IO.File]::WriteAllText((Join-Path $assetDir 'latest.json'), $manifest, [System.Text.UTF8Encoding]::new($false))
+          $rootJson = ConvertTo-Json -InputObject $assetDir -Compress
+          $server = @"
+          const http = require('node:http');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = $rootJson;
+          http.createServer((req, res) => {
+            const name = path.basename(decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname));
+            if (name === 'health') { res.writeHead(200); res.end('ok'); return; }
+            const file = path.join(root, name);
+            let stat;
+            try { stat = fs.statSync(file); } catch { res.writeHead(404); res.end('not found'); return; }
+            res.writeHead(200, { 'Content-Length': stat.size, 'Content-Type': name.endsWith('.json') ? 'application/json' : 'application/octet-stream', 'Cache-Control': 'no-store' });
+            const stream = fs.createReadStream(file, { highWaterMark: 262144 });
+            stream.on('data', chunk => { res.write(chunk); stream.pause(); setTimeout(() => stream.resume(), 60); });
+            stream.on('end', () => res.end());
+            stream.on('error', () => res.destroy());
+          }).listen(8765, '127.0.0.1');
+          "@
+          $serverPath = Join-Path $env:RUNNER_TEMP 'lanora-e2e-server.cjs'
+          [System.IO.File]::WriteAllText($serverPath, $server, [System.Text.UTF8Encoding]::new($false))
+          $serverLog = Join-Path $env:RUNNER_TEMP 'lanora-e2e-server.log'
+          $serverProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList @($serverPath) -PassThru -WindowStyle Hidden -RedirectStandardOutput $serverLog -RedirectStandardError $serverLog
+          "LANORA_E2E_DIR=$assetDir" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+          "LANORA_E2E_SERVER_PID=$($serverProcess.Id)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+          "LANORA_E2E_TARGET_NAME=$targetName" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+          $ready = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            try { if ((Invoke-WebRequest 'http://127.0.0.1:8765/health').Content -eq 'ok') { $ready = $true; break } } catch {}
+            Start-Sleep -Milliseconds 250
+          }
+          if (!$ready) { throw 'Loopback test update server did not start.' }
+      - name: Install Playwright Core for WebView2 control
+        shell: pwsh
+        run: |
+          $pwDir = Join-Path $env:RUNNER_TEMP 'lanora-playwright'
+          npm install --prefix $pwDir --no-save --no-package-lock playwright-core@1.56.1
+          "PLAYWRIGHT_CORE_DIR=$pwDir/node_modules/playwright-core" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+      - name: Test signature rejection, progress, install, restart, version and settings
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem apps/desktop/src-tauri/target/release/bundle/nsis/*.exe -File | Where-Object { $_.Name -like '*0.3.0-alpha.0*' } | Select-Object -First 1
+          $destination = Join-Path $env:RUNNER_TEMP 'LANORA-Updater-E2E'
+          $install = Start-Process $installer.FullName -ArgumentList '/S', "/D=$destination" -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw 'The signed test baseline installer failed.' }
+          $app = Get-ChildItem $destination -Filter 'lanora-desktop.exe' -Recurse | Select-Object -First 1
+          if (!$app) { throw 'The installed test baseline executable is missing.' }
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9223'
+          $appProcess = Start-Process $app.FullName -PassThru
+          $testScript = @'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const { chromium } = require(process.env.PLAYWRIGHT_CORE_DIR);
+          const endpoint = 'http://127.0.0.1:9223';
+          const manifestPath = process.env.LANORA_E2E_DIR + '/latest.json';
+          const targetName = process.env.LANORA_E2E_TARGET_NAME;
+          const signaturePath = process.env.LANORA_E2E_DIR + '/' + targetName + '.sig';
+          const seenStates = new Set();
+          const seenProgress = new Set();
+          const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+          function writeManifest(signature) {
+            const manifest = {
+              version: '0.3.0-alpha.1',
+              notes: 'Temporary loopback updater verification test.',
+              pub_date: new Date().toISOString(),
+              platforms: { 'windows-x86_64': { url: 'http://127.0.0.1:8765/' + targetName, signature } }
+            };
+            fs.writeFileSync(manifestPath, JSON.stringify(manifest), 'utf8');
+          }
+          function invalidSignature(encoded) {
+            const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+            assert.match(decoded, /untrusted comment|trusted comment/i, 'The published signature sidecar is not a Tauri minisign signature.');
+            const rows = decoded.split(/\r?\n/);
+            let index = -1;
+            for (let i = rows.length - 1; i >= 0; i--) {
+              if (/^[A-Za-z0-9+/=]+$/.test(rows[i]) && rows[i].length > 20) { index = i; break; }
+            }
+            assert.notEqual(index, -1, 'Could not locate the cryptographic signature payload.');
+            rows[index] = (rows[index][0] === 'A' ? 'B' : 'A') + rows[index].slice(1);
+            return Buffer.from(rows.join('\n'), 'utf8').toString('base64');
+          }
+          async function getPage(timeoutMs = 45000) {
+            const end = Date.now() + timeoutMs;
+            let lastError;
+            while (Date.now() < end) {
+              try {
+                const browser = await chromium.connectOverCDP(endpoint, { timeout: 2500 });
+                const pages = browser.contexts().flatMap(context => context.pages());
+                const page = pages.find(candidate => candidate.url().includes('tauri.localhost'));
+                if (page) return { browser, page };
+              } catch (error) { lastError = error; }
+              await sleep(500);
+            }
+            throw new Error('Could not attach to the LANORA WebView2 page: ' + String(lastError || 'no page found'));
+          }
+          async function openUpdateCheck(page) {
+            await page.getByRole('button', { name: /Check for Updates/ }).first().click({ timeout: 15000 });
+            await page.getByRole('menuitem', { name: 'Check for Updates', exact: true }).click({ timeout: 15000 });
+            await page.locator('.app-dialog-update').waitFor({ state: 'visible', timeout: 15000 });
+          }
+          async function waitForState(page, state, timeout = 30000) {
+            await page.locator('.app-update-state.' + state).waitFor({ state: 'visible', timeout });
+          }
+          function observeUpdate(page) {
+            page.on('console', message => {
+              const value = message.text();
+              if (value.startsWith('LANORA_E2E_STATE:')) seenStates.add(value.slice('LANORA_E2E_STATE:'.length));
+              if (value.startsWith('LANORA_E2E_PROGRESS:')) {
+                const pct = Number.parseInt(value.slice('LANORA_E2E_PROGRESS:'.length), 10);
+                if (Number.isFinite(pct)) seenProgress.add(pct);
+              }
+            });
+            return page.evaluate(() => {
+              const capture = () => {
+                const node = document.querySelector('.app-update-state');
+                if (node) {
+                  const state = ['checking','up_to_date','available','downloading','verifying','ready_to_install','installing','restarting','restart_required','installed','install_mismatch','failed'].find(name => node.classList.contains(name));
+                  if (state) console.log('LANORA_E2E_STATE:' + state);
+                }
+                const output = document.querySelector('.app-update-progress-value output');
+                if (output) console.log('LANORA_E2E_PROGRESS:' + output.textContent);
+              };
+              const observer = new MutationObserver(capture);
+              observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class','aria-valuetext'] });
+              window.__lanoraE2EObserver = observer;
+              capture();
+            });
+          }
+          async function main() {
+            const goodSignature = fs.readFileSync(signaturePath, 'utf8').trim();
+            assert.ok(goodSignature.length > 100, 'The published target signature sidecar is unexpectedly short.');
+            writeManifest(invalidSignature(goodSignature));
+            let { browser, page } = await getPage();
+            await page.evaluate(() => {
+              localStorage.setItem('lanora.playerName', 'Updater QA');
+              localStorage.setItem('lanora.language', 'en');
+              localStorage.setItem('lanora.theme', 'light');
+            });
+            await page.reload({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+            await page.locator('body').waitFor({ state: 'visible', timeout: 20000 });
+            await openUpdateCheck(page);
+            await waitForState(page, 'available', 30000);
+            await page.getByRole('button', { name: 'Install update', exact: true }).click();
+            await waitForState(page, 'failed', 60000);
+            assert.match(await page.locator('.app-update-state.failed').innerText(), /could not be installed|failed/i);
+            assert.ok(await page.getByRole('button', { name: /0\.3\.0-alpha\.0/ }).count(), 'An invalid signature must not replace the installed baseline.');
+            console.log('PASS: invalid signature rejected; alpha.0 remains installed');
+            await page.getByRole('button', { name: 'Later', exact: true }).last().click();
+            writeManifest(goodSignature);
+            await sleep(500);
+            await openUpdateCheck(page);
+            await waitForState(page, 'available', 30000);
+            const versions = await page.locator('.app-update-versions').innerText();
+            assert.match(versions, /0\.3\.0-alpha\.0/);
+            assert.match(versions, /0\.3\.0-alpha\.1/);
+            observeUpdate(page);
+            await page.getByRole('button', { name: 'Install update', exact: true }).click();
+            await page.locator('#lanora-update-progress').waitFor({ state: 'attached', timeout: 30000 });
+            const installDeadline = Date.now() + 120000;
+            while (Date.now() < installDeadline && !seenStates.has('restarting')) {
+              if (seenStates.has('failed')) throw new Error('The valid signed update failed before restart.');
+              await sleep(50);
+            }
+            assert.ok(seenStates.has('downloading'), 'No downloading state was observed.');
+            assert.ok(seenProgress.size > 0 && Math.max(...seenProgress) > 0, 'No non-zero download progress was observed.');
+            assert.ok(seenStates.has('verifying'), 'No signature verification state was observed.');
+            assert.ok(seenStates.has('installing'), 'No installing state was observed.');
+            assert.ok(seenStates.has('restarting'), 'No restarting state was observed.');
+            console.log('PASS: real download progress and download/verify/install/restart states observed');
+            try { await page.waitForEvent('close', { timeout: 30000 }); } catch {}
+            const next = await getPage(120000);
+            browser = next.browser;
+            page = next.page;
+            await page.locator('.app-update-state.installed').waitFor({ state: 'visible', timeout: 90000 });
+            const confirmation = await page.locator('.app-update-state.installed').innerText();
+            assert.match(confirmation, /0\.3\.0-alpha\.1/);
+            assert.ok(await page.getByRole('button', { name: /Check for Updates.*0\.3\.0-alpha\.1/ }).count(), 'The relaunched app is not alpha.1.');
+            const settings = await page.evaluate(() => ({
+              playerName: localStorage.getItem('lanora.playerName'),
+              language: localStorage.getItem('lanora.language'),
+              theme: localStorage.getItem('lanora.theme')
+            }));
+            assert.deepEqual(settings, { playerName: 'Updater QA', language: 'en', theme: 'light' });
+            console.log('PASS: app restarted into alpha.1, confirmed the running version, and preserved settings');
+          }
+          main().catch(error => { console.error(error); process.exit(1); });
+          '@
+          $testScriptPath = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e.cjs'
+          [System.IO.File]::WriteAllText($testScriptPath, $testScript, [System.Text.UTF8Encoding]::new($false))
+          node $testScriptPath
+      - name: Stop temporary processes
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:LANORA_E2E_SERVER_PID) { Stop-Process -Id ([int]$env:LANORA_E2E_SERVER_PID) -Force -ErrorAction SilentlyContinue }
+          Get-Process lanora-desktop -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
