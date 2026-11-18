@@ -47,9 +47,17 @@ jobs:
           $installer = Join-Path $env:RUNNER_TEMP 'LANORA_0.3.0-alpha.1_x64-setup.exe'
           Invoke-WebRequest $base -OutFile $installer
           $checksumText = (Invoke-WebRequest ($base + '.sha256')).Content
-          $expected = ($checksumText -split '\s+')[0].ToLowerInvariant()
+          $sidecarMatch = [regex]::Match($checksumText, '(?i)[a-f0-9]{64}')
+          if (!$sidecarMatch.Success) { throw 'Published Windows checksum sidecar does not contain a SHA-256 digest.' }
+          $sidecarHash = $sidecarMatch.Value.ToLowerInvariant()
+          $release = Invoke-RestMethod 'https://api.github.com/repos/kavianpcx/LANORA/releases/tags/v0.3.0-alpha.1'
+          $releaseAsset = $release.assets | Where-Object { $_.name -eq 'LANORA_0.3.0-alpha.1_x64-setup.exe' } | Select-Object -First 1
+          if (!$releaseAsset -or !$releaseAsset.digest.StartsWith('sha256:')) { throw 'GitHub Release API did not return the Windows installer SHA-256 digest.' }
+          $releaseHash = $releaseAsset.digest.Substring(7).ToLowerInvariant()
           $actual = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($expected -ne $actual) { throw 'Published Windows installer SHA-256 does not match its release sidecar.' }
+          if (($releaseHash -ne $actual) -or ($sidecarHash -ne $actual)) {
+            throw "Installer SHA-256 mismatch: GitHub release digest=$releaseHash; checksum sidecar=$sidecarHash; downloaded=$actual"
+          }
           $destination = Join-Path $env:RUNNER_TEMP 'LANORA-Client-API-Test'
           $install = Start-Process $installer -ArgumentList '/S', "/D=$destination" -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw 'Published LANORA installer did not complete successfully.' }
