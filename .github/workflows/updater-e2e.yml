@@ -282,7 +282,7 @@ jobs:
             await waitForState(page, 'available', 30000);
             const versions = await page.locator('.app-update-versions').innerText();
             assert.match(versions, /0\.3\.0-alpha\.0/);
-            assert.match(versions, /0\.3\.0-alpha\.1/);
+            assert.match(versions, /0\.3\.0-alpha\.2/);
             observeUpdate(page);
             await page.getByRole('button', { name: 'Install update', exact: true }).click();
             await page.locator('#lanora-update-progress').waitFor({ state: 'attached', timeout: 30000 });
@@ -303,8 +303,8 @@ jobs:
             page = next.page;
             await page.locator('.app-update-state.installed').waitFor({ state: 'visible', timeout: 90000 });
             const confirmation = await page.locator('.app-update-state.installed').innerText();
-            assert.match(confirmation, /0\.3\.0-alpha\.1/);
-            assert.ok(await page.getByRole('button', { name: /Check for Updates.*0\.3\.0-alpha\.1/ }).count(), 'The relaunched app is not alpha.1.');
+            assert.match(confirmation, /0\.3\.0-alpha\.2/);
+            assert.ok(await page.getByRole('button', { name: /Check for Updates.*0\.3\.0-alpha\.2/ }).count(), 'The relaunched app is not alpha.2.');
             const settings = await page.evaluate(() => ({
               playerName: localStorage.getItem('lanora.playerName'),
               language: localStorage.getItem('lanora.language'),
