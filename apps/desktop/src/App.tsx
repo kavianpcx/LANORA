@@ -1,13 +1,17 @@
 import { useEffect, useState, useRef, type FormEvent } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { check as tauriCheckForUpdate, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import {
   Activity,
   ArrowRight,
   Check,
+  Download,
   Eye,
   EyeOff,
   Gamepad2,
+  Info,
   Link2,
   LockKeyhole,
   Plus,
@@ -45,6 +49,9 @@ import type {
 import { RoomView } from "./components/RoomView";
 import "./style.css";
 
+type UpdateState = "idle" | "checking" | "up_to_date" | "available" | "downloading" | "verifying" | "ready_to_install" | "installing" | "restart_required" | "failed" | "unavailable";
+const UPDATER_ENABLED = import.meta.env.VITE_LANORA_UPDATES_ENABLED === "true";
+
 function localDeviceId() {
   const key = "lanora.deviceId";
   const saved = localStorage.getItem(key);
@@ -58,7 +65,7 @@ function localDeviceId() {
 export default function App() {
   const [startupReady, setStartupReady] = useState(false);
   const [showStartupSkeleton, setShowStartupSkeleton] = useState(false);
-  const [appVersion, setAppVersion] = useState("0.2.0-alpha.8");
+  const [appVersion, setAppVersion] = useState("0.3.0-alpha.1");
   const [lang, setLang] = useState<Lang>(() =>
     localStorage.getItem("lanora.language") === "fa" ? "fa" : "en",
   );
@@ -118,7 +125,7 @@ export default function App() {
     state: "stopped",
     error: null,
   });
-  const [mode, setMode] = useState<"create" | "join" | "settings" | null>(() =>
+  const [mode, setMode] = useState<"create" | "join" | "settings" | "profile" | null>(() =>
     localStorage.getItem("lanora.playerName") ? null : "settings",
   );
   const [onboardingStep, setOnboardingStep] = useState<"profile" | "server">(
@@ -131,6 +138,15 @@ export default function App() {
   const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState("");
   const [settingsError, setSettingsError] = useState("");
+  const settingsSnapshot = useRef<{ name: string; avatar: AvatarKind }>({ name, avatar });
+  const [updateEntry, setUpdateEntry] = useState<Update | null>(null);
+  const [updateState, setUpdateState] = useState<UpdateState>("idle");
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateToast, setUpdateToast] = useState(false);
+  const [updateActionBusy, setUpdateActionBusy] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<{ received: number; total: number | null } | null>(null);
+  const updateCheckBusy = useRef(false);
+  const updateInstallBusy = useRef(false);
   const [notice, setNotice] = useState("");
   const t = labels[lang];
   const connectionStatus = deriveConnectionStatus({
@@ -184,6 +200,11 @@ export default function App() {
       window.clearTimeout(releaseTimer);
     };
   }, []);
+  useEffect(() => {
+    if (!UPDATER_ENABLED || !isTauri()) return;
+    const timer = window.setTimeout(() => void checkForUpdates(false), 7000);
+    return () => window.clearTimeout(timer);
+  }, []);
   function closeModal() {
     if (busy) return;
     if (onboarding) {
@@ -200,11 +221,114 @@ export default function App() {
         return;
       }
     }
+    if (mode === "settings" && !onboarding) setAvatar(settingsSnapshot.current.avatar);
     setMode(null);
   }
   function openSettings() {
     setSettingsError("");
+    settingsSnapshot.current = { name, avatar };
     setMode("settings");
+  }
+  function openProfileEditor() {
+    setSettingsError("");
+    setMode("profile");
+  }
+  async function checkForUpdates(manual = false) {
+    if (manual) setUpdateDialogOpen(true);
+    if (!UPDATER_ENABLED || !isTauri()) {
+      setUpdateState("unavailable");
+      return;
+    }
+    if (updateCheckBusy.current) return;
+    updateCheckBusy.current = true;
+    setUpdateState("checking");
+    try {
+      const found = await tauriCheckForUpdate({ timeout: 12_000 });
+      if (updateEntry && updateEntry !== found) void updateEntry.close().catch(() => {});
+      setUpdateEntry(found);
+      if (found) {
+        setUpdateState("available");
+        if (!manual) setUpdateToast(true);
+      } else {
+        setUpdateState("up_to_date");
+        setUpdateToast(false);
+      }
+    } catch {
+      setUpdateState("failed");
+      setUpdateToast(false);
+    } finally {
+      updateCheckBusy.current = false;
+    }
+  }
+  async function closeUpdateDialog() {
+    if (updateInstallBusy.current || updateState === "checking" || updateState === "downloading" || updateState === "verifying" || updateState === "installing") return;
+    if (updateEntry) await updateEntry.close().catch(() => {});
+    setUpdateEntry(null);
+    setUpdateDialogOpen(false);
+  }
+  async function installUpdate() {
+    const nextUpdate = updateEntry;
+    if (!nextUpdate || updateInstallBusy.current) return;
+    updateInstallBusy.current = true;
+    setUpdateActionBusy(true);
+    setUpdateToast(false);
+    setDownloadProgress({ received: 0, total: null });
+    try {
+      setUpdateState("downloading");
+      let received = 0;
+      await nextUpdate.download((event) => {
+        if (event.event === "Started") {
+          setDownloadProgress({ received, total: event.data.contentLength ?? null });
+        } else if (event.event === "Progress") {
+          received += event.data.chunkLength;
+          setDownloadProgress((current) => ({
+            received,
+            total: current?.total ?? null,
+          }));
+        } else if (event.event === "Finished") {
+          setUpdateState("verifying");
+        }
+      }, { timeout: 180_000 });
+      // The updater plugin verifies the signature before its download promise resolves.
+      if (room) {
+        setUpdateState("ready_to_install");
+        updateInstallBusy.current = false;
+        setUpdateActionBusy(false);
+        return;
+      }
+      await completeUpdateInstallation(nextUpdate);
+    } catch {
+      setUpdateState("failed");
+      updateInstallBusy.current = false;
+      setUpdateActionBusy(false);
+    }
+  }
+  async function completeUpdateInstallation(nextUpdate: Update) {
+    if (room) {
+      const disconnected = await leave();
+      if (!disconnected) throw new Error("Could not stop the local network tunnel.");
+    } else {
+      await invoke("engine_stop");
+    }
+    // The updater plugin verifies the signature before its download promise resolves.
+    setUpdateActionBusy(true);
+    setUpdateState("installing");
+    await nextUpdate.install({ restartAfterInstall: true });
+    setUpdateState("restart_required");
+    await relaunch();
+  }
+  async function confirmUpdateInstall() {
+    const nextUpdate = updateEntry;
+    if (!nextUpdate || updateState !== "ready_to_install" || updateInstallBusy.current) return;
+    updateInstallBusy.current = true;
+    setUpdateActionBusy(true);
+    try {
+      await completeUpdateInstallation(nextUpdate);
+    } catch {
+      setUpdateState("failed");
+      updateInstallBusy.current = false;
+      setUpdateActionBusy(false);
+    }
   }
   useEffect(() => {
     const timer = window.setInterval(() => setPresenceClock(Date.now()), 5000);
@@ -758,6 +882,34 @@ export default function App() {
       tunnelBusy.current = false;
     }
   }
+  async function syncProfile(nextName: string, nextAvatar: AvatarKind) {
+    if (!room || !server) return;
+    if (room.roomId === "shared") {
+      const result = await api<{ members: Member[] }>(
+        server,
+        "/api/v1/network/profile",
+        room.accessToken,
+        { username: nextName, avatar: nextAvatar },
+        "PATCH",
+      );
+      setRoom((old) => old ? { ...old, members: result.members } : null);
+    } else {
+      await api(
+        server,
+        `/api/v1/rooms/${room.roomId}/profile`,
+        room.accessToken,
+        { username: nextName, avatar: nextAvatar },
+        "PATCH",
+      );
+      const current = await api<{ members: Member[]; networkGeneration: number }>(
+        server,
+        `/api/v1/rooms/${room.roomId}`,
+        room.accessToken,
+      );
+      setRoom((old) => old ? { ...old, members: current.members, networkGeneration: current.networkGeneration } : null);
+    }
+    setPresenceUpdatedAt(Date.now());
+  }
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -765,6 +917,40 @@ export default function App() {
     setSettingsError("");
     const data = new FormData(event.currentTarget);
     try {
+      if (mode === "settings" && !onboarding) {
+        const avatarChanged = avatar !== settingsSnapshot.current.avatar;
+        localStorage.setItem("lanora.avatar", avatar);
+        if (avatarChanged && room && server) {
+          try {
+            await syncProfile(name, avatar);
+          } catch {
+            setNotice(lang === "fa"
+              ? "آواتار روی این دستگاه ذخیره شد، اما همگام‌سازی با سرور انجام نشد."
+              : "Avatar saved on this device, but server sync failed.");
+          }
+        }
+        setOnboarding(false);
+        setMode(null);
+        return;
+      }
+      if (mode === "profile") {
+        const next = String(data.get("name") || "").trim();
+        if (next.length < 2 || next.length > 32)
+          throw new RequestError("invalid_input");
+        localStorage.setItem("lanora.playerName", next);
+        setName(next);
+        if (room && server) {
+          try {
+            await syncProfile(next, avatar);
+          } catch {
+            setNotice(lang === "fa"
+              ? "نام روی این دستگاه ذخیره شد، اما همگام‌سازی با سرور انجام نشد."
+              : "Name saved on this device, but server sync failed.");
+          }
+        }
+        setMode(null);
+        return;
+      }
       if (mode === "settings") {
         const next = String(data.get("name") || name).trim();
         if (next.length < 2 || next.length > 32)
@@ -892,7 +1078,7 @@ export default function App() {
       setMode(null);
       setSelectedRoom(null);
     } catch (e) {
-      if (mode === "settings") {
+      if (mode === "settings" || mode === "profile") {
         setSettingsError(
           e instanceof RequestError
             ? friendlyError(e, lang)
@@ -907,8 +1093,8 @@ export default function App() {
       setBusy(false);
     }
   }
-  async function leave() {
-    if (!room || busy || tunnelBusy.current || leaveBusy.current) return;
+  async function leave(): Promise<boolean> {
+    if (!room || busy || tunnelBusy.current || leaveBusy.current) return false;
     leaveBusy.current = true;
     setDisconnecting(true);
     setBusy(true);
@@ -957,8 +1143,10 @@ export default function App() {
         );
       }
       void loadRooms().catch(() => {});
+      return true;
     } catch (e) {
       setError(friendlyError(e, lang));
+      return false;
     } finally {
       leaveBusy.current = false;
       setDisconnecting(false);
@@ -1005,6 +1193,21 @@ export default function App() {
     setMode("join");
     setError("");
   };
+  const updateStateLabel: Record<UpdateState, string> = {
+    idle: "",
+    checking: t.checkingForUpdates,
+    up_to_date: t.upToDate,
+    available: t.updateAvailable,
+    downloading: t.updateDownloading,
+    verifying: t.updateVerifying,
+    installing: t.updateInstalling,
+    ready_to_install: t.updateReadyToInstall,
+    restart_required: t.updateRestartRequired,
+    failed: t.updateFailed,
+    unavailable: t.updateUnavailable,
+  };
+  const updaterBusy = updateActionBusy || updateState === "checking" ||
+    updateState === "downloading" || updateState === "verifying" || updateState === "installing";
   if (!startupReady) return <StartupSkeleton lang={lang} visible={showStartupSkeleton} />;
   return (
     <>
@@ -1032,8 +1235,23 @@ export default function App() {
         name={name}
         avatar={avatar}
         settingsLabel={t.settings}
+        profileMenuLabels={{ editProfile: t.editProfile, settings: t.settings }}
+        updateMenuLabels={{ check: t.checkForUpdates, version: t.currentVersion }}
         onSettings={openSettings}
+        onEditProfile={openProfileEditor}
+        onCheckForUpdates={() => void checkForUpdates(true)}
       />
+      {updateToast && updateEntry && (
+        <button
+          className="app-update-toast"
+          type="button"
+          onClick={() => { setUpdateToast(false); setUpdateDialogOpen(true); }}
+          dir={lang === "fa" ? "rtl" : "ltr"}
+        >
+          <Info size={16} aria-hidden="true" />
+          <span>{t.updateAvailable} · <bdi dir="ltr">{updateEntry.version}</bdi></span>
+        </button>
+      )}
       <div className="lanora-app" dir="ltr" data-lang={lang}>
         <aside className="app-sidebar">
           <div className="side-brand">
@@ -1396,6 +1614,8 @@ export default function App() {
               label={
                 mode === "settings"
                   ? t.settings
+                  : mode === "profile"
+                    ? t.editProfile
                   : mode === "create"
                     ? t.create
                     : t.join
@@ -1403,7 +1623,7 @@ export default function App() {
               onClose={closeModal}
             >
               <div
-                className={`app-dialog ${mode === "settings" ? "app-dialog-profile" : ""}`}
+                className={`app-dialog ${mode === "settings" || mode === "profile" ? "app-dialog-profile" : ""}`}
                 dir="ltr"
               >
                 <header className="app-dialog-header">
@@ -1428,6 +1648,8 @@ export default function App() {
                         : lang === "fa"
                           ? "تنظیمات برنامه"
                           : "APP SETTINGS"
+                      : mode === "profile"
+                        ? lang === "fa" ? "پروفایل شما" : "YOUR PROFILE"
                       : lang === "fa"
                         ? "فضای بازی"
                         : "GAME ROOM"}
@@ -1443,6 +1665,8 @@ export default function App() {
                             ? "به سرور خودتان وصل شوید"
                             : "Connect to your server"
                         : t.settings
+                      : mode === "profile"
+                        ? t.editProfile
                       : mode === "create"
                         ? t.create
                         : t.join}
@@ -1480,7 +1704,7 @@ export default function App() {
                     className="app-dialog-body"
                     role="region"
                     tabIndex={0}
-                    aria-label={mode === "settings" ? t.settings : mode === "create" ? t.create : t.join}
+                    aria-label={mode === "settings" ? t.settings : mode === "profile" ? t.editProfile : mode === "create" ? t.create : t.join}
                   >
                   {mode === "settings" &&
                     onboarding &&
@@ -1583,7 +1807,16 @@ export default function App() {
                         setTheme,
                         setAvatar,
                       }}
+                    showDisplayName={false}
                     autoFocusAvatar
+                    />
+                  )}
+                  {mode === "profile" && (
+                    <ProfileFields
+                      {...{ lang, theme, name, avatar, setLang, setTheme, setAvatar }}
+                      showAvatarPicker={false}
+                      showPreferences={false}
+                      autoFocusAvatar={false}
                     />
                   )}
                   {mode === "create" && (
@@ -1710,7 +1943,7 @@ export default function App() {
                       <button
                         className="app-button primary"
                         type="submit"
-                        disabled={busy || Boolean(room)}
+                        disabled={busy || (mode === "settings" && onboarding && onboardingStep === "server" && Boolean(room))}
                       >
                         {busy ? (
                           <RefreshCw className="spin" size={17} />
@@ -1805,11 +2038,91 @@ export default function App() {
                         disabled={busy}
                         onClick={cancelPasswordPrompt}
                       >
+                        <X size={15} aria-hidden="true" />
                         {t.cancel}
                       </button>
                     </div>
                   </footer>
                 </form>
+              </div>
+            </Modal>
+          )}
+          {updateDialogOpen && (
+            <Modal label={t.checkForUpdates} onClose={() => void closeUpdateDialog()}>
+              <div className="app-dialog app-dialog-update" dir="ltr">
+                <header className="app-dialog-header">
+                  <button
+                    className="app-dialog-close"
+                    type="button"
+                    onClick={() => void closeUpdateDialog()}
+                    aria-label={t.updateLater}
+                    disabled={updaterBusy}
+                  >
+                    <X size={18} />
+                  </button>
+                  <span className="app-eyebrow" dir={lang === "fa" ? "rtl" : "ltr"}>{t.currentVersion}</span>
+                  <h2 dir={lang === "fa" ? "rtl" : "ltr"}>{t.checkForUpdates}</h2>
+                </header>
+                <div className="app-dialog-body update-dialog-body" dir={lang === "fa" ? "rtl" : "ltr"}>
+                  <p className={`app-update-state ${updateState}`} role="status" aria-live="polite">
+                    {updateState === "checking" || updateState === "downloading" || updateState === "installing"
+                      ? <RefreshCw size={16} className="spin" aria-hidden="true" />
+                      : updateState === "up_to_date"
+                        ? <Check size={16} aria-hidden="true" />
+                        : updateState === "failed"
+                          ? <Activity size={16} aria-hidden="true" />
+                          : <Info size={16} aria-hidden="true" />}
+                    <span>{updateStateLabel[updateState]}</span>
+                  </p>
+                  {updateEntry && (
+                    <>
+                      <dl className="app-update-versions">
+                        <div><dt>{t.updateCurrent}</dt><dd dir="ltr">{updateEntry.currentVersion || appVersion}</dd></div>
+                        <div><dt>{t.updateNew}</dt><dd dir="ltr">{updateEntry.version}</dd></div>
+                      </dl>
+                      {updateEntry.body && <div className="app-update-notes">{updateEntry.body}</div>}
+                    </>
+                  )}
+                  {updateState === "downloading" && downloadProgress && (
+                    <div className="app-update-progress">
+                      <label htmlFor="lanora-update-progress">{t.updateProgress}</label>
+                      {downloadProgress.total && downloadProgress.total > 0 ? (
+                        <progress
+                          id="lanora-update-progress"
+                          value={Math.min(downloadProgress.received, downloadProgress.total)}
+                          max={downloadProgress.total}
+                        />
+                      ) : (
+                        <progress id="lanora-update-progress" />
+                      )}
+                    </div>
+                  )}
+                  {room && updateEntry && (updateState === "available" || updateState === "ready_to_install") && (
+                    <p className="app-update-warning" dir={lang === "fa" ? "rtl" : "ltr"}>{t.updateConnectedWarning}</p>
+                  )}
+                </div>
+                <footer className="app-dialog-footer" dir="ltr">
+                  <div className="app-dialog-footer-actions">
+                    {updateState === "failed" && (
+                      <button className="app-button subtle" type="button" onClick={() => void checkForUpdates(true)} disabled={updaterBusy}>
+                        <RefreshCw size={15} aria-hidden="true" />{t.updateRetry}
+                      </button>
+                    )}
+                    {updateState === "available" && updateEntry && (
+                      <button className="app-button primary" type="button" onClick={() => void installUpdate()} disabled={updaterBusy}>
+                        <Download size={15} aria-hidden="true" />{t.updateInstall}
+                      </button>
+                    )}
+                    {updateState === "ready_to_install" && updateEntry && room && (
+                      <button className="app-button primary" type="button" onClick={() => void confirmUpdateInstall()} disabled={updaterBusy}>
+                        <Download size={15} aria-hidden="true" />{t.updateDisconnectInstall}
+                      </button>
+                    )}
+                    <button className="app-button subtle" type="button" onClick={() => void closeUpdateDialog()} disabled={updaterBusy}>
+                      {t.updateLater}
+                    </button>
+                  </div>
+                </footer>
               </div>
             </Modal>
           )}

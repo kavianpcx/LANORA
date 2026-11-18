@@ -1,6 +1,8 @@
 # Roadmap
 
-## Current alpha: 0.2.0-alpha.8
+## Published alpha: 0.2.0-alpha.8
+
+The current source candidate is `0.3.0-alpha.1` and is not a published release. It compacts Settings, moves display-name editing into the titlebar profile menu, corrects peer-route counts for players awaiting an IP, and adds a signed Windows updater path. The candidate is not stable and has not passed a real installed-version update test.
 
 - Default flow enters a server URL, discovers whether player passwords are required, and joins one server-wide EasyTier network after authorization.
 - Server owners can choose protected or passwordless player access; administrator and relay credentials remain separate.
@@ -10,6 +12,8 @@
 - Profile setup and Settings use a viewport-bounded dialog with a fixed header/footer and a compact keyboard-accessible avatar picker.
 - Empty server addresses are rejected before network requests; bare loopback addresses default to HTTP while public hosts default to HTTPS.
 - Peer-route diagnostics distinguish partial, unknown, stale, and observed-relay states, and copied diagnostics contain only a safe field whitelist.
+- The candidate requires all expected active players to have fresh route evidence before a full peer-route pass; players awaiting an IP remain visible in the count.
+- Windows updates are configured through the official Tauri plugin and require a private signing key protected in GitHub Actions.
 
 ## Still unverified
 
@@ -18,10 +22,13 @@
 - Direct P2P/NAT traversal across consumer routers.
 - Popular game-specific LAN discovery, broadcast and multicast compatibility.
 - Recovery behavior on extended real ISP outages.
+- Tauri updater end-to-end behavior on Windows, including real signature rejection, installation, relaunch, and preserving local settings.
+- Windows display scaling at 125% and 150% on native hardware.
 
 ## Next
 
 - Test the Windows tunnel on two separate machines and capture route, firewall, relay/direct, and game-level evidence.
 - Improve peer and relay diagnostics from data the native engine can actually provide.
+- Verify the 0.3.0-alpha.1 candidate against an installed signed Windows build before treating updates as functional.
 - Keep the default connection flow to server address, authorization, and connect.
 - Retain room-based workflow only as an advanced option until real users need it.

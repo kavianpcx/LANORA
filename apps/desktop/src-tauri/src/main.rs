@@ -324,6 +324,8 @@ async fn engine_stop(state: State<'_, Engine>) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(Engine {
             child: Mutex::new(None),
             config: Mutex::new(None),

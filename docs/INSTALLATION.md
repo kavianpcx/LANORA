@@ -4,6 +4,8 @@
 
 Download [LANORA 0.2.0-alpha.8 for Windows x64](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe) and its [SHA-256 file](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe.sha256), verify the checksum, and run the installer. The installer is per-user. Start LANORA from the Start menu. A real Windows virtual-network session is not verified.
 
+The source candidate `0.3.0-alpha.1` is not yet a published download. When the first updater-enabled Windows release is published, Alpha 8 users must install it manually once because Alpha 8 does not include updater support. Later compatible Windows releases can be checked from the version menu. Only install an update offered by a correctly signed LANORA build.
+
 ## Linux
 
 Download [LANORA 0.2.0-alpha.8 for Linux x64](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb) and its [SHA-256 file](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb.sha256). Verify the checksum, then install it with:

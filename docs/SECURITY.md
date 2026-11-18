@@ -2,6 +2,12 @@
 
 LANORA is experimental. Review these limitations before exposing a server to people you do not trust.
 
+## Desktop update signatures
+
+The Windows updater uses the official Tauri updater plugin. Release installers and update metadata must be signed with the repository owner's private Tauri key; the matching public key is embedded in the release build. The updater verifies the signature before installing. Keep the private key out of the source repository and logs. Store it only in the protected `TAURI_SIGNING_PRIVATE_KEY` Actions secret (and its optional password in `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`); `TAURI_UPDATER_PUBLIC_KEY` is a non-secret repository variable. The first updater-enabled build must be installed manually over the older Alpha 8 app. Automatic update behavior is not considered verified until a real Windows version-to-version download, signature check, install, and relaunch succeeds.
+
+The manifest advertises only the Windows x64 artifact over HTTPS. Do not publish unsigned artifacts to the updater manifest, reuse a release tag, or accept an unexpected downgrade. The Linux package is distributed through the normal GitHub Release download and does not have in-app updates configured.
+
 ## Authentication and stored credentials
 
 - Public server addresses use HTTPS with normal certificate verification. HTTP is permitted only for loopback development.
