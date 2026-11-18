@@ -147,7 +147,11 @@ jobs:
           if ($install.ExitCode -ne 0) { throw 'The signed test baseline installer failed.' }
           $app = Get-ChildItem $destination -Filter 'lanora-desktop.exe' -Recurse | Select-Object -First 1
           if (!$app) { throw 'The installed test baseline executable is missing.' }
-          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9223'
+          Get-Process lanora-desktop -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9223 --remote-allow-origins=*'
+          $debugKey = 'HKCU:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $debugKey -Force | Out-Null
+          New-ItemProperty -Path $debugKey -Name 'lanora-desktop.exe' -Value '--remote-debugging-port=9223 --remote-allow-origins=*' -PropertyType String -Force | Out-Null
           $appProcess = Start-Process $app.FullName -PassThru
           $testScript = @'
           const assert = require('node:assert/strict');
