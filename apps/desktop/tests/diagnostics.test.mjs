@@ -19,12 +19,18 @@ const base = {
 
 test('partial peer reachability is not a full diagnostic pass', () => {
   const result = buildConnectionDiagnostics({ ...base, reachablePeerCount: 1 });
-  assert.deepEqual(result.peerRoute, { status: 'partial', reachable: 1, expected: 3 });
+  assert.deepEqual(result.peerRoute, {
+    status: 'partial', totalPlayers: 3, reachable: 1, expected: 3,
+    awaitingVirtualIp: 0, playersWithVirtualIp: 3, unknown: 2,
+  });
 });
 
 test('peer routes pass only when every expected peer has fresh route evidence', () => {
   const result = buildConnectionDiagnostics({ ...base, reachablePeerCount: 3 });
-  assert.deepEqual(result.peerRoute, { status: 'pass', reachable: 3, expected: 3 });
+  assert.deepEqual(result.peerRoute, {
+    status: 'pass', totalPlayers: 3, reachable: 3, expected: 3,
+    awaitingVirtualIp: 0, playersWithVirtualIp: 3, unknown: 0,
+  });
 });
 
 test('unknown and not-checked remain distinct from failure', () => {
@@ -64,4 +70,33 @@ test('diagnostic export whitelists fields and omits credentials and private iden
     assert.equal(exported.includes(secret), false);
   }
   assert.equal(exported.includes('"peerRoute"'), true);
+});
+
+test('a route report cannot pass while an expected player is awaiting an IP', () => {
+  const result = buildConnectionDiagnostics({
+    ...base,
+    expectedPeerCount: 2,
+    reachablePeerCount: 1,
+    awaitingVirtualIpCount: 1,
+    playersWithVirtualIpCount: 1,
+    unknownPeerCount: 0,
+  });
+  assert.equal(result.peerRoute.status, 'partial');
+  assert.equal(result.peerRoute.awaitingVirtualIp, 1);
+});
+
+test('diagnostics distinguish total players from active route expectations', () => {
+  const result = buildConnectionDiagnostics({
+    ...base,
+    expectedPeerCount: 1,
+    totalOtherPlayerCount: 2,
+    reachablePeerCount: 1,
+  });
+  assert.equal(result.peerRoute.totalPlayers, 2);
+  assert.equal(result.peerRoute.expected, 1);
+});
+
+test('stale presence prevents a full peer-route pass', () => {
+  const result = buildConnectionDiagnostics({ ...base, presenceFresh: false, reachablePeerCount: 3 });
+  assert.equal(result.peerRoute.status, 'unknown');
 });

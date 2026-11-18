@@ -7,8 +7,11 @@ from urllib.parse import unquote
 root=Path(__file__).resolve().parents[1]
 package=json.loads((root/'apps/desktop/package.json').read_text())
 version=package['version']
-assert re.fullmatch(r'0\.2\.0-alpha\.\d+', version), f'unexpected prerelease version: {version}'
+assert re.fullmatch(r'0\.3\.0-alpha\.\d+', version), f'unexpected prerelease version: {version}'
 tauri=json.loads((root/'apps/desktop/src-tauri/tauri.conf.json').read_text())
+updater=tauri.get('plugins',{}).get('updater',{})
+assert updater.get('pubkey')=='' and updater.get('endpoints')==[]
+assert updater.get('requireSignedVersion') is True
 assert tauri['version']==version
 nsis=tauri['bundle']['windows']['nsis']
 assert nsis['installMode']=='currentUser'
@@ -34,11 +37,20 @@ release_workflow=(root/'.github/workflows/windows.yml').read_text()
 assert 'tag="v$version"' in release_workflow
 assert 'notes="docs/releases/$version.md"' in release_workflow
 assert "release/0.2.x" in (root/'README.md').read_text()
+assert 'TAURI_SIGNING_PRIVATE_KEY' in release_workflow
+assert 'TAURI_UPDATER_PUBLIC_KEY' in release_workflow
+assert 'createUpdaterArtifacts' in release_workflow
+assert 'requireSignedVersion = $true' in release_workflow
+assert 'updates/alpha/latest.json' in release_workflow
+assert 'tauri-plugin-updater' in cargo
+assert '@tauri-apps/plugin-updater' in (root/'apps/desktop/package.json').read_text()
+assert '0.2.0-alpha.8' in (root/'README.md').read_text(), 'keep download links pinned to an actually published release until a new release exists'
 app_source=(root/'apps/desktop/src/App.tsx').read_text()
 assert f'useState("{version}")' in app_source
 assert 'document.documentElement.dir = "ltr"' in app_source
 assert '<div className="lanora-app" dir="ltr"' in app_source
-assert 'dir={lang === "fa" ? "rtl" : "ltr"}' not in app_source.split('<div className="lanora-app"')[0]
+titlebar_source=(root/'apps/desktop/src/components/TitleBar.tsx').read_text()
+assert 'className="titlebar"' in titlebar_source and 'dir="ltr"' in titlebar_source
 css_source=(root/'apps/desktop/src/style.css').read_text()
 fa_rules=re.findall(r'\.lanora-app\[data-lang="fa"\][^{]*\{([^}]+)\}',css_source,re.S)
 assert fa_rules, 'Persian text styles must be scoped to translated components'

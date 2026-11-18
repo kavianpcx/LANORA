@@ -36,7 +36,7 @@ The same desktop source supports a Debian/Ubuntu `.deb`. GitHub Actions installs
 
 ## Candidate validation
 
-For `0.2.0-alpha.2`, PR builds also run `npm test` and `cargo test` before packaging. The Linux workflow runs a real namespace integration test against the built Go API and pinned EasyTier executables. Installation/startup checks are separate CI steps and must be inspected independently of packaging success.
+For `0.3.0-alpha.1`, pull-request workflows also run `npm test` and `cargo test` before packaging. The Linux workflow runs a real namespace integration test against the built Go API and pinned EasyTier executables. Installation/startup checks are separate CI steps and must be inspected independently of packaging success. Debian package validation extracts its control directory and checks that the expected `postinst` file exists; `tests/deb_validation_test.sh` covers both valid and missing-script packages.
 
 ```sh
 cd apps/desktop
@@ -57,3 +57,9 @@ sudo python3 tests/network_smoke.py apps/desktop/src-tauri/resources/easytier/ea
 ```
 
 The test creates temporary network namespaces and a bridge, starts a real API and relay, creates/joins a room, checks distinct OS adapter IPs, then sends actual TCP/UDP payloads. P2P is disabled to force the foreign-network relay path. It removes only its temporary processes/interfaces on exit. This is not a test across two ISPs and does not exercise Windows adapters or game discovery.
+
+## Signed Windows updates
+
+The release workflow signs the Windows NSIS installer through Tauri's updater plugin. It requires `TAURI_SIGNING_PRIVATE_KEY` (and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if configured) as GitHub Actions secrets, plus `TAURI_UPDATER_PUBLIC_KEY` as a repository variable. Generate the keypair with `npx tauri signer generate -- -w <private-key-path>` on a secure machine. Do not commit the private key or place it in `.env`.
+
+Pull-request builds leave in-app update checks disabled. Release-branch builds embed the public key and stable prerelease manifest URL. The workflow creates the manifest from the actual `.exe.sig` produced by Tauri and publishes it as a release asset and at `updates/alpha/latest.json`. A manifest/unit test does not prove the updater's signature verification, install, or relaunch path; those require a real older Windows installation and a newer signed release.

@@ -589,7 +589,7 @@ select {
   border: 1px solid var(--line);
 }
 .app-dialog-profile {
-  width: min(560px, 100%);
+  width: min(440px, 100%);
 }
 @supports (height: 100dvh) {
   .app-dialog {
@@ -688,6 +688,113 @@ select {
 .app-dialog-footer .app-button {
   flex: none;
   margin: 0;
+}
+.app-dialog-profile .app-dialog-header {
+  padding: 20px 22px 4px;
+}
+.app-dialog-profile .app-dialog-body {
+  gap: 13px;
+  padding: 8px 22px 12px;
+}
+.app-dialog-profile .app-dialog-footer {
+  padding: 10px 22px 14px;
+}
+.app-dialog-update {
+  width: min(460px, 100%);
+}
+.update-dialog-body {
+  gap: 14px;
+}
+.app-update-state {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-weight: 650;
+}
+.app-update-state.failed {
+  color: var(--danger);
+}
+.app-update-state.up_to_date {
+  color: var(--success);
+}
+.app-update-versions {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: var(--surface-quiet);
+}
+.app-update-versions > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.app-update-versions dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.app-update-versions dd {
+  margin: 0;
+  font: 600 12px/1.4 Inter, ui-monospace, monospace;
+}
+.app-update-notes {
+  max-height: min(32vh, 210px);
+  overflow: auto;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.app-update-progress {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.app-update-progress progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--accent);
+}
+.app-update-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.app-update-toast {
+  position: fixed;
+  z-index: 15;
+  top: 68px;
+  inset-inline-end: 18px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  max-width: min(360px, calc(100vw - 36px));
+  padding: 9px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 10px 26px #0003;
+  text-align: start;
+  cursor: pointer;
+}
+.app-update-toast:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.app-update-toast:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  outline-offset: 2px;
 }
 .app-form {
   display: grid;
@@ -1194,6 +1301,8 @@ select {
   }
 }
 .titlebar {
+  position: relative;
+  z-index: 5;
   height: 56px;
   display: flex;
   align-items: center;
@@ -1220,10 +1329,66 @@ select {
   font: 800 13px Inter, sans-serif;
   letter-spacing: 0.11em;
 }
-.titlebar-leading > span {
+.titlebar-version {
   color: var(--muted);
   font: 11px Inter, sans-serif;
   padding-inline-start: 3px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.titlebar-version:hover {
+  color: var(--ink);
+}
+.titlebar-menu-anchor {
+  position: relative;
+}
+.titlebar-popover,
+.titlebar-update-popover {
+  position: absolute;
+  z-index: 20;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px #0003;
+  color: var(--ink);
+}
+.titlebar-popover {
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+}
+.titlebar-update-popover {
+  top: calc(100% + 6px);
+  inset-inline-start: 94px;
+}
+.titlebar-popover button,
+.titlebar-update-popover button {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.titlebar-popover button:hover,
+.titlebar-update-popover button:hover {
+  background: var(--surface-quiet);
+}
+.titlebar-update-popover > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 11px;
 }
 .titlebar-drag-fill {
   height: 100%;
@@ -1417,8 +1582,8 @@ button:focus-visible {
   user-select: none;
 }
 .avatar-owl img {
-  /* Owl art has the largest transparent inset among the unchanged 256px assets. */
-  transform: scale(1.15);
+  /* Preserve the unchanged artwork while compensating for its larger transparent inset. */
+  transform: scale(1.42) translateY(-2%);
   transform-origin: center;
 }
 .titlebar-profile > .avatar-shell {
@@ -1494,6 +1659,10 @@ button:focus-visible {
   font-size: 12px;
   line-height: 1.4;
   white-space: nowrap;
+}
+.app-server-latency > span {
+  color: var(--muted);
+  font-size: 10px;
 }
 .app-network-summary {
   display: flex;
@@ -1578,6 +1747,49 @@ button:focus-visible {
   color: var(--muted);
   text-align: center;
   font-size: 11px;
+}
+.app-peer-overview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.app-peer-overview > span:first-child {
+  color: var(--ink);
+  font-weight: 600;
+}
+.app-peer-awaiting {
+  color: var(--muted);
+}
+.app-game-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--success) 24%, var(--line));
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--success) 5%, var(--surface));
+}
+.app-game-hint strong {
+  font-size: 12px;
+}
+.app-game-hint p,
+.app-game-wait {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.app-game-hint .app-button {
+  flex: none;
+}
+.app-game-wait {
+  margin: 10px 0 0;
 }
 .app-player-section .app-members {
   display: block;
@@ -1726,9 +1938,9 @@ button:focus-visible {
   padding: 2px;
 }
 .avatar-picker button {
-  width: 56px;
-  height: 56px;
-  padding: 3px;
+  width: 52px;
+  height: 52px;
+  padding: 2px;
   margin: 0;
   aspect-ratio: 1;
   display: grid;
@@ -1775,8 +1987,8 @@ button:focus-visible {
   border-radius: 3px;
 }
 .avatar-picker button .avatar-shell {
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   max-width: 100%;
   max-height: 100%;
 }

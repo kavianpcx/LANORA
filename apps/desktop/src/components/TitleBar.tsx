@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauri } from "@tauri-apps/api/core";
-import { Minus, Square, Copy, X, Settings2 } from "lucide-react";
+import { Minus, Square, Copy, X, Settings2, ChevronDown, UserRound, Info, RefreshCw } from "lucide-react";
 import { Avatar, type AvatarKind } from "./Avatar";
 import brand from "../brand.svg";
 export function TitleBar({
@@ -12,7 +12,11 @@ export function TitleBar({
   name,
   avatar,
   settingsLabel,
+  profileMenuLabels,
+  updateMenuLabels,
   onSettings,
+  onEditProfile,
+  onCheckForUpdates,
 }: {
   lang: "en" | "fa";
   appVersion: string;
@@ -21,11 +25,17 @@ export function TitleBar({
   name: string;
   avatar: AvatarKind;
   settingsLabel: string;
+  profileMenuLabels: { editProfile: string; settings: string };
+  updateMenuLabels: { check: string; version: string };
   onSettings: () => void;
+  onEditProfile: () => void;
+  onCheckForUpdates: () => void;
 }) {
   const [maximized, setMaximized] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [failure, setFailure] = useState(false);
+  const [openMenu, setOpenMenu] = useState<"profile" | "updates" | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const safe = (work: Promise<unknown>) =>
     void work.catch(() => setFailure(true));
   useEffect(() => {
@@ -65,11 +75,27 @@ export function TitleBar({
       safe(listener.then((stop) => stop()));
     };
   }, []);
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !menuRef.current?.contains(event.target))
+        setOpenMenu(null);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenMenu(null);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
   if (!isTauri()) return null;
   const window = getCurrentWindow();
   return (
     <div
       className="titlebar"
+      ref={menuRef}
       dir="ltr"
       data-fullscreen={fullscreen}
       title={
@@ -87,7 +113,16 @@ export function TitleBar({
       >
         <img src={brand} alt="" data-tauri-drag-region />
         <b data-tauri-drag-region>LANORA</b>
-        <span data-tauri-drag-region>{appVersion}</span>
+        <button
+          type="button"
+          className="titlebar-version"
+          aria-label={`${updateMenuLabels.check} · ${appVersion}`}
+          aria-expanded={openMenu === "updates"}
+          onClick={() => setOpenMenu((value) => value === "updates" ? null : "updates")}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          {appVersion}
+        </button>
       </div>
       <div
         className="titlebar-drag-fill"
@@ -99,17 +134,38 @@ export function TitleBar({
           <i />
           <span dir={lang === "fa" ? "rtl" : "ltr"}>{statusLabels[status]}</span>
         </span>
-        <button
-          className="titlebar-profile"
-          aria-label={settingsLabel}
-          title={settingsLabel}
-          onClick={onSettings}
-        >
-          <Avatar kind={avatar} size={30} decorative />
-          <span dir="auto">{name || settingsLabel}</span>
-          <Settings2 size={16} />
-        </button>
+        <div className="titlebar-menu-anchor">
+          <button
+            className="titlebar-profile"
+            aria-label={settingsLabel}
+            title={settingsLabel}
+            aria-expanded={openMenu === "profile"}
+            onClick={() => setOpenMenu((value) => value === "profile" ? null : "profile")}
+          >
+            <Avatar kind={avatar} size={30} decorative />
+            <span dir="auto">{name || settingsLabel}</span>
+            <ChevronDown size={15} />
+          </button>
+          {openMenu === "profile" && (
+            <div className="titlebar-popover" role="menu">
+              <button role="menuitem" onClick={() => { setOpenMenu(null); onEditProfile(); }}>
+                <UserRound size={15} />{profileMenuLabels.editProfile}
+              </button>
+              <button role="menuitem" onClick={() => { setOpenMenu(null); onSettings(); }}>
+                <Settings2 size={15} />{profileMenuLabels.settings}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
+      {openMenu === "updates" && (
+        <div className="titlebar-update-popover" role="menu">
+          <span><Info size={15} />{updateMenuLabels.version}: <bdi dir="ltr">{appVersion}</bdi></span>
+          <button role="menuitem" onClick={() => { setOpenMenu(null); onCheckForUpdates(); }}>
+            <RefreshCw size={15} />{updateMenuLabels.check}
+          </button>
+        </div>
+      )}
       <button
         aria-label={lang === "fa" ? "کوچک‌کردن" : "Minimize"}
         onClick={() => safe(window.minimize())}

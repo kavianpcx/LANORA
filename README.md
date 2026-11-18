@@ -7,7 +7,7 @@
 
 LANORA is an open-source, self-hosted virtual LAN app for friends playing LAN-supported games over the internet. One person runs the server on a Linux VPS. Players install the desktop app, enter the server address, and provide a password only when the server owner requires one. There is no account and no website.
 
-> **Status: experimental alpha.** LANORA 0.2.0-alpha.8 improves server-address validation and local loopback HTTP testing, tightens peer-route and stale-presence diagnostics, and polishes connected-player and disconnect controls. Independent Windows PCs on public networks, Windows game traffic, direct P2P, and game-specific LAN discovery have not been verified.
+> **Status: experimental alpha.** The latest published download remains `v0.2.0-alpha.8`. Source version `0.3.0-alpha.1` is being prepared with a more compact Settings panel, corrected peer counts, and a signed Windows update path. It has not been published or tested end to end yet. Independent Windows PCs on public networks, Windows game traffic, direct P2P, and game-specific LAN discovery have not been verified.
 >
 > **Security limit:** Changing the player-password policy revokes API sessions and rotates the current network identity, but cannot force a modified client already connected to the old EasyTier overlay to disconnect. Ask all players to fully disconnect and rejoin after a policy change.
 
@@ -47,6 +47,8 @@ Disabling protection opens player access to anyone who can reach the server. Thi
 
 ## Download and connect as a player
 
+The links below point to the latest published release. The `0.3.0-alpha.1` source candidate is not yet downloadable; links will change only after its signed Windows installer and CI artifacts are published.
+
 - **Windows 10/11 x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe.sha256)
 - **Linux x64 (Debian/Ubuntu):** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb.sha256)
 - [View release notes and all checksums](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.8)
@@ -58,6 +60,8 @@ Disabling protection opens player access to anyone who can reach the server. Thi
 
 LAN discovery is not guaranteed for every game. Games that rely on broadcast or multicast may require Direct IP.
 
+In the candidate Settings panel, avatar, language, and appearance are kept together. Edit your display name from the titlebar profile menu. The version menu shows the installed version and provides **Check for Updates**. The first updater-enabled build must be installed manually over `v0.2.0-alpha.8`; later Windows updates are checked in the background, verified with Tauri's embedded public key, and installed only after you choose Install. Updater signing is not enabled for the existing Alpha 8 installer, and Linux in-app updates are not configured.
+
 ## What has been tested
 
 The release workflow exercises API authorization and race tests, frontend and Rust tests, Docker deployment checks, Windows installer build/install/launch, and Linux package build/install/launch. In an isolated Linux test, two clients join the shared network, receive distinct EasyTier IPs, exchange real TCP and UDP traffic through the relay, and keep their default routes unchanged. Avatar-sync API tests cover two independently authorized memberships, updates, validation, and persistence after reconnect; they are not two separate desktop PCs.
@@ -66,7 +70,7 @@ This does **not** verify two separate internet connections, a Windows tunnel car
 
 ## How LANORA works
 
-The self-hosted Go API publishes whether player passwords are required, then authorizes each player and coordinates membership. Passwords are stored as PBKDF2-SHA256 hashes. A passwordless server still creates authenticated player sessions, but anyone who can reach it can request membership. Administrator authentication and internal EasyTier relay credentials remain separate and protected. Authenticated profile updates synchronize each player's selected avatar and display name to other members. Server latency measures an actual API request round-trip; peer latency and Direct/Relay labels come separately from EasyTier status. EasyTier carries game traffic on a separate virtual network; LANORA does not change the system default gateway or global proxy. Peer reachability is shown only when the native engine provides fresh evidence.
+The self-hosted Go API publishes whether player passwords are required, then authorizes each player and coordinates membership. Passwords are stored as PBKDF2-SHA256 hashes. A passwordless server still creates authenticated player sessions, but anyone who can reach it can request membership. Administrator authentication and internal EasyTier relay credentials remain separate and protected. Authenticated profile updates synchronize each player's selected avatar and display name to other members. Server latency measures an actual API request round-trip; peer latency and Direct/Relay labels come separately from EasyTier status. Server RTT is not game ping. EasyTier carries game traffic on a separate virtual network; LANORA does not change the system default gateway or global proxy. Peer reachability is shown only when the native engine provides fresh evidence.
 
 ## Project layout
 

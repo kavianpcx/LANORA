@@ -8,6 +8,7 @@ import {
 } from "../diagnostics";
 import { Avatar, type AvatarKind } from "./Avatar";
 import { avatars } from "./avatarData";
+import { summarizePeerRoutes } from "../peerSummary";
 
 export function RoomView({
   room,
@@ -57,13 +58,15 @@ export function RoomView({
   const t = labels[lang];
   const members = room.members ?? [];
   const otherPlayers = members.filter((member) => member.userId !== room.selfUserId);
-  const expectedPeers = otherPlayers.filter((member) => Boolean(member.virtualIp));
   const freshPeers = peerStatuses.filter(
     (peer) => peer.observedAt != null && Date.now() - peer.observedAt < PEER_STATUS_MAX_AGE_MS,
   );
   const peerByIP = new Map(freshPeers.map((peer) => [peer.virtualIp, peer]));
-  const verifiedOtherRoutes = expectedPeers.filter((member) => peerByIP.has(member.virtualIp!)).length;
-  const observedRelayRoutes = expectedPeers.filter(
+  const peerSummary = summarizePeerRoutes(otherPlayers, new Set(peerByIP.keys()), presenceFresh);
+  const verifiedOtherRoutes = peerSummary.reachable;
+  const observedRelayRoutes = otherPlayers.filter(
+    (member) => member.online !== false || !presenceFresh,
+  ).filter((member) => Boolean(member.virtualIp)).filter(
     (member) => peerByIP.get(member.virtualIp!)?.routeType === "relay",
   ).length;
   const diagnostics = buildConnectionDiagnostics({
@@ -74,10 +77,14 @@ export function RoomView({
     virtualIpAssigned: Boolean(tunnel.virtualIp),
     presenceKnown: presenceUpdatedAt > 0,
     presenceFresh,
-    expectedPeerCount: expectedPeers.length,
+    expectedPeerCount: peerSummary.expectedPlayers,
     reachablePeerCount: verifiedOtherRoutes,
     observedRelayRouteCount: observedRelayRoutes,
     hasFreshPeerObservations: freshPeers.length > 0,
+    totalOtherPlayerCount: peerSummary.totalOtherPlayers,
+    awaitingVirtualIpCount: peerSummary.awaitingVirtualIp,
+    playersWithVirtualIpCount: peerSummary.playersWithVirtualIp,
+    unknownPeerCount: peerSummary.unknown,
   });
   const relativeUpdatedTime = () => {
     if (!presenceUpdatedAt) return lang === "fa" ? "هرگز" : "never";
@@ -105,6 +112,11 @@ export function RoomView({
     : t.peerRouteCount
       .replace("{reachable}", numberFormat.format(diagnostics.peerRoute.reachable))
       .replace("{expected}", numberFormat.format(diagnostics.peerRoute.expected));
+  const peerAddressSummary = peerSummary.expectedPlayers === 0
+    ? ""
+    : t.peerPlayersReachable
+      .replace("{reachable}", numberFormat.format(peerSummary.reachable))
+      .replace("{expected}", numberFormat.format(peerSummary.expectedPlayers));
   const relaySummary = diagnostics.observedRelayRoutes.status === "observed"
     ? `${numberFormat.format(diagnostics.observedRelayRoutes.count)} · ${diagnosticState("observed")}`
     : diagnosticState(diagnostics.observedRelayRoutes.status);
@@ -114,7 +126,10 @@ export function RoomView({
     [t.diagnosticEasyTierProcess, diagnosticState(diagnostics.easyTierProcess)],
     [t.diagnosticVirtualIp, diagnosticState(diagnostics.virtualIpAssigned)],
     [t.diagnosticPlayerPresence, diagnosticState(diagnostics.playerPresence)],
+    [t.diagnosticOtherPlayers, numberFormat.format(diagnostics.peerRoute.totalPlayers)],
     [t.diagnosticPeerRoute, peerRouteSummary],
+    [t.diagnosticAwaitingIp, numberFormat.format(diagnostics.peerRoute.awaitingVirtualIp)],
+    [t.diagnosticUnknownRoutes, numberFormat.format(diagnostics.peerRoute.unknown)],
     [t.diagnosticObservedRelayRoutes, relaySummary],
     [t.diagnosticRelayTest, diagnosticState(diagnostics.relayReachabilityTest)],
   ];
@@ -141,11 +156,15 @@ export function RoomView({
     if (otherPlayers.length === 0) {
       statusText = t.waitingForPeers;
       statusTone = "ready";
-    } else if (verifiedOtherRoutes > 0) {
-      statusText = verifiedOtherRoutes === expectedPeers.length
-        ? t.peerRoutesAllFound
-        : t.peerRoutesPartial;
+    } else if (peerSummary.status === "pass") {
+      statusText = t.peerRoutesAllFound;
       statusTone = "ready";
+    } else if (peerSummary.status === "partial") {
+      statusText = t.peerRoutesPartial;
+      statusTone = "ready";
+    } else if (peerSummary.awaitingVirtualIp > 0) {
+      statusText = t.waitingForPeerIp;
+      statusTone = "pending";
     } else {
       statusText = t.ipAssigned;
       statusTone = "pending";
@@ -175,6 +194,7 @@ export function RoomView({
             dir="ltr"
           >
             <Activity size={13} aria-hidden="true" />
+            <span>{lang === "fa" ? "سرور" : "Server"}</span>
             <bdi>{serverReachable && serverLatencyMs != null ? `${serverLatencyMs} ms` : "—"}</bdi>
           </span>
         </div>
@@ -225,6 +245,16 @@ export function RoomView({
             <Activity size={14} aria-hidden="true" />
             <span>{t.playerPresenceStale} · {t.playerPresenceUpdated.replace("{time}", relativeUpdatedTime())}</span>
           </p>
+        )}
+        {peerAddressSummary && (
+          <div className="app-peer-overview" role="status" dir={lang === "fa" ? "rtl" : "ltr"}>
+            <span>{peerAddressSummary}</span>
+            {peerSummary.awaitingVirtualIp > 0 && (
+              <span className="app-peer-awaiting">
+                {t.peerAwaitingIp.replace("{count}", numberFormat.format(peerSummary.awaitingVirtualIp))}
+              </span>
+            )}
+          </div>
         )}
         {room.status === "pending" ? (
           <p className="app-no-players" dir={lang === "fa" ? "rtl" : "ltr"}>{t.pending}</p>
@@ -291,6 +321,25 @@ export function RoomView({
           </div>
         )}
       </section>
+
+      {(() => {
+        const reachablePlayer = otherPlayers.find(
+          (member) => member.virtualIp && peerByIP.has(member.virtualIp),
+        );
+        return reachablePlayer?.virtualIp ? (
+          <div className="app-game-hint" dir={lang === "fa" ? "rtl" : "ltr"}>
+            <div>
+              <strong>{t.peerReachable}</strong>
+              <p>{t.directIp}</p>
+            </div>
+            <button className="app-button subtle" type="button" onClick={() => onCopy(reachablePlayer.virtualIp!)}>
+              <Copy size={15} aria-hidden="true" />{t.copyPlayerIp}
+            </button>
+          </div>
+        ) : otherPlayers.length > 0 ? (
+          <p className="app-game-wait" dir={lang === "fa" ? "rtl" : "ltr"}>{t.waitingForVerifiedPeer}</p>
+        ) : null;
+      })()}
 
       <details className="app-network-help">
         <summary>{lang === "fa" ? "راهنمای اتصال بازی" : "How to connect in your game"}</summary>

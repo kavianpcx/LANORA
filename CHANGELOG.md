@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0-alpha.1 — Compact profile UI and signed updater groundwork — 2026-11-18
+
+- Reduce the ordinary Settings panel to avatar, language, and appearance. Move display-name editing to the titlebar profile menu while keeping first-run onboarding and authenticated profile/avatar synchronization.
+- Keep the existing 17 avatar assets and saved IDs; size artwork within the picker button and normalize the owl's visible scale to account for transparent padding.
+- Include players awaiting virtual IPs in peer-route summaries. Full peer-route PASS now requires fresh player presence and fresh route evidence for every expected player; diagnostics show awaiting-IP and unknown-route counts separately.
+- Label server RTT as a server API measurement and show concise game-join guidance only after a peer route is observed. The prompt is generic because LANORA does not know which player is hosting the game.
+- Integrate the official Tauri 2 updater plugin, localized update states, manual update checks, real download progress, opt-in installation, and EasyTier cleanup before install.
+- Require a repository-owned Tauri signing key for release builds, produce the signed Windows installer signature and a manifest from the actual build output, and publish a stable raw-GitHub manifest only after release creation.
+- Replace the Debian package's short-circuiting `grep -q` control-tar pipeline with extracted-control-file validation and add valid/invalid package tests.
+- Keep this as an experimental prerelease candidate. The Alpha 8 installer cannot update itself; installing the first updater-enabled build is a manual upgrade. Signature verification, upgrade/relaunch, native Windows scaling, and two-computer game connectivity still need real release validation.
+
 ## 0.2.0-alpha.8 — Connection UX and diagnostic accuracy — 2026-11-17
 
 - Reject empty and malformed server addresses before connecting and show localized inline validation with focus returned to the address field.

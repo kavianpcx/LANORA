@@ -21,8 +21,12 @@ export type ConnectionDiagnostics = {
   playerPresence: "pass" | "stale" | "unknown";
   peerRoute: {
     status: "pass" | "partial" | "unknown" | "not_checked";
+    totalPlayers: number;
     reachable: number;
     expected: number;
+    awaitingVirtualIp: number;
+    playersWithVirtualIp: number;
+    unknown: number;
   };
   observedRelayRoutes: {
     status: "observed" | "none_observed" | "unknown";
@@ -44,6 +48,10 @@ type DiagnosticInput = {
   reachablePeerCount: number;
   observedRelayRouteCount: number;
   hasFreshPeerObservations: boolean;
+  totalOtherPlayerCount?: number;
+  awaitingVirtualIpCount?: number;
+  playersWithVirtualIpCount?: number;
+  unknownPeerCount?: number;
 };
 
 function count(value: number) {
@@ -56,7 +64,9 @@ export function buildConnectionDiagnostics(input: DiagnosticInput): ConnectionDi
   const relayCount = Math.min(count(input.observedRelayRouteCount), expected);
   const routeStatus = expected === 0
     ? "not_checked"
-    : reachable === expected
+    : !input.presenceKnown || !input.presenceFresh
+      ? "unknown"
+      : reachable === expected && count(input.awaitingVirtualIpCount ?? 0) === 0
       ? "pass"
       : reachable > 0
         ? "partial"
@@ -73,7 +83,15 @@ export function buildConnectionDiagnostics(input: DiagnosticInput): ConnectionDi
     easyTierProcess: input.tunnelRunning ? "pass" : input.tunnelFailed ? "fail" : "unknown",
     virtualIpAssigned: input.virtualIpAssigned ? "pass" : input.tunnelFailed ? "fail" : "unknown",
     playerPresence: !input.presenceKnown ? "unknown" : input.presenceFresh ? "pass" : "stale",
-    peerRoute: { status: routeStatus, reachable, expected },
+    peerRoute: {
+      status: routeStatus,
+      totalPlayers: count(input.totalOtherPlayerCount ?? expected),
+      reachable,
+      expected,
+      awaitingVirtualIp: Math.min(count(input.awaitingVirtualIpCount ?? 0), expected),
+      playersWithVirtualIp: Math.min(count(input.playersWithVirtualIpCount ?? expected), expected),
+      unknown: Math.min(count(input.unknownPeerCount ?? Math.max(0, expected - reachable)), expected),
+    },
     observedRelayRoutes: {
       status: !input.hasFreshPeerObservations
         ? "unknown"
@@ -99,8 +117,12 @@ export function serializeSafeDiagnostics(snapshot: ConnectionDiagnostics) {
     playerPresence: snapshot.playerPresence,
     peerRoute: {
       status: snapshot.peerRoute.status,
+      totalPlayers: count(snapshot.peerRoute.totalPlayers),
       reachable: count(snapshot.peerRoute.reachable),
       expected: count(snapshot.peerRoute.expected),
+      awaitingVirtualIp: count(snapshot.peerRoute.awaitingVirtualIp),
+      playersWithVirtualIp: count(snapshot.peerRoute.playersWithVirtualIp),
+      unknown: count(snapshot.peerRoute.unknown),
     },
     observedRelayRoutes: {
       status: snapshot.observedRelayRoutes.status,

@@ -16,6 +16,8 @@ export function ProfileFields({
   setTheme,
   setAvatar,
   showPreferences = true,
+  showDisplayName = true,
+  showAvatarPicker = true,
   autoFocusAvatar = false,
 }: {
   lang: "en" | "fa";
@@ -26,6 +28,8 @@ export function ProfileFields({
   setTheme: (v: "light" | "dark") => void;
   setAvatar: (v: AvatarKind) => void;
   showPreferences?: boolean;
+  showDisplayName?: boolean;
+  showAvatarPicker?: boolean;
   autoFocusAvatar?: boolean;
 }) {
   const t = labels[lang];
@@ -44,7 +48,7 @@ export function ProfileFields({
   };
   return (
     <>
-      <div
+      {showAvatarPicker && <div
         ref={pickerRef}
         id="profile-avatar-picker"
         className="avatar-picker"
@@ -88,11 +92,11 @@ export function ProfileFields({
               }
             }}
           >
-            <Avatar kind={a} size={48} decorative />
+            <Avatar kind={a} size={40} decorative />
           </button>
         ))}
-      </div>
-      {avatars.length > 6 && (
+      </div>}
+      {showAvatarPicker && avatars.length > 6 && (
         <button
           className="avatar-picker-expand"
           type="button"
@@ -103,7 +107,7 @@ export function ProfileFields({
           {showAll ? t.showFewerAvatars : t.showAllAvatars}
         </button>
       )}
-      <label dir={lang === "fa" ? "rtl" : "ltr"}>
+      {showDisplayName && <label dir={lang === "fa" ? "rtl" : "ltr"}>
         {t.profile}
         <input
           name="name"
@@ -114,8 +118,9 @@ export function ProfileFields({
           maxLength={32}
           required
           placeholder={t.displayName}
+          autoFocus={!showAvatarPicker}
         />
-      </label>
+      </label>}
       {showPreferences && (
         <div className="app-profile-preferences">
           <div className="app-pref">
