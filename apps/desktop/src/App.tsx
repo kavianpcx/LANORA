@@ -252,10 +252,7 @@ export default function App() {
     setMode("profile");
   }
   async function checkForUpdates(manual = false) {
-    if (manual) {
-      setUpdateDialogOpen(true);
-      setUpdateConfirmation(null);
-    }
+    if (manual) setUpdateDialogOpen(true);
     if (!UPDATER_ENABLED || !isTauri()) {
       setUpdateState("unavailable");
       return;
