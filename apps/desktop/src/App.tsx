@@ -144,6 +144,8 @@ export default function App() {
   const [settingsError, setSettingsError] = useState("");
   const settingsSnapshot = useRef<{ name: string; avatar: AvatarKind }>({ name, avatar });
   const [updateEntry, setUpdateEntry] = useState<Update | null>(null);
+  const updateEntryRef = useRef<Update | null>(updateEntry);
+  updateEntryRef.current = updateEntry;
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [updateConfirmation, setUpdateConfirmation] = useState<PendingUpdateResult | null>(null);
@@ -273,7 +275,9 @@ export default function App() {
     setUpdateState("checking");
     try {
       const found = await tauriCheckForUpdate({ timeout: 12_000 });
-      if (updateEntry && updateEntry !== found) void updateEntry.close().catch(() => {});
+      if (updateEntryRef.current && updateEntryRef.current !== found) {
+        void updateEntryRef.current.close().catch(() => {});
+      }
       setUpdateEntry(found);
       if (found) {
         setUpdateState("available");
