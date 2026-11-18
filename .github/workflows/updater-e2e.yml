@@ -95,12 +95,12 @@ jobs:
             }
           } | ConvertTo-Json -Depth 8
           [System.IO.File]::WriteAllText((Join-Path $assetDir 'latest.json'), $manifest, [System.Text.UTF8Encoding]::new($false))
-          $rootJson = ConvertTo-Json -InputObject $assetDir -Compress
+          $env:LANORA_E2E_DIR = $assetDir
           $server = @"
           const http = require('node:http');
           const fs = require('node:fs');
           const path = require('node:path');
-          const root = $rootJson;
+          const root = process.env.LANORA_E2E_DIR;
           http.createServer((req, res) => {
             const name = path.basename(decodeURIComponent(new URL(req.url, 'http://127.0.0.1').pathname));
             if (name === 'health') { res.writeHead(200); res.end('ok'); return; }
@@ -127,7 +127,11 @@ jobs:
             try { if ((Invoke-WebRequest 'http://127.0.0.1:8765/health').Content -eq 'ok') { $ready = $true; break } } catch {}
             Start-Sleep -Milliseconds 250
           }
-          if (!$ready) { throw 'Loopback test update server did not start.' }
+          if (!$ready) {
+            if (Test-Path $serverStdoutLog) { Get-Content $serverStdoutLog -Tail 40 }
+            if (Test-Path $serverStderrLog) { Get-Content $serverStderrLog -Tail 40 }
+            throw 'Loopback test update server did not start.'
+          }
       - name: Install Playwright Core for WebView2 control
         shell: pwsh
         run: |
