@@ -85,6 +85,7 @@ jobs:
                 updater = @{
                   pubkey = $env:TAURI_UPDATER_PUBLIC_KEY
                   endpoints = @('https://raw.githubusercontent.com/kavianpcx/LANORA/release/0.2.x/updates/alpha/latest.json')
+                  requireSignedVersion = $true
                   windows = @{ installMode = 'passive' }
                 }
               }
