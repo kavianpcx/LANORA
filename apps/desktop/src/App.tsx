@@ -30,6 +30,7 @@ import {
 } from "./serverAuth";
 import { deriveConnectionStatus, type ConnectionStage } from "./connectionStatus";
 import { PLAYER_PRESENCE_MAX_AGE_MS } from "./diagnostics";
+import { reconcilePendingUpdate, downloadPercent, PENDING_UPDATE_VERSION_KEY, type PendingUpdateResult } from "./updateState";
 import { avatars, type AvatarKind } from "./components/Avatar";
 import { ProfileFields } from "./components/ProfileFields";
 import { Modal } from "./components/Modal";
@@ -49,7 +50,7 @@ import type {
 import { RoomView } from "./components/RoomView";
 import "./style.css";
 
-type UpdateState = "idle" | "checking" | "up_to_date" | "available" | "downloading" | "verifying" | "ready_to_install" | "installing" | "restart_required" | "failed" | "unavailable";
+type UpdateState = "idle" | "checking" | "up_to_date" | "available" | "downloading" | "verifying" | "ready_to_install" | "installing" | "restarting" | "restart_required" | "installed" | "install_mismatch" | "failed" | "unavailable";
 const UPDATER_ENABLED = import.meta.env.VITE_LANORA_UPDATES_ENABLED === "true";
 
 function localDeviceId() {
@@ -66,6 +67,7 @@ export default function App() {
   const [startupReady, setStartupReady] = useState(false);
   const [showStartupSkeleton, setShowStartupSkeleton] = useState(false);
   const [appVersion, setAppVersion] = useState("0.3.0-alpha.1");
+  const [appVersionLoaded, setAppVersionLoaded] = useState(false);
   const [lang, setLang] = useState<Lang>(() =>
     localStorage.getItem("lanora.language") === "fa" ? "fa" : "en",
   );
@@ -142,6 +144,7 @@ export default function App() {
   const [updateEntry, setUpdateEntry] = useState<Update | null>(null);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateConfirmation, setUpdateConfirmation] = useState<PendingUpdateResult | null>(null);
   const [updateToast, setUpdateToast] = useState(false);
   const [updateActionBusy, setUpdateActionBusy] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ received: number; total: number | null } | null>(null);
@@ -187,8 +190,23 @@ export default function App() {
         getVersion(),
         invoke<EngineStatus>("engine_status"),
       ]);
-      if (active && versionResult.status === "fulfilled")
-        setAppVersion(versionResult.value);
+      if (active && versionResult.status === "fulfilled") {
+        const actualVersion = versionResult.value;
+        setAppVersion(actualVersion);
+        setAppVersionLoaded(true);
+        try {
+          const expectedVersion = localStorage.getItem(PENDING_UPDATE_VERSION_KEY);
+          const confirmation = reconcilePendingUpdate(expectedVersion, actualVersion);
+          if (confirmation) {
+            setUpdateConfirmation(confirmation);
+            setUpdateState(confirmation.status === "installed" ? "installed" : "install_mismatch");
+            setUpdateDialogOpen(true);
+          }
+          localStorage.removeItem(PENDING_UPDATE_VERSION_KEY);
+        } catch {
+          // A storage failure must never be reported as an installed update.
+        }
+      }
     };
     void Promise.race([
       initialize(),
@@ -201,10 +219,10 @@ export default function App() {
     };
   }, []);
   useEffect(() => {
-    if (!UPDATER_ENABLED || !isTauri()) return;
+    if (!UPDATER_ENABLED || !isTauri() || !appVersionLoaded || updateConfirmation) return;
     const timer = window.setTimeout(() => void checkForUpdates(false), 7000);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [appVersionLoaded, updateConfirmation]);
   function closeModal() {
     if (busy) return;
     if (onboarding) {
@@ -234,7 +252,10 @@ export default function App() {
     setMode("profile");
   }
   async function checkForUpdates(manual = false) {
-    if (manual) setUpdateDialogOpen(true);
+    if (manual) {
+      setUpdateDialogOpen(true);
+      setUpdateConfirmation(null);
+    }
     if (!UPDATER_ENABLED || !isTauri()) {
       setUpdateState("unavailable");
       return;
@@ -261,7 +282,7 @@ export default function App() {
     }
   }
   async function closeUpdateDialog() {
-    if (updateInstallBusy.current || updateState === "checking" || updateState === "downloading" || updateState === "verifying" || updateState === "installing") return;
+    if (updateInstallBusy.current || updateState === "checking" || updateState === "downloading" || updateState === "verifying" || updateState === "installing" || updateState === "restarting") return;
     if (updateEntry) await updateEntry.close().catch(() => {});
     setUpdateEntry(null);
     setUpdateDialogOpen(false);
@@ -310,12 +331,23 @@ export default function App() {
     } else {
       await invoke("engine_stop");
     }
-    // The updater plugin verifies the signature before its download promise resolves.
+    try {
+      localStorage.setItem(PENDING_UPDATE_VERSION_KEY, nextUpdate.version);
+    } catch {
+      throw new Error("Could not save update confirmation state.");
+    }
     setUpdateActionBusy(true);
     setUpdateState("installing");
+    // Tauri verifies the downloaded artifact signature before download() resolves.
     await nextUpdate.install({ restartAfterInstall: true });
-    setUpdateState("restart_required");
-    await relaunch();
+    setUpdateState("restarting");
+    try {
+      await relaunch();
+    } catch {
+      setUpdateState("restart_required");
+      updateInstallBusy.current = false;
+      setUpdateActionBusy(false);
+    }
   }
   async function confirmUpdateInstall() {
     const nextUpdate = updateEntry;
@@ -1201,13 +1233,23 @@ export default function App() {
     downloading: t.updateDownloading,
     verifying: t.updateVerifying,
     installing: t.updateInstalling,
+    restarting: t.updateRestarting,
     ready_to_install: t.updateReadyToInstall,
     restart_required: t.updateRestartRequired,
+    installed: updateConfirmation?.status === "installed"
+      ? t.updateInstalled.replace("{version}", updateConfirmation.version)
+      : t.updateInstalled.replace("{version}", appVersion),
+    install_mismatch: updateConfirmation?.status === "mismatch"
+      ? t.updateInstallMismatch
+        .replace("{expected}", updateConfirmation.expectedVersion)
+        .replace("{actual}", updateConfirmation.actualVersion)
+      : t.updateFailed,
     failed: t.updateFailed,
     unavailable: t.updateUnavailable,
   };
   const updaterBusy = updateActionBusy || updateState === "checking" ||
-    updateState === "downloading" || updateState === "verifying" || updateState === "installing";
+    updateState === "downloading" || updateState === "verifying" ||
+    updateState === "installing" || updateState === "restarting";
   if (!startupReady) return <StartupSkeleton lang={lang} visible={showStartupSkeleton} />;
   return (
     <>
@@ -1245,11 +1287,13 @@ export default function App() {
         <button
           className="app-update-toast"
           type="button"
-          onClick={() => { setUpdateToast(false); setUpdateDialogOpen(true); }}
+          onClick={() => { setUpdateToast(false); setUpdateDialogOpen(true); void installUpdate(); }}
+          aria-label={`${t.updateAvailable}: ${updateEntry.version}. ${t.updateInstall}`}
           dir={lang === "fa" ? "rtl" : "ltr"}
         >
           <Info size={16} aria-hidden="true" />
           <span>{t.updateAvailable} · <bdi dir="ltr">{updateEntry.version}</bdi></span>
+          <b>{t.updateInstall}</b>
         </button>
       )}
       <div className="lanora-app" dir="ltr" data-lang={lang}>
@@ -2065,13 +2109,13 @@ export default function App() {
                 </header>
                 <div className="app-dialog-body update-dialog-body" dir={lang === "fa" ? "rtl" : "ltr"}>
                   <p className={`app-update-state ${updateState}`} role="status" aria-live="polite">
-                    {updateState === "checking" || updateState === "downloading" || updateState === "installing"
+                    {updateState === "checking" || updateState === "downloading" || updateState === "verifying" || updateState === "installing" || updateState === "restarting"
                       ? <RefreshCw size={16} className="spin" aria-hidden="true" />
-                      : updateState === "up_to_date"
+                      : updateState === "up_to_date" || updateState === "installed"
                         ? <Check size={16} aria-hidden="true" />
-                        : updateState === "failed"
+                        : updateState === "failed" || updateState === "install_mismatch"
                           ? <Activity size={16} aria-hidden="true" />
-                          : <Info size={16} aria-hidden="true" />}
+                          : <Info size={16} aria-hidden="true" />
                     <span>{updateStateLabel[updateState]}</span>
                   </p>
                   {updateEntry && (
@@ -2083,20 +2127,27 @@ export default function App() {
                       {updateEntry.body && <div className="app-update-notes">{updateEntry.body}</div>}
                     </>
                   )}
-                  {updateState === "downloading" && downloadProgress && (
-                    <div className="app-update-progress">
-                      <label htmlFor="lanora-update-progress">{t.updateProgress}</label>
-                      {downloadProgress.total && downloadProgress.total > 0 ? (
-                        <progress
-                          id="lanora-update-progress"
-                          value={Math.min(downloadProgress.received, downloadProgress.total)}
-                          max={downloadProgress.total}
-                        />
-                      ) : (
-                        <progress id="lanora-update-progress" />
-                      )}
-                    </div>
-                  )}
+                  {updateState === "downloading" && downloadProgress && (() => {
+                    const percent = downloadPercent(downloadProgress.received, downloadProgress.total);
+                    return (
+                      <div className="app-update-progress">
+                        <label htmlFor="lanora-update-progress">{t.updateProgress}</label>
+                        {percent !== null ? (
+                          <div className="app-update-progress-value">
+                            <progress
+                              id="lanora-update-progress"
+                              value={percent}
+                              max={100}
+                              aria-valuetext={`${percent}%`}
+                            />
+                            <output htmlFor="lanora-update-progress" aria-live="off">{percent}%</output>
+                          </div>
+                        ) : (
+                          <progress id="lanora-update-progress" />
+                        )}
+                      </div>
+                    );
+                  })()}
                   {room && updateEntry && (updateState === "available" || updateState === "ready_to_install") && (
                     <p className="app-update-warning" dir={lang === "fa" ? "rtl" : "ltr"}>{t.updateConnectedWarning}</p>
                   )}
@@ -2116,6 +2167,14 @@ export default function App() {
                     {updateState === "ready_to_install" && updateEntry && room && (
                       <button className="app-button primary" type="button" onClick={() => void confirmUpdateInstall()} disabled={updaterBusy}>
                         <Download size={15} aria-hidden="true" />{t.updateDisconnectInstall}
+                      </button>
+                    )}
+                    {updateState === "restart_required" && (
+                      <button className="app-button primary" type="button" onClick={() => {
+                        setUpdateState("restarting");
+                        void relaunch().catch(() => setUpdateState("restart_required"));
+                      }}>
+                        <RefreshCw size={15} aria-hidden="true" />{t.updateRestartNow}
                       </button>
                     )}
                     <button className="app-button subtle" type="button" onClick={() => void closeUpdateDialog()} disabled={updaterBusy}>
