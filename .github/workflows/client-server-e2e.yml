@@ -59,6 +59,7 @@ jobs:
           if ($install.ExitCode -ne 0) { throw 'Published LANORA installer did not complete successfully.' }
           $app = Get-ChildItem $destination -Filter 'lanora-desktop.exe' -Recurse | Select-Object -First 1
           if (!$app) { throw 'Installed LANORA executable was not found.' }
+          Get-Process lanora-desktop -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           "LANORA_APP_PATH=$($app.FullName)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
       - name: Install Playwright Core
         shell: pwsh
@@ -69,7 +70,10 @@ jobs:
       - name: Connect the installed Windows client to the isolated API
         shell: pwsh
         run: |
-          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224'
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9224 --remote-allow-origins=*'
+          $debugKey = 'HKCU:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $debugKey -Force | Out-Null
+          New-ItemProperty -Path $debugKey -Name 'lanora-desktop.exe' -Value '--remote-debugging-port=9224 --remote-allow-origins=*' -PropertyType String -Force | Out-Null
           $app = Start-Process $env:LANORA_APP_PATH -PassThru
           $script = @'
           const assert = require('node:assert/strict');
@@ -120,6 +124,13 @@ jobs:
           $path = Join-Path $env:RUNNER_TEMP 'lanora-client-api-smoke.cjs'
           [System.IO.File]::WriteAllText($path, $script, [System.Text.UTF8Encoding]::new($false))
           node $path
+          $testExit = $LASTEXITCODE
+          if ($testExit -ne 0) {
+            Write-Host 'LANORA process snapshot:'
+            Get-Process lanora-desktop, msedgewebview2 -ErrorAction SilentlyContinue | Select-Object ProcessName, Id | Format-Table -AutoSize
+            try { Invoke-WebRequest 'http://127.0.0.1:9224/json/version' -TimeoutSec 3 | Select-Object -ExpandProperty Content } catch { Write-Host "WebView2 CDP endpoint unavailable: $($_.Exception.Message)" }
+            exit $testExit
+          }
       - name: Stop isolated test processes
         if: always()
         shell: pwsh
