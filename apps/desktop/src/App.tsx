@@ -2130,7 +2130,7 @@ export default function App() {
                         ? <Check size={16} aria-hidden="true" />
                         : updateState === "failed" || updateState === "install_mismatch"
                           ? <Activity size={16} aria-hidden="true" />
-                          : <Info size={16} aria-hidden="true" />
+                          : <Info size={16} aria-hidden="true" />}
                     <span>{updateStateLabel[updateState]}</span>
                   </p>
                   {updateEntry && (
