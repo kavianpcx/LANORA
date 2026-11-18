@@ -761,6 +761,23 @@ select {
   height: 8px;
   accent-color: var(--accent);
 }
+.app-update-progress-value {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.app-update-progress-value output {
+  min-width: 3ch;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+.app-update-toast b {
+  margin-inline-start: auto;
+  color: var(--accent);
+  font-size: 12px;
+}
 .app-update-warning {
   margin: 0;
   padding: 10px 12px;
