@@ -52,6 +52,7 @@ import "./style.css";
 
 type UpdateState = "idle" | "checking" | "up_to_date" | "available" | "downloading" | "verifying" | "ready_to_install" | "installing" | "restarting" | "restart_required" | "installed" | "install_mismatch" | "failed" | "unavailable";
 const UPDATER_ENABLED = import.meta.env.VITE_LANORA_UPDATES_ENABLED === "true";
+const LANORA_E2E_ENABLED = import.meta.env.VITE_LANORA_E2E_ENABLED === "true";
 
 function localDeviceId() {
   const key = "lanora.deviceId";
@@ -146,12 +147,21 @@ export default function App() {
   const [updateEntry, setUpdateEntry] = useState<Update | null>(null);
   const updateEntryRef = useRef<Update | null>(updateEntry);
   updateEntryRef.current = updateEntry;
-  const [updateState, setUpdateState] = useState<UpdateState>("idle");
+  const updateStateTrace = useRef<UpdateState[]>(["idle"]);
+  const [updateState, setUpdateStateValue] = useState<UpdateState>("idle");
+  const setUpdateState = (next: UpdateState) => {
+    if (LANORA_E2E_ENABLED) {
+      updateStateTrace.current.push(next);
+      if (updateStateTrace.current.length > 40) updateStateTrace.current.shift();
+    }
+    setUpdateStateValue(next);
+  };
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [updateConfirmation, setUpdateConfirmation] = useState<PendingUpdateResult | null>(null);
   const [updateToast, setUpdateToast] = useState(false);
   const [updateActionBusy, setUpdateActionBusy] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<{ received: number; total: number | null } | null>(null);
+  const e2eDownloadTrace = useRef<{ received: number; total: number | null; maxPercent: number | null }>({ received: 0, total: null, maxPercent: null });
   const updateCheckBusy = useRef(false);
   const updateInstallBusy = useRef(false);
   const [notice, setNotice] = useState("");
@@ -307,14 +317,26 @@ export default function App() {
     setUpdateActionBusy(true);
     setUpdateToast(false);
     setDownloadProgress({ received: 0, total: null });
+    if (LANORA_E2E_ENABLED) e2eDownloadTrace.current = { received: 0, total: null, maxPercent: 0 };
     try {
       setUpdateState("downloading");
       let received = 0;
       await nextUpdate.download((event) => {
         if (event.event === "Started") {
-          setDownloadProgress({ received, total: event.data.contentLength ?? null });
+          const total = event.data.contentLength ?? null;
+          if (LANORA_E2E_ENABLED) e2eDownloadTrace.current = { received, total, maxPercent: 0 };
+          setDownloadProgress({ received, total });
         } else if (event.event === "Progress") {
           received += event.data.chunkLength;
+          if (LANORA_E2E_ENABLED) {
+            const total = e2eDownloadTrace.current.total;
+            const percent = downloadPercent(received, total);
+            e2eDownloadTrace.current = {
+              received,
+              total,
+              maxPercent: percent === null ? e2eDownloadTrace.current.maxPercent : Math.max(e2eDownloadTrace.current.maxPercent ?? 0, percent),
+            };
+          }
           setDownloadProgress((current) => ({
             received,
             total: current?.total ?? null,
@@ -1265,6 +1287,20 @@ export default function App() {
   const updaterBusy = updateActionBusy || updateState === "checking" ||
     updateState === "downloading" || updateState === "verifying" ||
     updateState === "installing" || updateState === "restarting";
+  const e2eSnapshot = {
+    version: appVersion,
+    updateState,
+    updateStates: updateStateTrace.current,
+    downloadReceived: e2eDownloadTrace.current.received,
+    downloadTotal: e2eDownloadTrace.current.total,
+    maxDownloadPercent: e2eDownloadTrace.current.maxPercent,
+    playerName: name,
+    language: lang,
+    theme,
+    serverInput,
+    connectedServer: server,
+    rooms: publicRooms.length,
+  };
   if (!startupReady) return <StartupSkeleton lang={lang} visible={showStartupSkeleton} />;
   return (
     <>
@@ -2202,6 +2238,17 @@ export default function App() {
           )}
         </div>
       </div>
+      {LANORA_E2E_ENABLED && (
+        <output
+          id="lanora-e2e-state"
+          role="status"
+          aria-live="off"
+          aria-label={`LANORA_E2E_STATE:${JSON.stringify(e2eSnapshot)}`}
+          style={{ position: "fixed", left: "-10000px", top: 0, width: 1, height: 1, overflow: "hidden", whiteSpace: "nowrap" }}
+        >
+          LANORA test state
+        </output>
+      )}
     </>
   );
 }
