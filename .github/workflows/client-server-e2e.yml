@@ -59,7 +59,7 @@ jobs:
           if ($install.ExitCode -ne 0) { throw 'Published LANORA installer did not complete successfully.' }
           $app = Get-ChildItem $destination -Filter 'lanora-desktop.exe' -Recurse | Select-Object -First 1
           if (!$app) { throw 'Installed LANORA executable was not found.' }
-          Get-Process lanora-desktop -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process lanora-desktop, msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           "LANORA_APP_PATH=$($app.FullName)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
       - name: Install Playwright Core
         shell: pwsh
@@ -136,4 +136,4 @@ jobs:
         shell: pwsh
         run: |
           if ($env:LANORA_API_PID) { Stop-Process -Id ([int]$env:LANORA_API_PID) -Force -ErrorAction SilentlyContinue }
-          Get-Process lanora-desktop -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          Get-Process lanora-desktop, msedgewebview2 -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
