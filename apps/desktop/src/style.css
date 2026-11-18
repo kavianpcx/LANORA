@@ -715,8 +715,12 @@ select {
 .app-update-state.failed {
   color: var(--danger);
 }
-.app-update-state.up_to_date {
+.app-update-state.up_to_date,
+.app-update-state.installed {
   color: var(--success);
+}
+.app-update-state.install_mismatch {
+  color: var(--danger);
 }
 .app-update-versions {
   display: grid;
