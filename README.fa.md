@@ -7,7 +7,7 @@
 
 LANORA برنامه‌ای متن‌باز و خودمیزبان برای بازی‌هایی است که از LAN پشتیبانی می‌کنند. یک نفر سرور را روی VPS لینوکس اجرا می‌کند. بازیکنان برنامهٔ دسکتاپ را نصب و نشانی سرور را وارد می‌کنند. برنامه فقط وقتی رمز بازیکن را می‌پرسد که آن سرور رمز بخواهد. حساب کاربری یا سرویس میزبانی‌شدهٔ LANORA وجود ندارد.
 
-> **نسخهٔ فعلی: <code dir="ltr">0.2.0-alpha.8</code> (پیش‌انتشار آزمایشی).** این نسخه اعتبارسنجی نشانی سرور، آزمایش HTTP محلی، کنترل‌های بازیکنان و دقت وضعیت مسیر همتا و تازگی حضور را بهبود می‌دهد. بازی بین دو ویندوز روی اینترنت‌های جدا، عبور ترافیک بازی از تونل ویندوز، P2P/NAT traversal و کشف خودکار LAN در بازی‌های مشخص تأیید نشده‌اند.
+> **نسخهٔ فعلی: <code dir="ltr">0.3.0-alpha.1</code> (پیش‌انتشار آزمایشی).** این انتشار شامل بسته‌های امضاشدهٔ ویندوز و Debian، checksum، امضاهای جداگانه و مانیفست به‌روزرسانی Tauri است. تست‌های رابط/Rust، شبکهٔ ایزولهٔ Linux، API و فرمان‌های VPS، ساخت/نصب/اجرای بسته‌های ویندوز و Linux و تأیید امضای به‌روزرسانی در CI موفق شدند. نسخهٔ `v0.2.0-alpha.8` به‌روزرسانی‌گر ندارد، بنابراین نصب نخستین نسخهٔ دارای به‌روزرسانی‌گر باید دستی انجام شود. به‌روزرسانی و راه‌اندازی دوباره بین دو نصب واقعی، بازی دو ویندوز روی اینترنت عمومی، عبور ترافیک بازی از تونل ویندوز، P2P/NAT traversal و کشف خودکار LAN در بازی‌های مشخص تأیید نشده‌اند.
 >
 > **هشدار دسترسی:** در سرور بدون رمز، هر کسی که بتواند به سرور دسترسی پیدا کند می‌تواند درخواست عضویت بدهد. تغییر سیاست رمز، نشست‌های API را باطل و هویت شبکه را عوض می‌کند؛ اما نمی‌تواند کلاینت تغییریافته‌ای را که هنوز از شبکهٔ قدیمی EasyTier استفاده می‌کند مجبور به قطع کند. پس از تغییر سیاست از همه بخواهید کامل قطع شوند و دوباره وصل شوند.
 
@@ -15,9 +15,9 @@ LANORA برنامه‌ای متن‌باز و خودمیزبان برای باز
 
 ## دانلود LANORA
 
-- **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe.sha256)
-- **لینوکس x64، Debian/Ubuntu:** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb.sha256)
-- [یادداشت انتشار و همهٔ فایل‌ها](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.8)
+- **ویندوز ۱۰/۱۱، x64:** [دانلود نصب‌کننده](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe.sha256) · [امضا](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe.sig)
+- **لینوکس x64، Debian/Ubuntu:** [دانلود بستهٔ .deb](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb.sha256) · [امضا](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb.sig)
+- [یادداشت انتشار و همهٔ فایل‌ها](https://github.com/kavianpcx/LANORA/releases/tag/v0.3.0-alpha.1) · [مانیفست زندهٔ به‌روزرسانی](https://raw.githubusercontent.com/kavianpcx/LANORA/release/0.2.x/updates/alpha/latest.json)
 
 پیش از نصب، فایل دانلودشده را با فایل SHA-256 کناری آن بررسی کنید.
 
