@@ -116,8 +116,9 @@ jobs:
           "@
           $serverPath = Join-Path $env:RUNNER_TEMP 'lanora-e2e-server.cjs'
           [System.IO.File]::WriteAllText($serverPath, $server, [System.Text.UTF8Encoding]::new($false))
-          $serverLog = Join-Path $env:RUNNER_TEMP 'lanora-e2e-server.log'
-          $serverProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList @($serverPath) -PassThru -WindowStyle Hidden -RedirectStandardOutput $serverLog -RedirectStandardError $serverLog
+          $serverStdoutLog = Join-Path $env:RUNNER_TEMP 'lanora-e2e-server.stdout.log'
+          $serverStderrLog = Join-Path $env:RUNNER_TEMP 'lanora-e2e-server.stderr.log'
+          $serverProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList @($serverPath) -PassThru -WindowStyle Hidden -RedirectStandardOutput $serverStdoutLog -RedirectStandardError $serverStderrLog
           "LANORA_E2E_DIR=$assetDir" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
           "LANORA_E2E_SERVER_PID=$($serverProcess.Id)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
           "LANORA_E2E_TARGET_NAME=$targetName" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
