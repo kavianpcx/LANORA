@@ -363,7 +363,7 @@ jobs:
           TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
         run: |
           test -n "$TAURI_UPDATER_PUBLIC_KEY"
-          printf '%s\n' "$TAURI_UPDATER_PUBLIC_KEY" > "$RUNNER_TEMP/lanora-updater.pub"
+          printf '%s' "$TAURI_UPDATER_PUBLIC_KEY" | base64 --decode > "$RUNNER_TEMP/lanora-updater.pub"
           sudo apt-get update
           sudo apt-get install -y minisign
           windows_installer="$(find dist/windows -maxdepth 1 -type f -name '*.exe' -print -quit)"
@@ -372,8 +372,12 @@ jobs:
           linux_signature="$(find dist/linux -maxdepth 1 -type f -name '*.deb.sig' -print -quit)"
           test -n "$windows_installer" && test -n "$windows_signature"
           test -n "$linux_package" && test -n "$linux_signature"
-          minisign -Vm "$windows_installer" -x "$windows_signature" -p "$RUNNER_TEMP/lanora-updater.pub"
-          minisign -Vm "$linux_package" -x "$linux_signature" -p "$RUNNER_TEMP/lanora-updater.pub"
+          windows_signature_decoded="$RUNNER_TEMP/windows-updater.sig"
+          linux_signature_decoded="$RUNNER_TEMP/linux-updater.sig"
+          base64 --decode "$windows_signature" > "$windows_signature_decoded"
+          base64 --decode "$linux_signature" > "$linux_signature_decoded"
+          minisign -Vm "$windows_installer" -x "$windows_signature_decoded" -p "$RUNNER_TEMP/lanora-updater.pub"
+          minisign -Vm "$linux_package" -x "$linux_signature_decoded" -p "$RUNNER_TEMP/lanora-updater.pub"
       - name: Generate updater manifest from signed artifacts
         run: |
           version="$(node -p "require('./apps/desktop/package.json').version")"
