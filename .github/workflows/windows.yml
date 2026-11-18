@@ -196,7 +196,41 @@ jobs:
         run: cargo test
       - name: Build Linux Debian package
         working-directory: apps/desktop
-        run: npm run tauri build -- --bundles deb
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+        run: |
+          if [[ "$GITHUB_REF" == "refs/heads/release/0.2.x" ]]; then
+            test -n "$TAURI_SIGNING_PRIVATE_KEY" || { echo 'Configure the TAURI_SIGNING_PRIVATE_KEY GitHub Actions secret before publishing updater-enabled packages.'; exit 1; }
+            test -n "$TAURI_UPDATER_PUBLIC_KEY" || { echo 'Configure the TAURI_UPDATER_PUBLIC_KEY repository variable before publishing updater-enabled packages.'; exit 1; }
+            python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          config = {
+              "bundle": {"createUpdaterArtifacts": True},
+              "plugins": {
+                  "updater": {
+                      "pubkey": os.environ["TAURI_UPDATER_PUBLIC_KEY"],
+                      "endpoints": ["https://raw.githubusercontent.com/kavianpcx/LANORA/release/0.2.x/updates/alpha/latest.json"],
+                      "requireSignedVersion": True,
+                      "windows": {"installMode": "passive"},
+                  }
+              },
+          }
+          Path(os.environ["RUNNER_TEMP"], "lanora-updater-config.json").write_text(
+              json.dumps(config), encoding="utf-8"
+          )
+          PY
+            export VITE_LANORA_UPDATES_ENABLED=true
+            npm run tauri build -- --bundles deb --config "$RUNNER_TEMP/lanora-updater-config.json"
+            linux_signature="$(find src-tauri/target/release/bundle/deb -maxdepth 1 -type f -name '*.deb.sig' -print -quit)"
+            test -n "$linux_signature"
+          else
+            export VITE_LANORA_UPDATES_ENABLED=false
+            npm run tauri build -- --bundles deb
+          fi
       - name: Validate package contents
         run: |
           deb=$(find apps/desktop/src-tauri/target/release/bundle/deb -name '*.deb' -print -quit)
@@ -222,15 +256,22 @@ jobs:
       - name: Generate package SHA-256
         run: |
           deb=$(find apps/desktop/src-tauri/target/release/bundle/deb -name '*.deb' -type f -print -quit)
+          test -n "$deb"
           deb_dir=$(dirname "$deb")
           deb_name=$(basename "$deb")
           (cd "$deb_dir" && sha256sum "$deb_name" > "$deb_name.sha256" && sha256sum --check "$deb_name.sha256")
+          if [[ "$GITHUB_REF" == "refs/heads/release/0.2.x" ]]; then
+            test -s "$deb.sig"
+            (cd "$deb_dir" && sha256sum "$deb_name.sig" > "$deb_name.sig.sha256" && sha256sum --check "$deb_name.sig.sha256")
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: lanora-linux-x64-prerelease
           path: |
             apps/desktop/src-tauri/target/release/bundle/deb/*.deb
             apps/desktop/src-tauri/target/release/bundle/deb/*.deb.sha256
+            apps/desktop/src-tauri/target/release/bundle/deb/*.deb.sig
+            apps/desktop/src-tauri/target/release/bundle/deb/*.deb.sig.sha256
           if-no-files-found: error
 
   server-validation:
@@ -317,20 +358,44 @@ jobs:
             echo "Refusing to overwrite existing release $tag"
             exit 1
           fi
-      - name: Generate updater manifest from the signed artifact
+      - name: Verify Tauri updater signatures
+        env:
+          TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+        run: |
+          test -n "$TAURI_UPDATER_PUBLIC_KEY"
+          printf '%s' "$TAURI_UPDATER_PUBLIC_KEY" | base64 --decode > "$RUNNER_TEMP/lanora-updater.pub"
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          windows_installer="$(find dist/windows -maxdepth 1 -type f -name '*.exe' -print -quit)"
+          windows_signature="$(find dist/windows-signature -maxdepth 1 -type f -name '*.exe.sig' -print -quit)"
+          linux_package="$(find dist/linux -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          linux_signature="$(find dist/linux -maxdepth 1 -type f -name '*.deb.sig' -print -quit)"
+          test -n "$windows_installer" && test -n "$windows_signature"
+          test -n "$linux_package" && test -n "$linux_signature"
+          windows_signature_decoded="$RUNNER_TEMP/windows-updater.sig"
+          linux_signature_decoded="$RUNNER_TEMP/linux-updater.sig"
+          base64 --decode "$windows_signature" > "$windows_signature_decoded"
+          base64 --decode "$linux_signature" > "$linux_signature_decoded"
+          minisign -Vm "$windows_installer" -x "$windows_signature_decoded" -p "$RUNNER_TEMP/lanora-updater.pub"
+          minisign -Vm "$linux_package" -x "$linux_signature_decoded" -p "$RUNNER_TEMP/lanora-updater.pub"
+      - name: Generate updater manifest from signed artifacts
         run: |
           version="$(node -p "require('./apps/desktop/package.json').version")"
           installer="$(find dist/windows -maxdepth 1 -type f -name '*.exe' -print -quit)"
           signature="$(find dist/windows-signature -maxdepth 1 -type f -name '*.exe.sig' -print -quit)"
-          test -n "$installer" && test -n "$signature"
+          linux_package="$(find dist/linux -maxdepth 1 -type f -name '*.deb' -print -quit)"
+          linux_signature="$(find dist/linux -maxdepth 1 -type f -name '*.deb.sig' -print -quit)"
+          test -n "$installer" && test -n "$signature" && test -n "$linux_package" && test -n "$linux_signature"
           python3 scripts/generate_updater_manifest.py \
             --version "$version" \
             --notes "docs/releases/$version.md" \
             --artifact "$installer" \
             --signature "$signature" \
+            --linux-artifact "$linux_package" \
+            --linux-signature "$linux_signature" \
             --release-url "https://github.com/kavianpcx/LANORA/releases/download/v$version" \
             --output dist/latest.json
-          python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); p=m["platforms"]["windows-x86_64"]; assert m["version"] and p["url"].startswith("https://github.com/") and p["signature"]' dist/latest.json
+          python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); assert m["version"] and all(m["platforms"][t]["url"].startswith("https://github.com/") and m["platforms"][t]["signature"] for t in ("windows-x86_64","linux-x86_64"))' dist/latest.json
           (cd dist && sha256sum latest.json > latest.json.sha256)
           (cd dist && sha256sum --check latest.json.sha256)
       - name: Publish prerelease
@@ -341,7 +406,7 @@ jobs:
           gh release create "v$version" \
             dist/windows/*.exe dist/windows/*.sha256 dist/windows-signature/*.sig dist/windows-signature/*.sha256 \
             dist/latest.json dist/latest.json.sha256 \
-            dist/linux/*.deb dist/linux/*.sha256 \
+            dist/linux/*.deb dist/linux/*.deb.sig dist/linux/*.sha256 \
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "LANORA $version" \
