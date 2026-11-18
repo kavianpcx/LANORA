@@ -221,10 +221,19 @@ export default function App() {
     };
   }, []);
   useEffect(() => {
-    if (!UPDATER_ENABLED || !isTauri() || !appVersionLoaded || updateConfirmation) return;
-    const timer = window.setTimeout(() => void checkForUpdates(false), 7000);
-    return () => window.clearTimeout(timer);
-  }, [appVersionLoaded, updateConfirmation]);
+    if (!UPDATER_ENABLED || !isTauri() || !appVersionLoaded || updateConfirmation || updateDialogOpen) return;
+    const checkInBackground = () => {
+      if (document.visibilityState === "visible" && !updateInstallBusy.current) {
+        void checkForUpdates(false);
+      }
+    };
+    const initialTimer = window.setTimeout(checkInBackground, 7000);
+    const periodicTimer = window.setInterval(checkInBackground, 60 * 60 * 1000);
+    return () => {
+      window.clearTimeout(initialTimer);
+      window.clearInterval(periodicTimer);
+    };
+  }, [appVersionLoaded, updateConfirmation, updateDialogOpen]);
   function closeModal() {
     if (busy) return;
     if (onboarding) {
@@ -284,6 +293,7 @@ export default function App() {
     if (updateInstallBusy.current || updateState === "checking" || updateState === "downloading" || updateState === "verifying" || updateState === "installing" || updateState === "restarting") return;
     if (updateEntry) await updateEntry.close().catch(() => {});
     setUpdateEntry(null);
+    setUpdateConfirmation(null);
     setUpdateDialogOpen(false);
   }
   async function installUpdate() {
