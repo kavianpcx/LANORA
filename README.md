@@ -7,7 +7,7 @@
 
 LANORA is an open-source, self-hosted virtual LAN app for games with LAN support. One person runs the server on a Linux VPS. Players install the desktop app and enter the server address. The app asks for a player password only when that server requires one. There is no account or hosted LANORA service.
 
-> **Current release: 0.2.0-alpha.8 (experimental pre-release).** This release improves server-address validation, loopback HTTP development, connected-player controls, and the accuracy of peer and presence diagnostics. Windows-to-Windows play over separate public networks, Windows game traffic, direct P2P/NAT traversal, and game-specific LAN discovery are not verified.
+> **Current release: 0.3.0-alpha.1 (experimental pre-release).** The release includes signed Windows and Debian packages, checksums, detached signatures, and a Tauri updater manifest. CI passed frontend/native and isolated Linux networking tests, API/VPS checks, Windows installer build/install/launch, Linux package build/install/launch, and updater signature verification. The v0.2.0-alpha.8 app has no updater, so the first updater-enabled version needs manual installation. Installed-version update/restart behavior, Windows-to-Windows public-network play, Windows game traffic, direct P2P/NAT traversal, and game-specific LAN discovery are not verified.
 >
 > **Access warning:** A passwordless server lets anyone who can reach it request player access. Changing the policy revokes API sessions and rotates the network identity, but cannot force a modified client already using the old EasyTier overlay to disconnect. Ask all players to fully disconnect and rejoin after a policy change.
 
@@ -15,9 +15,9 @@ LANORA is an open-source, self-hosted virtual LAN app for games with LAN support
 
 ## Download LANORA
 
-- **Windows 10/11, x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_x64-setup.exe.sha256)
-- **Linux x64, Debian/Ubuntu:** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.2.0-alpha.8/LANORA_0.2.0-alpha.8_amd64.deb.sha256)
-- [Release notes and all release assets](https://github.com/kavianpcx/LANORA/releases/tag/v0.2.0-alpha.8)
+- **Windows 10/11, x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe.sha256) · [Signature](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe.sig)
+- **Linux x64, Debian/Ubuntu:** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb.sha256) · [Signature](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb.sig)
+- [Release notes and all release assets](https://github.com/kavianpcx/LANORA/releases/tag/v0.3.0-alpha.1) · [Live updater manifest](https://raw.githubusercontent.com/kavianpcx/LANORA/release/0.2.x/updates/alpha/latest.json)
 
 Verify the downloaded file against its SHA-256 sidecar before installing it.
 
