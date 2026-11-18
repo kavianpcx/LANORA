@@ -76,6 +76,12 @@ jobs:
           $installer = Get-ChildItem src-tauri/target/release/bundle/nsis/*.exe -File | Where-Object { $_.Name -like '*0.3.0-alpha.0*' } | Select-Object -First 1
           if (!$installer) { throw 'Signed alpha.0 test installer was not produced.' }
           if (!(Test-Path "$($installer.FullName).sig")) { throw 'Tauri did not produce the signed baseline artifact.' }
+          $baselineDir = Join-Path $env:RUNNER_TEMP 'lanora-alpha0-baseline'
+          New-Item -ItemType Directory -Force -Path $baselineDir | Out-Null
+          $baselineInstaller = Join-Path $baselineDir $installer.Name
+          Copy-Item $installer.FullName $baselineInstaller
+          Copy-Item "$($installer.FullName).sig" "$baselineInstaller.sig"
+          "LANORA_E2E_BASELINE_INSTALLER=$baselineInstaller" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
           $targetConfig = $config.Replace('0.3.0-alpha.0', '0.3.0-alpha.2')
           $targetConfigPath = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e-target-config.json'
           [System.IO.File]::WriteAllText($targetConfigPath, $targetConfig, [System.Text.UTF8Encoding]::new($false))
@@ -141,9 +147,10 @@ jobs:
       - name: Test signature rejection, progress, install, restart, version and settings
         shell: pwsh
         run: |
-          $installer = Get-ChildItem apps/desktop/src-tauri/target/release/bundle/nsis/*.exe -File | Where-Object { $_.Name -like '*0.3.0-alpha.0*' } | Select-Object -First 1
+          $installer = $env:LANORA_E2E_BASELINE_INSTALLER
+          if (!(Test-Path $installer)) { throw 'The saved signed alpha.0 baseline installer is missing.' }
           $destination = Join-Path $env:RUNNER_TEMP 'LANORA-Updater-E2E'
-          $install = Start-Process $installer.FullName -ArgumentList '/S', "/D=$destination" -Wait -PassThru
+          $install = Start-Process $installer -ArgumentList '/S', "/D=$destination" -Wait -PassThru
           if ($install.ExitCode -ne 0) { throw 'The signed test baseline installer failed.' }
           $app = Get-ChildItem $destination -Filter 'lanora-desktop.exe' -Recurse | Select-Object -First 1
           if (!$app) { throw 'The installed test baseline executable is missing.' }
