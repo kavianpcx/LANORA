@@ -1,13 +1,5 @@
 name: Signed updater installed-to-installed test
 on:
-  push:
-    branches:
-      - codex/alpha1-updater-control-e2e
-    paths:
-      - '.github/workflows/updater-e2e.yml'
-      - 'apps/desktop/src/App.tsx'
-      - 'apps/desktop/src/components/TitleBar.tsx'
-      - 'apps/desktop/src/style.css'
   pull_request:
     branches:
       - release/0.2.x
