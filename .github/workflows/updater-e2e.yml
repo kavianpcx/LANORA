@@ -437,7 +437,7 @@ jobs:
             $script:stage = 'open updater menu for invalid-signature test'
             Invoke-UiElement $updateButton
             $script:stage = 'find update command for invalid-signature test'
-            $menuCheck = Wait-UiElement @('Check for Updates') 'ControlType.Button' 10 $true
+            $menuCheck = Wait-UiElement @('Check for Updates') '' 10 $true
             $script:stage = 'check for invalid-signature update'
             Invoke-UiElement $menuCheck
             $script:stage = 'wait for invalid-signature update offer'
@@ -461,7 +461,7 @@ jobs:
             $script:stage = 'open updater menu for signed update'
             Invoke-UiElement $updateButton
             $script:stage = 'find update command for signed update'
-            $menuCheck = Wait-UiElement @('Check for Updates') 'ControlType.Button' 10 $true
+            $menuCheck = Wait-UiElement @('Check for Updates') '' 10 $true
             $script:stage = 'check for correctly signed update'
             Invoke-UiElement $menuCheck
             $script:stage = 'wait for signed update offer'
