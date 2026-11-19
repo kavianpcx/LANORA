@@ -502,6 +502,8 @@ jobs:
             Add-Type -AssemblyName UIAutomationClient
             Add-Type -AssemblyName UIAutomationTypes
             Add-Type -AssemblyName System.Windows.Forms
+            $env:LANORA_UPDATER_HOOK_E2E_LOG = '1'
+            Remove-Item -LiteralPath (Join-Path $env:TEMP 'LANORA-updater-e2e-hook.log') -Force -ErrorAction SilentlyContinue
             $appProcess = Start-Process -FilePath $app.FullName -PassThru
             $profileName = Wait-UiElement @('Display name', 'Enter a display name') 'ControlType.Edit' 45
             Set-UiValue $profileName 'Updater QA'
@@ -725,20 +727,12 @@ jobs:
                 }
               } catch {}
               Write-Output "UPDATER_WINDOWS: windows=$(@($windowClasses | Sort-Object) -join ',');buttons=$(@($buttonNames | Sort-Object) -join ',')"
-              $installerLog = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e-nsis.log'
+              $installerLog = Join-Path $env:TEMP 'LANORA-updater-e2e-hook.log'
               if (Test-Path $installerLog) {
-                $logLines = @(Get-Content -Path $installerLog)
-                $operations = @($logLines | ForEach-Object {
-                  if ($_ -match '^(Section|SectionEnd|SetOutPath|File|Delete|CreateDirectory|RMDir|WriteRegStr|WriteRegDWORD|DeleteRegKey|DeleteRegValue|WriteUninstaller|ExecShell|Exec|Rename|CopyFiles)(?::|$)') { $Matches[1] }
-                } | Select-Object -Last 30)
-                $errorKinds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
-                foreach ($logLine in $logLines) {
-                  if ($logLine -match '(?i)error opening file for writing') { [void]$errorKinds.Add('file_write') }
-                  elseif ($logLine -match '(?i)access is denied') { [void]$errorKinds.Add('access_denied') }
-                  elseif ($logLine -match '(?i)restart manager|another application') { [void]$errorKinds.Add('restart_manager') }
-                  elseif ($logLine -match '(?i)\b(error|failed|aborted)\b') { [void]$errorKinds.Add('installer_reported_error') }
-                }
-                Write-Output "UPDATER_INSTALL_LOG: exists=true;lines=$($logLines.Count);operations=$($operations -join ',');errors=$(@($errorKinds | Sort-Object) -join ',')"
+                $hookEvents = @(Get-Content -Path $installerLog | Where-Object {
+                  $_ -match '^(hook_enter|session_start_returned|resource_register_returned_[0-9]+|rm_get_list_[0-9]+_iteration_[0-9]+|file_release_wait_done|session_end_returned|session_unavailable|hook_exit)$'
+                } | Select-Object -Last 40)
+                Write-Output "UPDATER_INSTALL_LOG: exists=true;events=$($hookEvents -join ',')"
               } else {
                 Write-Output 'UPDATER_INSTALL_LOG: exists=false'
               }
