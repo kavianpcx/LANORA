@@ -2,6 +2,7 @@ export class RequestError extends Error {
   constructor(
     public code: string,
     public status?: number,
+    public causeName?: string,
   ) {
     super(code);
   }
@@ -98,7 +99,8 @@ export async function api<T>(
         : looksLikeTlsCertificateError(error)
           ? "tls_certificate"
           : "network";
-    throw new RequestError(code);
+    const causeName = error instanceof Error ? error.name : "UnknownError";
+    throw new RequestError(code, undefined, causeName);
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", cancel);
