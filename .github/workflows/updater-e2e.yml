@@ -70,10 +70,35 @@ jobs:
         run: |
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) { throw 'TAURI_SIGNING_PRIVATE_KEY is unavailable to this test workflow.' }
           if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY)) { throw 'TAURI_UPDATER_PUBLIC_KEY is unavailable to this test workflow.' }
+          $releaseHookPath = Join-Path $env:GITHUB_WORKSPACE 'apps/desktop/src-tauri/windows/installer-hooks.nsh'
+          $testHookPath = Join-Path $env:GITHUB_WORKSPACE 'apps/desktop/src-tauri/windows/installer-hooks-e2e.nsh'
+          $releaseHook = [System.IO.File]::ReadAllText($releaseHookPath)
+          $macroStart = $releaseHook.IndexOf('!macro LANORA_UPDATER_E2E_LOG message')
+          $macroEndMarker = '!macroend'
+          $macroEnd = if ($macroStart -ge 0) { $releaseHook.IndexOf($macroEndMarker, $macroStart) } else { -1 }
+          if ($macroStart -lt 0 -or $macroEnd -lt 0) { throw 'Could not locate the release NSIS hook logging macro.' }
+          $macroEnd += $macroEndMarker.Length
+          $diagnosticMacro = @'
+!macro LANORA_UPDATER_E2E_LOG message
+  FileOpen $R5 "$TEMP\LANORA-updater-e2e-hook.log" a
+  ${If} $R5 != error
+    FileWrite $R5 "${message}$\r$\n"
+    FileClose $R5
+  ${EndIf}
+!macroend
+'@
+          $testHook = $releaseHook.Substring(0, $macroStart) + $diagnosticMacro + $releaseHook.Substring($macroEnd)
+          [System.IO.File]::WriteAllText($testHookPath, $testHook, [System.Text.UTF8Encoding]::new($false))
+          if (!(Test-Path -LiteralPath $testHookPath)) { throw 'Diagnostic NSIS hook was not created.' }
           $config = @{
             version = '0.3.0-alpha.1'
             bundle = @{
               createUpdaterArtifacts = $true
+              windows = @{
+                nsis = @{
+                  installerHooks = $testHookPath
+                }
+              }
             }
             plugins = @{
               updater = @{
@@ -489,7 +514,7 @@ jobs:
             Add-Type -AssemblyName UIAutomationClient
             Add-Type -AssemblyName UIAutomationTypes
             Add-Type -AssemblyName System.Windows.Forms
-            $env:LANORA_UPDATER_HOOK_E2E_LOG = Join-Path $env:RUNNER_TEMP 'LANORA-updater-e2e-hook.log'
+            $env:LANORA_UPDATER_HOOK_E2E_LOG = Join-Path $env:TEMP 'LANORA-updater-e2e-hook.log'
             Remove-Item -LiteralPath $env:LANORA_UPDATER_HOOK_E2E_LOG -Force -ErrorAction SilentlyContinue
             $appProcess = Start-Process -FilePath $app.FullName -PassThru
             $profileName = Wait-UiElement @('Display name', 'Enter a display name') 'ControlType.Edit' 45
@@ -679,6 +704,12 @@ jobs:
               throw 'one or more saved preferences changed during installation'
             }
             $versionButton = Wait-UiElement @('0.3.0-alpha.2') 'ControlType.Button' 15
+            if (!(Test-Path -LiteralPath $env:LANORA_UPDATER_HOOK_E2E_LOG)) { throw 'The updater installer did not create its hook log.' }
+            $hookEvents = @(Get-Content -LiteralPath $env:LANORA_UPDATER_HOOK_E2E_LOG)
+            foreach ($expectedEvent in @('hook_enter', 'session_start_returned', 'resource_register_returned_0', 'file_release_wait_done', 'session_end_returned', 'hook_exit')) {
+              if ($hookEvents -notcontains $expectedEvent) { throw 'The updater installer hook did not complete its expected Restart Manager steps.' }
+            }
+            Report-Pass 'release NSIS updater hook completed its Restart Manager check'
             Report-Pass 'new process confirmed installed alpha.2 after updater relaunch'
             Report-Pass 'display name, avatar, language, theme and server setting survived the update'
             $later = Find-UiElement @('Later') 'ControlType.Button' $true
