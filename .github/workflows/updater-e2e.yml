@@ -120,7 +120,7 @@ jobs:
       - name: Start isolated LANORA API for installed client
         shell: pwsh
         run: |
-          $env:LANORA_LISTEN_ADDR = '127.0.0.1:8080'
+          $env:LANORA_LISTEN_ADDR = '127.0.0.1:8081'
           $env:LANORA_DB_PATH = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e.sqlite'
           $env:LANORA_ALLOWED_ORIGINS = 'tauri://localhost,http://tauri.localhost,https://tauri.localhost,http://localhost:1420'
           $stdout = Join-Path $env:RUNNER_TEMP 'lanora-api.stdout.log'
@@ -130,7 +130,7 @@ jobs:
           $ready = $false
           for ($i = 0; $i -lt 80; $i++) {
             try {
-              $health = Invoke-RestMethod 'http://127.0.0.1:8080/api/v1/health'
+              $health = Invoke-RestMethod 'http://127.0.0.1:8081/api/v1/health'
               if ($health.status -eq 'ok') { $ready = $true; break }
             } catch {}
             Start-Sleep -Milliseconds 250
@@ -140,6 +140,54 @@ jobs:
             if (Test-Path $stderr) { Get-Content $stderr -Tail 40 }
             throw 'Isolated LANORA API did not become healthy.'
           }
+          $tracePath = Join-Path $env:RUNNER_TEMP 'lanora-api-client-trace.log'
+          $proxyPath = Join-Path $env:RUNNER_TEMP 'lanora-api-trace-proxy.cjs'
+          $proxySource = @'
+          const fs = require('node:fs');
+          const http = require('node:http');
+          const tracePath = process.argv[2];
+          function safe(value) {
+            return String(value ?? 'missing').replace(/[^A-Za-z0-9:._/-]/g, '_').slice(0, 128);
+          }
+          function record(line) {
+            fs.appendFileSync(tracePath, line + '\n', { encoding: 'utf8' });
+          }
+          const server = http.createServer((req, res) => {
+            let pathname = '/';
+            try { pathname = new URL(req.url, 'http://127.0.0.1').pathname; } catch {}
+            const origin = safe(req.headers.origin);
+            const requestedMethod = safe(req.headers['access-control-request-method']);
+            const privateNetwork = String(req.headers['access-control-request-private-network'] || '').toLowerCase() === 'true';
+            record('request method=' + safe(req.method) + ' path=' + safe(pathname) + ' origin=' + origin + ' requested_method=' + requestedMethod + ' private_network=' + privateNetwork);
+            const upstream = http.request({ hostname: '127.0.0.1', port: 8081, method: req.method, path: req.url, headers: req.headers }, upstreamResponse => {
+              record('response method=' + safe(req.method) + ' path=' + safe(pathname) + ' status=' + upstreamResponse.statusCode + ' allow_origin=' + safe(upstreamResponse.headers['access-control-allow-origin']) + ' allow_private_network=' + safe(upstreamResponse.headers['access-control-allow-private-network']) + ' allow_headers=' + safe(upstreamResponse.headers['access-control-allow-headers']));
+              res.writeHead(upstreamResponse.statusCode, upstreamResponse.headers);
+              upstreamResponse.pipe(res);
+            });
+            upstream.on('error', () => {
+              record('upstream_error method=' + safe(req.method) + ' path=' + safe(pathname));
+              if (!res.headersSent) res.writeHead(502);
+              res.end();
+            });
+            req.pipe(upstream);
+          });
+          server.listen(8080, '127.0.0.1');
+          '@
+          [System.IO.File]::WriteAllText($proxyPath, $proxySource, [System.Text.UTF8Encoding]::new($false))
+          $proxyOut = Join-Path $env:RUNNER_TEMP 'lanora-api-proxy.stdout.log'
+          $proxyErr = Join-Path $env:RUNNER_TEMP 'lanora-api-proxy.stderr.log'
+          $proxy = Start-Process -FilePath (Get-Command node).Source -ArgumentList @($proxyPath, $tracePath) -PassThru -WindowStyle Hidden -RedirectStandardOutput $proxyOut -RedirectStandardError $proxyErr
+          "LANORA_API_PROXY_PID=$($proxy.Id)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+          "LANORA_API_TRACE_LOG=$tracePath" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+          $proxyReady = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            try {
+              $response = Invoke-WebRequest 'http://127.0.0.1:8080/api/v1/health' -TimeoutSec 2
+              if ($response.StatusCode -eq 200) { $proxyReady = $true; break }
+            } catch {}
+            Start-Sleep -Milliseconds 250
+          }
+          if (!$proxyReady) { throw 'Sanitized local API request trace proxy did not become ready.' }
       # The prior run showed that the app and WebView2 stayed alive without a 9223 listener.
       # Available evidence identifies the CDP dependency as the harness failure; it does not identify
       # why WebView2 ignored the debugging flags. This test uses UI Automation and no debugging port.
@@ -150,12 +198,20 @@ jobs:
           $script:stage = 'initialize test report'
           $script:results = [System.Collections.Generic.List[string]]::new()
           $script:passed = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+          $script:failedChecks = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
           $script:failed = $false
           function Report-Pass([string]$message) {
             $line = "PASS: $message"
             Write-Output $line
             $script:results.Add($line)
             [void]$script:passed.Add($message)
+          }
+          function Report-Fail([string]$message) {
+            $line = "FAIL: $message"
+            Write-Output $line
+            $script:results.Add($line)
+            [void]$script:failedChecks.Add($message)
+            $script:failed = $true
           }
           function Get-LanoraWindow {
             foreach ($process in @(Get-Process -Name 'lanora-desktop' -ErrorAction SilentlyContinue)) {
@@ -353,8 +409,17 @@ jobs:
             $script:stage = 'invoke installed alpha.0 API connect control'
             Invoke-UiElement $connect
             $script:stage = 'confirm installed alpha.0 client reached the local API'
-            $state = Wait-LanoraState { param($s) ($s.serverReachable -eq $true) -and ($s.connectedServer -eq 'http://127.0.0.1:8080') } 30
-            Report-Pass 'installed alpha.0 client connected to the isolated local API'
+            $state = Wait-LanoraState { param($s) ($s.serverReachable -eq $true) -or ($s.serverPhase -eq 'failed') } 15
+            if (($state.serverReachable -eq $true) -and ($state.connectedServer -eq 'http://127.0.0.1:8080')) {
+              Report-Pass 'installed alpha.0 client connected to the isolated local API'
+            } else {
+              $phase = if ([string]$state.serverPhase -match '^[a-z_]{1,24}$') { [string]$state.serverPhase } else { 'other' }
+              $connectionStage = if ([string]$state.connectionStage -match '^[a-z_]{1,24}$') { [string]$state.connectionStage } else { 'other' }
+              $failureCode = if ([string]$state.serverFailureCode -match '^[a-z_]{1,32}$') { [string]$state.serverFailureCode } else { 'other' }
+              $failureStatus = if ($null -ne $state.serverFailureStatus -and [int]$state.serverFailureStatus -ge 100 -and [int]$state.serverFailureStatus -le 599) { [string]$state.serverFailureStatus } else { 'none' }
+              Write-Output "CLIENT_STATE: server_phase=$phase;connection_stage=$connectionStage;failure_code=$failureCode;failure_status=$failureStatus"
+              Report-Fail 'installed alpha.0 client connected to the isolated local API'
+            }
             $cancel = Find-UiElement @('Cancel') 'ControlType.Button' $true
             if ($null -ne $cancel) { Invoke-UiElement $cancel }
 
@@ -429,8 +494,12 @@ jobs:
             Set-UiValue $serverInput 'http://127.0.0.1:8080'
             $connect = Wait-UiElement @('Connect to network') 'ControlType.Button' 10
             Invoke-UiElement $connect
-            $state = Wait-LanoraState { param($s) ($s.version -eq '0.3.0-alpha.2') -and ($s.serverReachable -eq $true) -and ($s.connectedServer -eq 'http://127.0.0.1:8080') } 30
-            Report-Pass 'installed alpha.2 client reconnected to the isolated local API'
+            $state = Wait-LanoraState { param($s) ($s.version -eq '0.3.0-alpha.2') -and (($s.serverReachable -eq $true) -or ($s.serverPhase -eq 'failed')) } 15
+            if (($state.serverReachable -eq $true) -and ($state.connectedServer -eq 'http://127.0.0.1:8080')) {
+              Report-Pass 'installed alpha.2 client reconnected to the isolated local API'
+            } else {
+              Report-Fail 'installed alpha.2 client reconnected to the isolated local API'
+            }
 
             $script:stage = 'complete test report'
           } catch {
@@ -460,11 +529,23 @@ jobs:
               'display name, avatar, language, theme and server setting survived the update',
               'installed alpha.2 client reconnected to the isolated local API'
             )) {
-              if (!$script:passed.Contains($check)) { Add-NotVerified $check }
+              if (!$script:passed.Contains($check) -and !$script:failedChecks.Contains($check)) { Add-NotVerified $check }
             }
           } finally {
+            $traceLines = @()
+            if ($env:LANORA_API_TRACE_LOG -and (Test-Path $env:LANORA_API_TRACE_LOG)) {
+              $traceLines = @(Get-Content -Path $env:LANORA_API_TRACE_LOG)
+            }
+            if ($traceLines.Count -gt 0) {
+              foreach ($traceLine in $traceLines) { Write-Output "API_TRACE: $traceLine" }
+            } else {
+              Write-Output 'API_TRACE: no local API requests were recorded'
+            }
             $summary = @('## Installed Windows updater test', '')
             $summary += $script:results
+            $summary += ''
+            $summary += '### Sanitized local API trace'
+            if ($traceLines.Count -gt 0) { $summary += $traceLines | ForEach-Object { "API_TRACE: $_" } } else { $summary += "No local API requests were recorded." }
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary -Encoding utf8
           }
           if ($script:failed) { exit 1 }
@@ -473,6 +554,7 @@ jobs:
         shell: pwsh
         run: |
           if ($env:LANORA_E2E_SERVER_PID) { Stop-Process -Id ([int]$env:LANORA_E2E_SERVER_PID) -Force -ErrorAction SilentlyContinue }
+          if ($env:LANORA_API_PROXY_PID) { Stop-Process -Id ([int]$env:LANORA_API_PROXY_PID) -Force -ErrorAction SilentlyContinue }
           if ($env:LANORA_API_PID) { Stop-Process -Id ([int]$env:LANORA_API_PID) -Force -ErrorAction SilentlyContinue }
           Get-Process lanora-api, lanora-desktop -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
