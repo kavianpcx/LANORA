@@ -15,21 +15,6 @@ on:
       - 'apps/desktop/src/style.css'
       - 'services/api/internal/api/api.go'
       - 'services/api/internal/api/api_test.go'
-  push:
-    branches:
-      - codex/alpha1-updater-control-e2e
-    paths:
-      - '.github/workflows/updater-e2e.yml'
-      - 'apps/desktop/src-tauri/tauri.conf.json'
-      - 'apps/desktop/src-tauri/Cargo.toml'
-      - 'apps/desktop/src-tauri/src/main.rs'
-      - 'apps/desktop/src-tauri/windows/installer-hooks.nsh'
-      - 'apps/desktop/src/App.tsx'
-      - 'apps/desktop/src/api.ts'
-      - 'apps/desktop/src/components/TitleBar.tsx'
-      - 'apps/desktop/src/style.css'
-      - 'services/api/internal/api/api.go'
-      - 'services/api/internal/api/api_test.go'
   workflow_dispatch:
 permissions:
   contents: read
