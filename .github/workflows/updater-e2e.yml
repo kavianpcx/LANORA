@@ -104,8 +104,7 @@ jobs:
           "LANORA_E2E_BASELINE_INSTALLER=$baselineInstaller" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
           $targetConfig = $config.Replace('0.3.0-alpha.1', '0.3.0-alpha.2')
           $targetConfigMap = $targetConfig | ConvertFrom-Json
-          # Omit the custom NSIS hook for this disposable candidate to isolate its effect on updater installation.
-          $targetConfigMap.bundle.windows.nsis.installerHooks = $null
+          # Keep the update target aligned with the release NSIS installer hook.
           $targetConfigPath = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e-target-config.json'
           $targetConfig = $targetConfigMap | ConvertTo-Json -Depth 8 -Compress
           [System.IO.File]::WriteAllText($targetConfigPath, $targetConfig, [System.Text.UTF8Encoding]::new($false))
@@ -491,8 +490,8 @@ jobs:
             Add-Type -AssemblyName UIAutomationClient
             Add-Type -AssemblyName UIAutomationTypes
             Add-Type -AssemblyName System.Windows.Forms
-            $env:LANORA_UPDATER_HOOK_E2E_LOG = '1'
-            Remove-Item -LiteralPath (Join-Path $env:TEMP 'LANORA-updater-e2e-hook.log') -Force -ErrorAction SilentlyContinue
+            $env:LANORA_UPDATER_HOOK_E2E_LOG = Join-Path $env:RUNNER_TEMP 'LANORA-updater-e2e-hook.log'
+            Remove-Item -LiteralPath $env:LANORA_UPDATER_HOOK_E2E_LOG -Force -ErrorAction SilentlyContinue
             $appProcess = Start-Process -FilePath $app.FullName -PassThru
             $profileName = Wait-UiElement @('Display name', 'Enter a display name') 'ControlType.Edit' 45
             Set-UiValue $profileName 'Updater QA'
@@ -750,7 +749,7 @@ jobs:
                 }
               } catch {}
               Write-Output "UPDATER_WINDOWS: windows=$(@($windowClasses | Sort-Object) -join ',');buttons=$(@($buttonNames | Sort-Object) -join ',')"
-              $installerLog = Join-Path $env:TEMP 'LANORA-updater-e2e-hook.log'
+              $installerLog = $env:LANORA_UPDATER_HOOK_E2E_LOG
               if (Test-Path $installerLog) {
                 $hookEvents = @(Get-Content -Path $installerLog | Where-Object {
                   $_ -match '^(hook_enter|session_start_returned|resource_register_returned_[0-9]+|rm_get_list_[0-9]+_iteration_[0-9]+|file_release_wait_done|session_end_returned|session_unavailable|hook_exit)$'
