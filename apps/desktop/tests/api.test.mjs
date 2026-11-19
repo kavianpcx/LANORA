@@ -60,7 +60,7 @@ test('real request timeout cancels the underlying fetch',async()=>{
 });
 test('network failure and invalid JSON are distinct',async()=>{
  const original=global.fetch;
- try {global.fetch=async()=>{throw new TypeError('Failed to fetch')};await assert.rejects(api('https://server','/'),e=>e.code==='network');
+ try {global.fetch=async()=>{throw new TypeError('Failed to fetch')};await assert.rejects(api('https://server','/'),e=>e.code==='network'&&e.causeName==='TypeError');
  global.fetch=async()=>new Response('<html>');await assert.rejects(api('https://server','/'),e=>e.code==='response');}finally{global.fetch=original;}
 });
 
