@@ -649,9 +649,7 @@ mod tests {
             "/api/v1/rooms/0123456789abcdef0123456789abcdef"
         ));
         assert!(!valid_loopback_api_path("/api/v1/../admin"));
-        assert!(!valid_loopback_api_path(
-            "/api/v1/%2e%2e/%2e%2e/admin"
-        ));
+        assert!(!valid_loopback_api_path("/api/v1/%2e%2e/%2e%2e/admin"));
         assert!(!valid_loopback_api_path("/api/v1/rooms%2fadmin"));
         assert!(!valid_loopback_api_path("/api/v1/rooms?token=secret"));
         assert!(valid_loopback_api_method("PATCH"));
