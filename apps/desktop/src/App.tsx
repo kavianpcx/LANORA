@@ -1297,8 +1297,10 @@ export default function App() {
     playerName: name,
     language: lang,
     theme,
+    avatar,
     serverInput,
     connectedServer: server,
+    serverReachable,
     rooms: publicRooms.length,
   };
   if (!startupReady) return <StartupSkeleton lang={lang} visible={showStartupSkeleton} />;
