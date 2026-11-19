@@ -263,11 +263,6 @@ jobs:
             [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
             Start-Sleep -Milliseconds 250
           }
-            $element.SetFocus()
-            Start-Sleep -Milliseconds 100
-            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
-            Start-Sleep -Milliseconds 250
-          }
           function Set-UiValue($element, [string]$value) {
             $element.SetFocus()
             try {
