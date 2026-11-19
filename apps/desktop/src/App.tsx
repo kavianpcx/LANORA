@@ -165,6 +165,38 @@ export default function App() {
   const updateCheckBusy = useRef(false);
   const updateInstallBusy = useRef(false);
   const [notice, setNotice] = useState("");
+  const [runtimeLoopbackPermission, setRuntimeLoopbackPermission] =
+    useState<PermissionState | "unsupported" | "unknown">("unknown");
+  const [runtimeConnectCspViolation, setRuntimeConnectCspViolation] = useState(false);
+  useEffect(() => {
+    if (!LANORA_E2E_ENABLED) return;
+    let active = true;
+    const onSecurityPolicyViolation = (event: SecurityPolicyViolationEvent) => {
+      if (event.effectiveDirective === "connect-src") setRuntimeConnectCspViolation(true);
+    };
+    window.addEventListener("securitypolicyviolation", onSecurityPolicyViolation);
+    try {
+      const permissions = navigator.permissions;
+      if (!permissions?.query) {
+        setRuntimeLoopbackPermission("unsupported");
+      } else {
+        void permissions
+          .query({ name: "loopback-network" } as PermissionDescriptor)
+          .then(({ state }) => {
+            if (active) setRuntimeLoopbackPermission(state);
+          })
+          .catch(() => {
+            if (active) setRuntimeLoopbackPermission("unsupported");
+          });
+      }
+    } catch {
+      setRuntimeLoopbackPermission("unsupported");
+    }
+    return () => {
+      active = false;
+      window.removeEventListener("securitypolicyviolation", onSecurityPolicyViolation);
+    };
+  }, []);
   const t = labels[lang];
   const connectionStatus = deriveConnectionStatus({
     serverReachable,
@@ -1299,6 +1331,10 @@ export default function App() {
     updateState === "installing" || updateState === "restarting";
   const e2eSnapshot = {
     runtimeOrigin: window.location.origin,
+    runtimeSecureContext: window.isSecureContext,
+    runtimeEdgeMajor: navigator.userAgent.match(/Edg\/([0-9]{1,3})/i)?.[1] ?? null,
+    runtimeLoopbackPermission,
+    runtimeConnectCspViolation,
     version: appVersion,
     updateState,
     updateStates: updateStateTrace.current,
