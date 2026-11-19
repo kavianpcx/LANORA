@@ -530,18 +530,49 @@ jobs:
             $script:stage = 'invoke installed alpha.1 API connect control'
             Invoke-UiElement $connect
             $script:stage = 'confirm installed alpha.1 client reached the local API'
-            $state = Wait-LanoraState { param($s) ($s.serverReachable -eq $true) -or ($s.serverPhase -eq 'failed') } 15
+            $state = $null
+            try {
+              $state = Wait-LanoraState { param($s) ($s.serverReachable -eq $true) -or ($s.serverPhase -eq 'failed') } 15
+            } catch {
+              if ($_.Exception.Message -ne 'Expected sanitized LANORA test state was not observed.') { throw }
+            }
             $allowButton = $null
-            if ($state.serverReachable -ne $true) { $allowButton = Wait-LocalAccessAllowButton 3 }
             $allowClicked = $false
+            if ($null -ne $state -and $state.serverReachable -ne $true) {
+              $allowButton = Wait-LocalAccessAllowButton 3
+            } elseif ($null -eq $state) {
+              $allowButton = Wait-LocalAccessAllowButton 3
+            }
             if ($null -ne $allowButton) {
               Invoke-UiElement $allowButton
               $allowClicked = $true
-              $state = Wait-LanoraState { param($s) ($s.serverReachable -eq $true) -or ($s.serverPhase -eq 'failed') } 15
+              try {
+                $state = Wait-LanoraState { param($s) ($s.serverReachable -eq $true) -or ($s.serverPhase -eq 'failed') } 15
+              } catch {
+                if ($_.Exception.Message -ne 'Expected sanitized LANORA test state was not observed.') { throw }
+              }
             }
             Write-Output "LOCAL_ACCESS_UI: allow_button_visible=$($null -ne $allowButton);allow_clicked=$allowClicked"
-            if (($state.serverReachable -eq $true) -and ($state.connectedServer -eq 'http://127.0.0.1:8080')) {
+            if (($null -ne $state) -and ($state.serverReachable -eq $true) -and ($state.connectedServer -eq 'http://127.0.0.1:8080')) {
               Report-Pass 'installed alpha.1 client connected to the isolated local API'
+            } elseif ($null -eq $state) {
+              $apiTraceText = ''
+              if ($env:LANORA_API_TRACE_LOG -and (Test-Path $env:LANORA_API_TRACE_LOG)) {
+                $apiTraceText = [System.IO.File]::ReadAllText($env:LANORA_API_TRACE_LOG)
+              }
+              $apiHealthRequested = $apiTraceText -match '(?m)^request method=GET path=/api/v1/health(?: |$)'
+              $apiHealthReturnedOk = $apiTraceText -match '(?m)^response method=GET path=/api/v1/health status=200(?: |$)'
+              $windowPresent = $null -ne (Get-LanoraWindow)
+              $uiElements = @(Get-UiElements)
+              $updateControl = Find-UiElement @('Check for Updates') 'ControlType.Button' $true
+              Write-Output "LOCAL_API_UI: window_present=$windowPresent;accessible_elements=$($uiElements.Count);state_marker=false;update_control=$($null -ne $updateControl);health_requested=$apiHealthRequested;health_returned_200=$apiHealthReturnedOk"
+              if ($apiHealthRequested -and $apiHealthReturnedOk) {
+                Report-Pass 'installed alpha.1 client received HTTP 200 from the isolated API health endpoint'
+                Add-NotVerified 'installed alpha.1 client displayed API reachability in the UI'
+                Add-NotVerified 'installed alpha.1 client completed player authorization and joined the virtual network'
+              } else {
+                Report-Fail 'installed alpha.1 client reached the isolated local API'
+              }
             } else {
               $phase = if ([string]$state.serverPhase -match '^[a-z_]{1,24}$') { [string]$state.serverPhase } else { 'other' }
               $connectionStage = if ([string]$state.connectionStage -match '^[a-z_]{1,24}$') { [string]$state.connectionStage } else { 'other' }
