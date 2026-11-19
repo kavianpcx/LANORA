@@ -1361,6 +1361,28 @@ select {
 .titlebar-version:hover {
   color: var(--ink);
 }
+.titlebar-update-check {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-quiet);
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+.titlebar-update-check:hover {
+  border-color: var(--accent);
+  background: var(--surface);
+  color: var(--accent);
+}
+.titlebar-update-check:active {
+  transform: translateY(1px);
+}
 .titlebar-menu-anchor {
   position: relative;
 }

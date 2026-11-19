@@ -130,6 +130,19 @@ export function TitleBar({
         onDoubleClick={() => safe(window.toggleMaximize())}
       />
       <div className="titlebar-tools">
+        <button
+          type="button"
+          className="titlebar-update-check"
+          aria-label={updateMenuLabels.check}
+          title={updateMenuLabels.check}
+          onClick={() => {
+            setOpenMenu(null);
+            onCheckForUpdates();
+          }}
+          onDoubleClick={(event) => event.stopPropagation()}
+        >
+          <RefreshCw size={15} aria-hidden="true" />
+        </button>
         <span className={`titlebar-status ${status}`} role="status" aria-live="polite">
           <i />
           <span dir={lang === "fa" ? "rtl" : "ltr"}>{statusLabels[status]}</span>

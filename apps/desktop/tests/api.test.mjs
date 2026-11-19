@@ -20,6 +20,27 @@ test('addresses keep HTTPS for public servers and infer HTTP for loopback develo
  assert.throws(()=>normalize('ftp://games.example.org'),e=>e.code==='unsupported_protocol');
  for(const value of ['not a host', 'https://user:secret@example.org','https://example.org/path','https://example.org?token=secret','file:///tmp','localhost:99999']) assert.throws(()=>normalize(value));
 });
+test('loopback HTTP health requests declare their target address space',async()=>{
+ const original=global.fetch;let captured;
+ try {
+  global.fetch=async(_url,options)=>{captured=options;return new Response(JSON.stringify({status:'ok',service:'lanora-api'}));};
+  await health('http://127.0.0.1:8080');
+  assert.equal(captured.targetAddressSpace,'loopback');
+  assert.equal(new Headers(captured.headers).has('content-type'),false);
+ } finally {global.fetch=original;}
+});
+test('JSON content type is only sent when a request body exists',async()=>{
+ const original=global.fetch;const captured=[];
+ try {
+  global.fetch=async(_url,options)=>{captured.push(options);return new Response('{}');};
+  await api('https://server','/status');
+  await api('https://server','/join',undefined,{username:'Player'});
+  assert.equal(new Headers(captured[0].headers).has('content-type'),false);
+  assert.equal(new Headers(captured[1].headers).get('content-type'),'application/json');
+  assert.equal(captured[1].body,'{"username":"Player"}');
+ } finally {global.fetch=original;}
+});
+
 test('server errors are translated without exposing remote error text',async()=>{
  const original=global.fetch;
  try {global.fetch=async()=>new Response(JSON.stringify({error:{code:'invalid_password',message:'SECRET'}}),{status:401});
@@ -39,7 +60,7 @@ test('real request timeout cancels the underlying fetch',async()=>{
 });
 test('network failure and invalid JSON are distinct',async()=>{
  const original=global.fetch;
- try {global.fetch=async()=>{throw new TypeError('Failed to fetch')};await assert.rejects(api('https://server','/'),e=>e.code==='network');
+ try {global.fetch=async()=>{throw new TypeError('Failed to fetch')};await assert.rejects(api('https://server','/'),e=>e.code==='network'&&e.causeName==='TypeError');
  global.fetch=async()=>new Response('<html>');await assert.rejects(api('https://server','/'),e=>e.code==='response');}finally{global.fetch=original;}
 });
 
