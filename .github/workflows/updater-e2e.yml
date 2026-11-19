@@ -444,7 +444,9 @@ jobs:
               $reachable = [bool]$last.serverReachable
               $serverPresent = ![string]::IsNullOrWhiteSpace([string]$last.connectedServer)
               $inputPresent = ![string]::IsNullOrWhiteSpace([string]$last.serverInput)
-              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;version=$($last.version);update_state=$($last.updateState)"
+              $failureCode = if ($last.serverFailureCode) { [string]$last.serverFailureCode } else { 'none' }
+              $failureStatus = if ($last.serverFailureStatus) { [string]$last.serverFailureStatus } else { 'none' }
+              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;server_phase=$($last.serverPhase);connection_stage=$($last.connectionStage);failure_code=$failureCode;failure_status=$failureStatus;version=$($last.version);update_state=$($last.updateState)"
             } else {
               Write-Output 'CLIENT_STATE: telemetry_available=false'
             }
