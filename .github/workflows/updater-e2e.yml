@@ -150,84 +150,6 @@ jobs:
           [System.IO.File]::WriteAllText((Join-Path $assetDir 'latest.json'), $manifest, [System.Text.UTF8Encoding]::new($false))
           "LANORA_E2E_DIR=$assetDir" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
           "LANORA_E2E_TARGET_NAME=$targetName" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
-      - name: Start isolated LANORA API for installed client
-        shell: pwsh
-        run: |
-          $env:LANORA_LISTEN_ADDR = '127.0.0.1:8081'
-          $env:LANORA_DB_PATH = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e.sqlite'
-          $env:LANORA_ALLOWED_ORIGINS = 'tauri://localhost,http://tauri.localhost,https://tauri.localhost,http://localhost:1420'
-          $stdout = Join-Path $env:RUNNER_TEMP 'lanora-api.stdout.log'
-          $stderr = Join-Path $env:RUNNER_TEMP 'lanora-api.stderr.log'
-          $api = Start-Process -FilePath (Get-Command go).Source -ArgumentList @('run', './cmd/lanora-api') -WorkingDirectory "$env:GITHUB_WORKSPACE/services/api" -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-          "LANORA_API_PID=$($api.Id)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
-          $ready = $false
-          for ($i = 0; $i -lt 80; $i++) {
-            try {
-              $health = Invoke-RestMethod 'http://127.0.0.1:8081/api/v1/health'
-              if ($health.status -eq 'ok') { $ready = $true; break }
-            } catch {}
-            Start-Sleep -Milliseconds 250
-          }
-          if (!$ready) {
-            if (Test-Path $stdout) { Get-Content $stdout -Tail 40 }
-            if (Test-Path $stderr) { Get-Content $stderr -Tail 40 }
-            throw 'Isolated LANORA API did not become healthy.'
-          }
-          $tracePath = Join-Path $env:RUNNER_TEMP 'lanora-api-client-trace.log'
-          $proxyPath = Join-Path $env:RUNNER_TEMP 'lanora-api-trace-proxy.cjs'
-          $proxySource = @'
-          const fs = require('node:fs');
-          const http = require('node:http');
-          const tracePath = process.argv[2];
-          function safe(value) {
-            return String(value ?? 'missing').replace(/[^A-Za-z0-9:._/-]/g, '_').slice(0, 128);
-          }
-          function record(line) {
-            fs.appendFileSync(tracePath, line + '\n', { encoding: 'utf8' });
-          }
-          const server = http.createServer((req, res) => {
-            let pathname = '/';
-            try { pathname = new URL(req.url, 'http://127.0.0.1').pathname; } catch {}
-            const origin = safe(req.headers.origin);
-            const requestedMethod = safe(req.headers['access-control-request-method']);
-            const privateNetwork = String(req.headers['access-control-request-private-network'] || '').toLowerCase() === 'true';
-            record('request method=' + safe(req.method) + ' path=' + safe(pathname) + ' origin=' + origin + ' requested_method=' + requestedMethod + ' private_network=' + privateNetwork);
-            const upstream = http.request({ hostname: '127.0.0.1', port: 8081, method: req.method, path: req.url, headers: req.headers }, upstreamResponse => {
-              record('response method=' + safe(req.method) + ' path=' + safe(pathname) + ' status=' + upstreamResponse.statusCode + ' allow_origin=' + safe(upstreamResponse.headers['access-control-allow-origin']) + ' allow_private_network=' + safe(upstreamResponse.headers['access-control-allow-private-network']) + ' allow_headers=' + safe(upstreamResponse.headers['access-control-allow-headers']));
-              res.writeHead(upstreamResponse.statusCode, upstreamResponse.headers);
-              upstreamResponse.pipe(res);
-            });
-            upstream.on('error', () => {
-              record('upstream_error method=' + safe(req.method) + ' path=' + safe(pathname));
-              if (!res.headersSent) res.writeHead(502);
-              res.end();
-            });
-            req.pipe(upstream);
-          });
-          server.listen(8080, '127.0.0.1');
-          '@
-          [System.IO.File]::WriteAllText($proxyPath, $proxySource, [System.Text.UTF8Encoding]::new($false))
-          $proxyOut = Join-Path $env:RUNNER_TEMP 'lanora-api-proxy.stdout.log'
-          $proxyErr = Join-Path $env:RUNNER_TEMP 'lanora-api-proxy.stderr.log'
-          $proxy = Start-Process -FilePath (Get-Command node).Source -ArgumentList @($proxyPath, $tracePath) -PassThru -WindowStyle Hidden -RedirectStandardOutput $proxyOut -RedirectStandardError $proxyErr
-          "LANORA_API_PROXY_PID=$($proxy.Id)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
-          "LANORA_API_TRACE_LOG=$tracePath" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
-          $proxyReady = $false
-          for ($i = 0; $i -lt 40; $i++) {
-            try {
-              $response = Invoke-WebRequest 'http://127.0.0.1:8080/api/v1/health' -TimeoutSec 2
-              if ($response.StatusCode -eq 200) { $proxyReady = $true; break }
-            } catch {}
-            Start-Sleep -Milliseconds 250
-          }
-          if (!$proxyReady) { throw 'Sanitized local API request trace proxy did not become ready.' }
-          if ($proxy.HasExited) { throw 'Sanitized local API request trace proxy exited before the client test.' }
-          $listenerOwners = @()
-          try {
-            $listenerOwners = @(Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique)
-          } catch {}
-          if ($listenerOwners.Count -gt 0 -and $listenerOwners -notcontains $proxy.Id) { throw 'The local API trace proxy did not own the expected loopback port.' }
-          Remove-Item -LiteralPath $tracePath -Force -ErrorAction SilentlyContinue
       # The prior run showed that the app and WebView2 stayed alive without a 9223 listener.
       # Available evidence identifies the CDP dependency as the harness failure; it does not identify
       # why WebView2 ignored the debugging flags. This test uses UI Automation and no debugging port.
@@ -409,6 +331,84 @@ jobs:
             Write-Output $line
             $script:results.Add($line)
           }
+          $env:LANORA_LISTEN_ADDR = '127.0.0.1:8081'
+          $env:LANORA_DB_PATH = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e.sqlite'
+          $env:LANORA_ALLOWED_ORIGINS = 'tauri://localhost,http://tauri.localhost,https://tauri.localhost,http://localhost:1420'
+          $stdout = Join-Path $env:RUNNER_TEMP 'lanora-api.stdout.log'
+          $stderr = Join-Path $env:RUNNER_TEMP 'lanora-api.stderr.log'
+          $api = Start-Process -FilePath (Get-Command go).Source -ArgumentList @('run', './cmd/lanora-api') -WorkingDirectory "$env:GITHUB_WORKSPACE/services/api" -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          $env:LANORA_API_PID = [string]$api.Id
+          "LANORA_API_PID=$($api.Id)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+          $ready = $false
+          for ($i = 0; $i -lt 80; $i++) {
+            try {
+              $health = Invoke-RestMethod 'http://127.0.0.1:8081/api/v1/health'
+              if ($health.status -eq 'ok') { $ready = $true; break }
+            } catch {}
+            Start-Sleep -Milliseconds 250
+          }
+          if (!$ready) {
+            if (Test-Path $stdout) { Get-Content $stdout -Tail 40 }
+            if (Test-Path $stderr) { Get-Content $stderr -Tail 40 }
+            throw 'Isolated LANORA API did not become healthy.'
+          }
+          $tracePath = Join-Path $env:RUNNER_TEMP 'lanora-api-client-trace.log'
+          $proxyPath = Join-Path $env:RUNNER_TEMP 'lanora-api-trace-proxy.cjs'
+          $proxySource = @'
+          const fs = require('node:fs');
+          const http = require('node:http');
+          const tracePath = process.argv[2];
+          function safe(value) {
+            return String(value ?? 'missing').replace(/[^A-Za-z0-9:._/-]/g, '_').slice(0, 128);
+          }
+          function record(line) {
+            fs.appendFileSync(tracePath, line + '\n', { encoding: 'utf8' });
+          }
+          const server = http.createServer((req, res) => {
+            let pathname = '/';
+            try { pathname = new URL(req.url, 'http://127.0.0.1').pathname; } catch {}
+            const origin = safe(req.headers.origin);
+            const requestedMethod = safe(req.headers['access-control-request-method']);
+            const privateNetwork = String(req.headers['access-control-request-private-network'] || '').toLowerCase() === 'true';
+            record('request method=' + safe(req.method) + ' path=' + safe(pathname) + ' origin=' + origin + ' requested_method=' + requestedMethod + ' private_network=' + privateNetwork);
+            const upstream = http.request({ hostname: '127.0.0.1', port: 8081, method: req.method, path: req.url, headers: req.headers }, upstreamResponse => {
+              record('response method=' + safe(req.method) + ' path=' + safe(pathname) + ' status=' + upstreamResponse.statusCode + ' allow_origin=' + safe(upstreamResponse.headers['access-control-allow-origin']) + ' allow_private_network=' + safe(upstreamResponse.headers['access-control-allow-private-network']) + ' allow_headers=' + safe(upstreamResponse.headers['access-control-allow-headers']));
+              res.writeHead(upstreamResponse.statusCode, upstreamResponse.headers);
+              upstreamResponse.pipe(res);
+            });
+            upstream.on('error', () => {
+              record('upstream_error method=' + safe(req.method) + ' path=' + safe(pathname));
+              if (!res.headersSent) res.writeHead(502);
+              res.end();
+            });
+            req.pipe(upstream);
+          });
+          server.listen(8080, '127.0.0.1');
+          '@
+          [System.IO.File]::WriteAllText($proxyPath, $proxySource, [System.Text.UTF8Encoding]::new($false))
+          $proxyOut = Join-Path $env:RUNNER_TEMP 'lanora-api-proxy.stdout.log'
+          $proxyErr = Join-Path $env:RUNNER_TEMP 'lanora-api-proxy.stderr.log'
+          $proxy = Start-Process -FilePath (Get-Command node).Source -ArgumentList @($proxyPath, $tracePath) -PassThru -WindowStyle Hidden -RedirectStandardOutput $proxyOut -RedirectStandardError $proxyErr
+          $env:LANORA_API_PROXY_PID = [string]$proxy.Id
+          "LANORA_API_PROXY_PID=$($proxy.Id)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+          $env:LANORA_API_TRACE_LOG = $tracePath
+          "LANORA_API_TRACE_LOG=$tracePath" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+          $proxyReady = $false
+          for ($i = 0; $i -lt 40; $i++) {
+            try {
+              $response = Invoke-WebRequest 'http://127.0.0.1:8080/api/v1/health' -TimeoutSec 2
+              if ($response.StatusCode -eq 200) { $proxyReady = $true; break }
+            } catch {}
+            Start-Sleep -Milliseconds 250
+          }
+          if (!$proxyReady) { throw 'Sanitized local API request trace proxy did not become ready.' }
+          if ($proxy.HasExited) { throw 'Sanitized local API request trace proxy exited before the client test.' }
+          $listenerOwners = @()
+          try {
+            $listenerOwners = @(Get-NetTCPConnection -LocalPort 8080 -State Listen -ErrorAction Stop | Select-Object -ExpandProperty OwningProcess -Unique)
+          } catch {}
+          if ($listenerOwners.Count -gt 0 -and $listenerOwners -notcontains $proxy.Id) { throw 'The local API trace proxy did not own the expected loopback port.' }
+          Remove-Item -LiteralPath $tracePath -Force -ErrorAction SilentlyContinue
           try {
             $script:stage = 'install signed alpha.1 baseline'
             $baseline = $env:LANORA_E2E_BASELINE_INSTALLER
@@ -696,7 +696,18 @@ jobs:
                 $window = if ($_.MainWindowTitle -match '(?i)LANORA.*(Setup|Installer|Update)') { 'lanora_setup' } elseif ($_.MainWindowTitle -match '(?i)LANORA') { 'lanora' } else { 'none' }
                 "$name;responding=$responding;cpu=$cpu;window=$window"
               })
-              Write-Output "UPDATER_PROCESS: original_exited=$originalExited;processes=$($activeProcesses -join ',')"
+              $installerFlags = 'unknown'
+              try {
+                $installerProcesses = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -match '(?i)^LANORA.*installer' })
+                $flagSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+                foreach ($installer in $installerProcesses) {
+                  foreach ($flag in @('/S', '/P', '/UPDATE', '/RESTART')) {
+                    if ([string]$installer.CommandLine -match "(?i)(?:^|\s)$([regex]::Escape($flag))(?:\s|=|$)") { [void]$flagSet.Add($flag) }
+                  }
+                }
+                $installerFlags = if ($flagSet.Count -gt 0) { @($flagSet | Sort-Object) -join ',' } else { 'none' }
+              } catch {}
+              Write-Output "UPDATER_PROCESS: original_exited=$originalExited;processes=$($activeProcesses -join ',');installer_flags=$installerFlags"
               $windowClasses = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
               $buttonNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
               try {
