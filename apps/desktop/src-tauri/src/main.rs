@@ -179,6 +179,20 @@ fn valid_loopback_api_method(method: &str) -> bool {
     matches!(method, "GET" | "POST" | "PATCH" | "DELETE")
 }
 
+fn reqwest_cause_name(error: &reqwest::Error) -> &'static str {
+    if error.is_timeout() {
+        "TimeoutError"
+    } else if error.is_connect() {
+        "ConnectError"
+    } else if error.is_body() {
+        "BodyError"
+    } else if error.is_request() {
+        "RequestError"
+    } else {
+        "ReqwestError"
+    }
+}
+
 #[tauri::command]
 async fn loopback_api_request(
     server: String,
@@ -201,10 +215,13 @@ async fn loopback_api_request(
         .join(&path)
         .map_err(|_| LoopbackApiFailure::new("invalid_input", None, None))?;
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_millis(timeout_ms.clamp(1, 30_000)))
+        .no_proxy()
+        .timeout(std::time::Duration::from_millis(
+            timeout_ms.clamp(1, 30_000),
+        ))
         .redirect(reqwest::redirect::Policy::none())
         .build()
-        .map_err(|_| LoopbackApiFailure::new("network", None, Some("ReqwestError")))?;
+        .map_err(|_| LoopbackApiFailure::new("network", None, Some("ReqwestBuildError")))?;
     let mut request = client.request(
         reqwest::Method::from_bytes(method.as_bytes())
             .map_err(|_| LoopbackApiFailure::new("invalid_input", None, None))?,
@@ -221,9 +238,13 @@ async fn loopback_api_request(
 
     let mut response = request.send().await.map_err(|error| {
         LoopbackApiFailure::new(
-            if error.is_timeout() { "timeout" } else { "network" },
+            if error.is_timeout() {
+                "timeout"
+            } else {
+                "network"
+            },
             None,
-            Some("ReqwestError"),
+            Some(reqwest_cause_name(&error)),
         )
     })?;
     let status = response.status().as_u16();
@@ -237,9 +258,13 @@ async fn loopback_api_request(
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|error| {
         LoopbackApiFailure::new(
-            if error.is_timeout() { "timeout" } else { "network" },
+            if error.is_timeout() {
+                "timeout"
+            } else {
+                "network"
+            },
             Some(status),
-            Some("ReqwestError"),
+            Some(reqwest_cause_name(&error)),
         )
     })? {
         if bytes.len().saturating_add(chunk.len()) as u64 > MAX_API_RESPONSE_BYTES {
@@ -257,9 +282,9 @@ async fn loopback_api_request(
             .filter(|code| {
                 !code.is_empty()
                     && code.len() <= 64
-                    && code
-                        .bytes()
-                        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+                    && code.bytes().all(|byte| {
+                        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'
+                    })
             })
             .unwrap_or("http");
         return Err(LoopbackApiFailure::new(code, Some(status), None));
@@ -576,5 +601,4 @@ mod tests {
         assert!(valid_loopback_api_method("PATCH"));
         assert!(!valid_loopback_api_method("OPTIONS"));
     }
-
 }
