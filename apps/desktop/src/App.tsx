@@ -1301,6 +1301,10 @@ export default function App() {
     serverInput,
     connectedServer: server,
     serverReachable,
+    serverPhase: phase,
+    connectionStage,
+    serverFailureCode: failure instanceof RequestError ? failure.code : failure ? "unknown" : null,
+    serverFailureStatus: failure instanceof RequestError ? failure.status ?? null : null,
     rooms: publicRooms.length,
   };
   if (!startupReady) return <StartupSkeleton lang={lang} visible={showStartupSkeleton} />;
