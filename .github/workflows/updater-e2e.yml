@@ -250,8 +250,16 @@ jobs:
             throw 'Expected accessible UI control was not available.'
           }
           function Invoke-UiElement($element) {
-            $pattern = $element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-            $pattern.Invoke()
+            $pattern = $null
+            try { $pattern = $element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern) } catch {}
+            if ($null -ne $pattern) {
+              $pattern.Invoke()
+              return
+            }
+            $element.SetFocus()
+            Start-Sleep -Milliseconds 100
+            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+            Start-Sleep -Milliseconds 250
           }
           function Set-UiValue($element, [string]$value) {
             $element.SetFocus()
@@ -424,29 +432,45 @@ jobs:
             if ($null -ne $cancel) { Invoke-UiElement $cancel }
 
             $script:stage = 'reject invalid update signature'
+            $script:stage = 'find version button for invalid-signature test'
             $updateButton = Wait-UiElement @('Check for Updates') 'ControlType.Button' 20
+            $script:stage = 'open updater menu for invalid-signature test'
             Invoke-UiElement $updateButton
+            $script:stage = 'find update command for invalid-signature test'
             $menuCheck = Wait-UiElement @('Check for Updates') 'ControlType.Button' 10 $true
+            $script:stage = 'check for invalid-signature update'
             Invoke-UiElement $menuCheck
+            $script:stage = 'wait for invalid-signature update offer'
             $state = Wait-LanoraState { param($s) $s.updateState -eq 'available' } 40
+            $script:stage = 'find invalid-signature install control'
             $installButton = Wait-UiElement @('Install update') 'ControlType.Button' 15
+            $script:stage = 'invoke update with invalid signature'
             Invoke-UiElement $installButton
+            $script:stage = 'confirm invalid signature rejection'
             $state = Wait-LanoraState { param($s) ($s.updateState -eq 'failed') -and ($s.version -eq '0.3.0-alpha.0') } 60
             Report-Pass 'invalid signature rejected and alpha.0 remained installed'
             $later = Find-UiElement @('Later') 'ControlType.Button' $true
             if ($null -ne $later) { Invoke-UiElement $later }
 
             $script:stage = 'download and install correctly signed alpha.2'
+            $script:stage = 'prepare correctly signed update manifest'
             Write-TestManifest $goodSignature
             Start-Sleep -Milliseconds 500
+            $script:stage = 'find version button for signed update'
             $updateButton = Wait-UiElement @('Check for Updates') 'ControlType.Button' 20
+            $script:stage = 'open updater menu for signed update'
             Invoke-UiElement $updateButton
+            $script:stage = 'find update command for signed update'
             $menuCheck = Wait-UiElement @('Check for Updates') 'ControlType.Button' 10 $true
+            $script:stage = 'check for correctly signed update'
             Invoke-UiElement $menuCheck
+            $script:stage = 'wait for signed update offer'
             $state = Wait-LanoraState { param($s) $s.updateState -eq 'available' } 40
             if ($state.version -ne '0.3.0-alpha.0') { throw 'baseline version changed before valid update' }
             $traceStart = @($state.updateStates).Count
+            $script:stage = 'find signed update install control'
             $installButton = Wait-UiElement @('Install update') 'ControlType.Button' 15
+            $script:stage = 'invoke signed update installation'
             Invoke-UiElement $installButton
             $maxPercent = 0
             $downloadReceived = 0
