@@ -2165,7 +2165,7 @@ export default function App() {
                   <h2 dir={lang === "fa" ? "rtl" : "ltr"}>{t.checkForUpdates}</h2>
                 </header>
                 <div className="app-dialog-body update-dialog-body" dir={lang === "fa" ? "rtl" : "ltr"}>
-                  <p className={`app-update-state ${updateState}`} role="status" aria-live="polite">
+                  <p className={`app-update-state ${updateState}`} role="status" aria-live="polite" aria-label={LANORA_E2E_ENABLED ? `LANORA_E2E_STATE:${JSON.stringify(e2eSnapshot)}` : undefined}>
                     {updateState === "checking" || updateState === "downloading" || updateState === "verifying" || updateState === "installing" || updateState === "restarting"
                       ? <RefreshCw size={16} className="spin" aria-hidden="true" />
                       : updateState === "up_to_date" || updateState === "installed"
@@ -2244,7 +2244,7 @@ export default function App() {
           )}
         </div>
       </div>
-      {LANORA_E2E_ENABLED && (
+      {LANORA_E2E_ENABLED && !updateDialogOpen && (
         <output
           id="lanora-e2e-state"
           role="status"
