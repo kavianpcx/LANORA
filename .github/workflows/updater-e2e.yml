@@ -390,21 +390,27 @@ jobs:
             try { stat = fs.statSync(file); } catch { record('response path=' + safe(name) + ' status=404'); res.writeHead(404); res.end('not found'); return; }
             const started = Date.now();
             let bytes = 0;
+            let finished = false;
             record('response path=' + safe(name) + ' status=200 content_length=' + stat.size);
             res.writeHead(200, {
               'Content-Length': stat.size,
               'Content-Type': name.endsWith('.json') ? 'application/json' : 'application/octet-stream',
               'Cache-Control': 'no-store'
             });
-            const stream = fs.createReadStream(file, { highWaterMark: 262144 });
-            stream.on('data', chunk => {
-              bytes += chunk.length;
-              res.write(chunk);
-              stream.pause();
-              setTimeout(() => stream.resume(), 60);
+            const stream = fs.createReadStream(file);
+            stream.on('data', chunk => { bytes += chunk.length; });
+            res.on('finish', () => {
+              finished = true;
+              record('complete path=' + safe(name) + ' bytes=' + bytes + ' content_length=' + stat.size + ' elapsed_ms=' + Math.max(0, Date.now() - started));
             });
-            stream.on('end', () => { res.end(); record('complete path=' + safe(name) + ' bytes=' + bytes + ' elapsed_ms=' + Math.max(0, Date.now() - started)); });
+            res.on('close', () => {
+              if (!finished) {
+                record('incomplete path=' + safe(name) + ' bytes=' + bytes + ' content_length=' + stat.size);
+                stream.destroy();
+              }
+            });
             stream.on('error', () => { record('stream_error path=' + safe(name) + ' bytes=' + bytes); res.destroy(); });
+            stream.pipe(res);
           });
           server.listen(8765, '127.0.0.1');
           '@
