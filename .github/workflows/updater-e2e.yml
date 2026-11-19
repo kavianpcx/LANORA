@@ -79,14 +79,14 @@ jobs:
           if ($macroStart -lt 0 -or $macroEnd -lt 0) { throw 'Could not locate the release NSIS hook logging macro.' }
           $macroEnd += $macroEndMarker.Length
           $diagnosticMacro = @'
-!macro LANORA_UPDATER_E2E_LOG message
-  FileOpen $R5 "$TEMP\LANORA-updater-e2e-hook.log" a
-  ${If} $R5 != error
-    FileWrite $R5 "${message}$\r$\n"
-    FileClose $R5
-  ${EndIf}
-!macroend
-'@
+          !macro LANORA_UPDATER_E2E_LOG message
+            FileOpen $R5 "$TEMP\LANORA-updater-e2e-hook.log" a
+            ${If} $R5 != error
+              FileWrite $R5 "${message}$\r$\n"
+              FileClose $R5
+            ${EndIf}
+          !macroend
+          '@
           $testHook = $releaseHook.Substring(0, $macroStart) + $diagnosticMacro + $releaseHook.Substring($macroEnd)
           [System.IO.File]::WriteAllText($testHookPath, $testHook, [System.Text.UTF8Encoding]::new($false))
           if (!(Test-Path -LiteralPath $testHookPath)) { throw 'Diagnostic NSIS hook was not created.' }
