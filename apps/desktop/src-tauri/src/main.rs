@@ -473,6 +473,7 @@ fn main() {
             rpc_port: Mutex::new(0),
         })
         .invoke_handler(tauri::generate_handler![
+            loopback_api_request,
             engine_start,
             engine_status,
             engine_peers,
@@ -552,4 +553,28 @@ mod tests {
         c.peer_url = "file:///bin/sh".into();
         assert!(!valid_config(&c));
     }
+    #[test]
+    fn loopback_api_bridge_rejects_nonlocal_hosts_and_unsafe_routes() {
+        assert!(validate_loopback_api_server("http://127.0.0.1:8080").is_ok());
+        assert!(validate_loopback_api_server("http://localhost:8080").is_ok());
+        assert!(validate_loopback_api_server("http://[::1]:8080").is_ok());
+        assert_eq!(
+            validate_loopback_api_server("http://192.168.1.5:8080"),
+            Err("insecure_http")
+        );
+        assert_eq!(
+            validate_loopback_api_server("https://example.org"),
+            Err("insecure_http")
+        );
+        assert_eq!(
+            validate_loopback_api_server("http://user:pass@127.0.0.1:8080"),
+            Err("invalid_address")
+        );
+        assert!(valid_loopback_api_path("/api/v1/rooms/join"));
+        assert!(!valid_loopback_api_path("/api/v1/../admin"));
+        assert!(!valid_loopback_api_path("/api/v1/rooms?token=secret"));
+        assert!(valid_loopback_api_method("PATCH"));
+        assert!(!valid_loopback_api_method("OPTIONS"));
+    }
+
 }
