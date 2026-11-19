@@ -179,10 +179,32 @@ fn valid_loopback_api_method(method: &str) -> bool {
     matches!(method, "GET" | "POST" | "PATCH" | "DELETE")
 }
 
+fn io_error_cause_name(kind: std::io::ErrorKind) -> &'static str {
+    match kind {
+        std::io::ErrorKind::NotFound => "NotFound",
+        std::io::ErrorKind::PermissionDenied => "PermissionDenied",
+        std::io::ErrorKind::ConnectionRefused => "ConnectionRefused",
+        std::io::ErrorKind::ConnectionReset => "ConnectionReset",
+        std::io::ErrorKind::ConnectionAborted => "ConnectionAborted",
+        std::io::ErrorKind::NotConnected => "NotConnected",
+        std::io::ErrorKind::AddrInUse => "AddrInUse",
+        std::io::ErrorKind::AddrNotAvailable => "AddrNotAvailable",
+        std::io::ErrorKind::TimedOut => "TimedOut",
+        _ => "OtherIoError",
+    }
+}
+
 fn reqwest_cause_name(error: &reqwest::Error) -> &'static str {
     if error.is_timeout() {
         "TimeoutError"
     } else if error.is_connect() {
+        let mut cause = std::error::Error::source(error);
+        while let Some(current) = cause {
+            if let Some(io_error) = current.downcast_ref::<std::io::Error>() {
+                return io_error_cause_name(io_error.kind());
+            }
+            cause = current.source();
+        }
         "ConnectError"
     } else if error.is_body() {
         "BodyError"
@@ -578,6 +600,22 @@ mod tests {
         c.peer_url = "file:///bin/sh".into();
         assert!(!valid_config(&c));
     }
+    #[test]
+    fn native_network_diagnostics_expose_only_safe_io_error_classes() {
+        assert_eq!(
+            io_error_cause_name(std::io::ErrorKind::ConnectionRefused),
+            "ConnectionRefused"
+        );
+        assert_eq!(
+            io_error_cause_name(std::io::ErrorKind::PermissionDenied),
+            "PermissionDenied"
+        );
+        assert_eq!(
+            io_error_cause_name(std::io::ErrorKind::Other),
+            "OtherIoError"
+        );
+    }
+
     #[test]
     fn loopback_api_bridge_rejects_nonlocal_hosts_and_unsafe_routes() {
         assert!(validate_loopback_api_server("http://127.0.0.1:8080").is_ok());
