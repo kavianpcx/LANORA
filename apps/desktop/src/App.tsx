@@ -1298,6 +1298,7 @@ export default function App() {
     updateState === "downloading" || updateState === "verifying" ||
     updateState === "installing" || updateState === "restarting";
   const e2eSnapshot = {
+    runtimeOrigin: window.location.origin,
     version: appVersion,
     updateState,
     updateStates: updateStateTrace.current,
