@@ -496,8 +496,9 @@ jobs:
               $connectionStage = if ([string]$state.connectionStage -match '^[a-z_]{1,24}$') { [string]$state.connectionStage } else { 'other' }
               $failureCode = if ([string]$state.serverFailureCode -match '^[a-z_]{1,32}$') { [string]$state.serverFailureCode } else { 'other' }
               $failureStatus = if ($null -ne $state.serverFailureStatus -and [int]$state.serverFailureStatus -ge 100 -and [int]$state.serverFailureStatus -le 599) { [string]$state.serverFailureStatus } else { 'none' }
+              $failureCauseName = if ([string]$state.serverFailureCauseName -match '^[A-Za-z]{1,32}$') { [string]$state.serverFailureCauseName } else { 'other' }
               $runtimeOrigin = if ([string]$state.runtimeOrigin -match '^(https?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?|tauri://localhost)$') { [string]$state.runtimeOrigin } else { 'other' }
-              Write-Output "CLIENT_STATE: origin=$runtimeOrigin;server_phase=$phase;connection_stage=$connectionStage;failure_code=$failureCode;failure_status=$failureStatus"
+              Write-Output "CLIENT_STATE: origin=$runtimeOrigin;server_phase=$phase;connection_stage=$connectionStage;failure_code=$failureCode;failure_status=$failureStatus;failure_cause=$failureCauseName"
               Report-Fail 'installed alpha.1 client connected to the isolated local API'
             }
             $cancel = Find-UiElement @('Cancel') 'ControlType.Button' $true
@@ -609,6 +610,12 @@ jobs:
             $exceptionType = $_.Exception.GetType().Name
             $safeFailure = if ($_.Exception.Message -eq 'Expected sanitized LANORA test state was not observed.') { 'state timeout' } elseif ($_.Exception.Message -eq 'Expected accessible UI control was not available.') { 'UI control unavailable' } else { $exceptionType }
             $line = "FAIL: $($script:stage) (sanitized cause: $safeFailure)"
+            if ($script:stage -eq 'confirm relaunch on installed alpha.2 and settings persistence') {
+              $originalExited = 'unknown'
+              if ($null -ne $appProcess) { try { $originalExited = [string]$appProcess.HasExited } catch {} }
+              $activeNames = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(?i:lanora|nsis)' } | ForEach-Object { $_.ProcessName } | Where-Object { $_ -match '^[A-Za-z0-9_.-]{1,80}$' } | Sort-Object -Unique)
+              Write-Output "UPDATER_PROCESS: original_exited=$originalExited;matching_processes=$($activeNames -join ',')"
+            }
             Write-Output $line
             if ($null -ne $script:lastStateObserved) {
               $last = $script:lastStateObserved
@@ -617,11 +624,12 @@ jobs:
               $inputPresent = ![string]::IsNullOrWhiteSpace([string]$last.serverInput)
               $failureCode = if ($last.serverFailureCode) { [string]$last.serverFailureCode } else { 'none' }
               $failureStatus = if ($last.serverFailureStatus) { [string]$last.serverFailureStatus } else { 'none' }
+              $failureCauseName = if ([string]$last.serverFailureCauseName -match '^[A-Za-z]{1,32}$') { [string]$last.serverFailureCauseName } else { 'other' }
               $downloadReceived = if ($null -ne $last.downloadReceived) { [long]$last.downloadReceived } else { 0 }
               $downloadTotal = if ($null -ne $last.downloadTotal) { [long]$last.downloadTotal } else { 0 }
               $downloadPercent = if ($null -ne $last.maxDownloadPercent) { [int]$last.maxDownloadPercent } else { 0 }
               $safeStates = @($last.updateStates | ForEach-Object { [string]$_ } | Where-Object { $_ -in @('idle','checking','available','downloading','verifying','ready_to_install','installing','restarting','installed','failed') }) -join ','
-              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;server_phase=$($last.serverPhase);connection_stage=$($last.connectionStage);failure_code=$failureCode;failure_status=$failureStatus;version=$($last.version);update_state=$($last.updateState);download_received=$downloadReceived;download_total=$downloadTotal;download_percent=$downloadPercent;update_states=$safeStates"
+              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;server_phase=$($last.serverPhase);connection_stage=$($last.connectionStage);failure_code=$failureCode;failure_status=$failureStatus;failure_cause=$failureCauseName;version=$($last.version);update_state=$($last.updateState);download_received=$downloadReceived;download_total=$downloadTotal;download_percent=$downloadPercent;update_states=$safeStates"
             } else {
               Write-Output 'CLIENT_STATE: telemetry_available=false'
             }
