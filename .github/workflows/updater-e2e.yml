@@ -93,7 +93,10 @@ jobs:
                 endpoints = @('http://127.0.0.1:8765/latest.json')
                 requireSignedVersion = $true
                 dangerousInsecureTransportProtocol = $true
-                windows = @{ installMode = 'passive' }
+                windows = @{
+                  installMode = 'passive'
+                  installerArgs = @("/LOG=$($env:RUNNER_TEMP)\lanora-updater-e2e-nsis.log")
+                }
               }
             }
           } | ConvertTo-Json -Depth 8 -Compress
@@ -498,7 +501,11 @@ jobs:
               $failureStatus = if ($null -ne $state.serverFailureStatus -and [int]$state.serverFailureStatus -ge 100 -and [int]$state.serverFailureStatus -le 599) { [string]$state.serverFailureStatus } else { 'none' }
               $failureCauseName = if ([string]$state.serverFailureCauseName -match '^[A-Za-z]{1,32}$') { [string]$state.serverFailureCauseName } else { 'other' }
               $runtimeOrigin = if ([string]$state.runtimeOrigin -match '^(https?://[A-Za-z0-9.-]+(?::[0-9]{1,5})?|tauri://localhost)$') { [string]$state.runtimeOrigin } else { 'other' }
-              Write-Output "CLIENT_STATE: origin=$runtimeOrigin;server_phase=$phase;connection_stage=$connectionStage;failure_code=$failureCode;failure_status=$failureStatus;failure_cause=$failureCauseName"
+              $secureContext = [string]($state.runtimeSecureContext -eq $true)
+              $edgeMajor = if ([string]$state.runtimeEdgeMajor -match '^[0-9]{2,3}$') { [string]$state.runtimeEdgeMajor } else { 'unknown' }
+              $loopbackPermission = if ([string]$state.runtimeLoopbackPermission -in @('granted', 'denied', 'prompt', 'unsupported', 'unknown')) { [string]$state.runtimeLoopbackPermission } else { 'other' }
+              $cspConnectViolation = [string]($state.runtimeConnectCspViolation -eq $true)
+              Write-Output "CLIENT_STATE: origin=$runtimeOrigin;server_phase=$phase;connection_stage=$connectionStage;failure_code=$failureCode;failure_status=$failureStatus;failure_cause=$failureCauseName;secure_context=$secureContext;edge_major=$edgeMajor;loopback_permission=$loopbackPermission;csp_connect_violation=$cspConnectViolation"
               Report-Fail 'installed alpha.1 client connected to the isolated local API'
             }
             $cancel = Find-UiElement @('Cancel') 'ControlType.Button' $true
@@ -613,8 +620,55 @@ jobs:
             if ($script:stage -eq 'confirm relaunch on installed alpha.2 and settings persistence') {
               $originalExited = 'unknown'
               if ($null -ne $appProcess) { try { $originalExited = [string]$appProcess.HasExited } catch {} }
-              $activeNames = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(?i:lanora|nsis)' } | ForEach-Object { $_.ProcessName } | Where-Object { $_ -match '^[A-Za-z0-9_.-]{1,80}$' } | Sort-Object -Unique)
-              Write-Output "UPDATER_PROCESS: original_exited=$originalExited;matching_processes=$($activeNames -join ',')"
+              $activeProcesses = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(?i:lanora|nsis)' } | ForEach-Object {
+                $name = if ($_.ProcessName -match '^[A-Za-z0-9_.-]{1,80}$') { $_.ProcessName } else { 'other' }
+                $responding = 'unknown'
+                try { $responding = if ($_.Responding) { 'yes' } else { 'no' } } catch {}
+                $cpu = 'unknown'
+                try { $cpu = [string][Math]::Round([double]$_.CPU, 1) } catch {}
+                $window = if ($_.MainWindowTitle -match '(?i)LANORA.*(Setup|Installer|Update)') { 'lanora_setup' } elseif ($_.MainWindowTitle -match '(?i)LANORA') { 'lanora' } else { 'none' }
+                "$name;responding=$responding;cpu=$cpu;window=$window"
+              })
+              Write-Output "UPDATER_PROCESS: original_exited=$originalExited;processes=$($activeProcesses -join ',')"
+              $windowClasses = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+              $buttonNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+              try {
+                $root = [System.Windows.Automation.AutomationElement]::RootElement
+                $windowCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)
+                $buttonCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
+                foreach ($topWindow in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)) {
+                  try {
+                    $title = [string]$topWindow.Current.Name
+                    if ($title -match '(?i)LANORA') { [void]$windowClasses.Add('lanora') }
+                    elseif ($title -match '(?i)(Setup|Installer|Update)') { [void]$windowClasses.Add('installer') }
+                    elseif ($title -match '(?i)(Error|Blocked|Permission)') { [void]$windowClasses.Add('dialog') }
+                    if ($title -match '(?i)(LANORA|Setup|Installer|Update|Error|Blocked|Permission)') {
+                      foreach ($button in $topWindow.FindAll([System.Windows.Automation.TreeScope]::Descendants, $buttonCondition)) {
+                        $buttonName = [string]$button.Current.Name
+                        if ($buttonName -in @('Allow', 'Block', 'Continue', 'Cancel', 'Retry', 'Close', 'OK', 'Yes', 'No', 'Finish', 'Next')) { [void]$buttonNames.Add($buttonName) }
+                      }
+                    }
+                  } catch {}
+                }
+              } catch {}
+              Write-Output "UPDATER_WINDOWS: windows=$(@($windowClasses | Sort-Object) -join ',');buttons=$(@($buttonNames | Sort-Object) -join ',')"
+              $installerLog = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e-nsis.log'
+              if (Test-Path $installerLog) {
+                $logLines = @(Get-Content -Path $installerLog)
+                $operations = @($logLines | ForEach-Object {
+                  if ($_ -match '^(Section|SectionEnd|SetOutPath|File|Delete|CreateDirectory|RMDir|WriteRegStr|WriteRegDWORD|DeleteRegKey|DeleteRegValue|WriteUninstaller|ExecShell|Exec|Rename|CopyFiles)(?::|$)') { $Matches[1] }
+                } | Select-Object -Last 30)
+                $errorKinds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+                foreach ($logLine in $logLines) {
+                  if ($logLine -match '(?i)error opening file for writing') { [void]$errorKinds.Add('file_write') }
+                  elseif ($logLine -match '(?i)access is denied') { [void]$errorKinds.Add('access_denied') }
+                  elseif ($logLine -match '(?i)restart manager|another application') { [void]$errorKinds.Add('restart_manager') }
+                  elseif ($logLine -match '(?i)\b(error|failed|aborted)\b') { [void]$errorKinds.Add('installer_reported_error') }
+                }
+                Write-Output "UPDATER_INSTALL_LOG: exists=true;lines=$($logLines.Count);operations=$($operations -join ',');errors=$(@($errorKinds | Sort-Object) -join ',')"
+              } else {
+                Write-Output 'UPDATER_INSTALL_LOG: exists=false'
+              }
             }
             Write-Output $line
             if ($null -ne $script:lastStateObserved) {
@@ -629,7 +683,11 @@ jobs:
               $downloadTotal = if ($null -ne $last.downloadTotal) { [long]$last.downloadTotal } else { 0 }
               $downloadPercent = if ($null -ne $last.maxDownloadPercent) { [int]$last.maxDownloadPercent } else { 0 }
               $safeStates = @($last.updateStates | ForEach-Object { [string]$_ } | Where-Object { $_ -in @('idle','checking','available','downloading','verifying','ready_to_install','installing','restarting','installed','failed') }) -join ','
-              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;server_phase=$($last.serverPhase);connection_stage=$($last.connectionStage);failure_code=$failureCode;failure_status=$failureStatus;failure_cause=$failureCauseName;version=$($last.version);update_state=$($last.updateState);download_received=$downloadReceived;download_total=$downloadTotal;download_percent=$downloadPercent;update_states=$safeStates"
+              $secureContext = [string]($last.runtimeSecureContext -eq $true)
+              $edgeMajor = if ([string]$last.runtimeEdgeMajor -match '^[0-9]{2,3}$') { [string]$last.runtimeEdgeMajor } else { 'unknown' }
+              $loopbackPermission = if ([string]$last.runtimeLoopbackPermission -in @('granted', 'denied', 'prompt', 'unsupported', 'unknown')) { [string]$last.runtimeLoopbackPermission } else { 'other' }
+              $cspConnectViolation = [string]($last.runtimeConnectCspViolation -eq $true)
+              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;server_phase=$($last.serverPhase);connection_stage=$($last.connectionStage);failure_code=$failureCode;failure_status=$failureStatus;failure_cause=$failureCauseName;secure_context=$secureContext;edge_major=$edgeMajor;loopback_permission=$loopbackPermission;csp_connect_violation=$cspConnectViolation;version=$($last.version);update_state=$($last.updateState);download_received=$downloadReceived;download_total=$downloadTotal;download_percent=$downloadPercent;update_states=$safeStates"
             } else {
               Write-Output 'CLIENT_STATE: telemetry_available=false'
             }
