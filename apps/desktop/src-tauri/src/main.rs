@@ -167,12 +167,23 @@ fn validate_loopback_api_server(server: &str) -> Result<url::Url, &'static str> 
 }
 
 fn valid_loopback_api_path(path: &str) -> bool {
-    path.starts_with("/api/v1/")
-        && !path.contains("..")
-        && !path.contains('?')
-        && !path.contains('#')
-        && !path.contains('\\')
-        && !path.chars().any(|c| c.is_control() || c.is_whitespace())
+    if !path.starts_with("/api/v1/")
+        || path.contains("..")
+        || path.contains('?')
+        || path.contains('#')
+        || path.contains('\\')
+        || path.contains('%')
+        || !path.is_ascii()
+        || path.chars().any(|c| c.is_control() || c.is_whitespace())
+    {
+        return false;
+    }
+
+    let Ok(base) = url::Url::parse("http://127.0.0.1/") else {
+        return false;
+    };
+    base.join(path)
+        .is_ok_and(|normalized| normalized.path().starts_with("/api/v1/"))
 }
 
 fn valid_loopback_api_method(method: &str) -> bool {
@@ -634,7 +645,14 @@ mod tests {
             Err("invalid_address")
         );
         assert!(valid_loopback_api_path("/api/v1/rooms/join"));
+        assert!(valid_loopback_api_path(
+            "/api/v1/rooms/0123456789abcdef0123456789abcdef"
+        ));
         assert!(!valid_loopback_api_path("/api/v1/../admin"));
+        assert!(!valid_loopback_api_path(
+            "/api/v1/%2e%2e/%2e%2e/admin"
+        ));
+        assert!(!valid_loopback_api_path("/api/v1/rooms%2fadmin"));
         assert!(!valid_loopback_api_path("/api/v1/rooms?token=secret"));
         assert!(valid_loopback_api_method("PATCH"));
         assert!(!valid_loopback_api_method("OPTIONS"));
