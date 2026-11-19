@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/updater-e2e.yml'
       - 'apps/desktop/src-tauri/tauri.conf.json'
+      - 'apps/desktop/src-tauri/Cargo.toml'
+      - 'apps/desktop/src-tauri/src/main.rs'
       - 'apps/desktop/src-tauri/windows/installer-hooks.nsh'
       - 'apps/desktop/src/App.tsx'
       - 'apps/desktop/src/api.ts'
@@ -19,6 +21,8 @@ on:
     paths:
       - '.github/workflows/updater-e2e.yml'
       - 'apps/desktop/src-tauri/tauri.conf.json'
+      - 'apps/desktop/src-tauri/Cargo.toml'
+      - 'apps/desktop/src-tauri/src/main.rs'
       - 'apps/desktop/src-tauri/windows/installer-hooks.nsh'
       - 'apps/desktop/src/App.tsx'
       - 'apps/desktop/src/api.ts'
@@ -542,6 +546,530 @@ jobs:
               $loopbackPermission = if ([string]$state.runtimeLoopbackPermission -in @('granted', 'denied', 'prompt', 'unsupported', 'unknown')) { [string]$state.runtimeLoopbackPermission } else { 'other' }
               $cspConnectViolation = [string]($state.runtimeConnectCspViolation -eq $true)
               Write-Output "CLIENT_STATE: origin=$runtimeOrigin;server_phase=$phase;connection_stage=$connectionStage;failure_code=$failureCode;failure_status=$failureStatus;failure_cause=$failureCauseName;secure_context=$secureContext;edge_major=$edgeMajor;loopback_permission=$loopbackPermission;csp_connect_violation=$cspConnectViolation"
+              $proxyProcessAlive = $false
+              if ($env:LANORA_API_PROXY_PID -match '^[0-9]{1,8}
+            }
+            $cancel = Find-UiElement @('Cancel') 'ControlType.Button' $true
+            if ($null -ne $cancel) { Invoke-UiElement $cancel }
+
+            $script:stage = 'reject invalid update signature'
+            $script:stage = 'find standalone Check for Updates control'
+            $updateButton = Wait-UiElement @('Check for Updates') 'ControlType.Button' 20 $true
+            if ($updateButton.Current.IsOffscreen -or !$updateButton.Current.IsEnabled) { throw 'standalone Check for Updates control was not visible and enabled' }
+            Report-Pass 'standalone Check for Updates control is visible and accessible by name'
+            $script:uiEvidencePath = Save-TitleBarEvidence (Join-Path $env:RUNNER_TEMP 'lanora-titlebar-update.png')
+            Write-Output 'UI_EVIDENCE: titlebar screenshot captured'
+            $script:stage = 'check for invalid-signature update'
+            Invoke-UiElement $updateButton
+            $script:stage = 'wait for invalid-signature update offer'
+            $state = Wait-LanoraState { param($s) $s.updateState -eq 'available' } 40
+            $script:stage = 'find invalid-signature install control'
+            $installButton = Wait-UiElement @('Install update') 'ControlType.Button' 15
+            $script:stage = 'invoke update with invalid signature'
+            Invoke-UiElement $installButton
+            $script:stage = 'confirm invalid signature rejection'
+            $state = Wait-LanoraState { param($s) ($s.updateState -eq 'failed') -and ($s.version -eq '0.3.0-alpha.1') } 60
+            Report-Pass 'invalid signature rejected and alpha.1 remained installed'
+            $later = Find-UiElement @('Later') 'ControlType.Button' $true
+            if ($null -ne $later) { Invoke-UiElement $later }
+
+            $script:stage = 'download and install correctly signed alpha.2'
+            $script:stage = 'prepare correctly signed update manifest'
+            Write-TestManifest $goodSignature
+            Start-Sleep -Milliseconds 500
+            $script:stage = 'find standalone Check for Updates control for signed update'
+            $updateButton = Wait-UiElement @('Check for Updates') 'ControlType.Button' 20 $true
+            $script:stage = 'check for correctly signed update'
+            Invoke-UiElement $updateButton
+            $script:stage = 'wait for signed update offer'
+            $state = Wait-LanoraState { param($s) $s.updateState -eq 'available' } 40
+            if ($state.version -ne '0.3.0-alpha.1') { throw 'baseline version changed before valid update' }
+            $traceStart = @($state.updateStates).Count
+            $script:stage = 'find signed update install control'
+            $installButton = Wait-UiElement @('Install update') 'ControlType.Button' 15
+            $script:stage = 'activate signed update installation'
+            Invoke-UiElement $installButton
+            $script:stage = 'observe signed update download and state transitions'
+            $maxPercent = 0
+            $downloadReceived = 0
+            $downloadTotal = 0
+            $lastState = $null
+            $installStartDeadline = [DateTime]::UtcNow.AddSeconds(30)
+            $installStarted = $false
+            $updateDeadline = [DateTime]::UtcNow.AddMinutes(4)
+            while ([DateTime]::UtcNow -lt $updateDeadline) {
+              $snapshot = Get-LanoraState
+              if ($null -ne $snapshot) {
+                $lastState = $snapshot
+                $script:lastStateObserved = $snapshot
+                if ($snapshot.maxDownloadPercent -ne $null) { $maxPercent = [Math]::Max($maxPercent, [int]$snapshot.maxDownloadPercent) }
+                if ($snapshot.downloadReceived -ne $null) { $downloadReceived = [Math]::Max($downloadReceived, [long]$snapshot.downloadReceived) }
+                if ($snapshot.downloadTotal -ne $null) { $downloadTotal = [Math]::Max($downloadTotal, [long]$snapshot.downloadTotal) }
+                $tail = @($snapshot.updateStates | Select-Object -Skip $traceStart)
+                if ($snapshot.updateState -eq 'failed') { throw 'valid signed update reported failure' }
+                if (!$installStarted -and $tail -contains 'downloading') {
+                  $installStarted = $true
+                  Report-Pass 'signed update entered downloading after install activation'
+                }
+                if (!$installStarted -and [DateTime]::UtcNow -ge $installStartDeadline) { throw 'signed update did not begin downloading after install activation' }
+                if ($snapshot.version -eq '0.3.0-alpha.2' -or $tail -contains 'restarting') { break }
+              }
+              Start-Sleep -Milliseconds 250
+            }
+            $script:stage = 'validate signed update states and byte progress'
+            if ($null -eq $lastState) { throw 'client state disappeared before update telemetry was captured' }
+            $updateTrace = @($lastState.updateStates | Select-Object -Skip $traceStart)
+            $expectedStates = @('downloading', 'verifying', 'installing', 'restarting')
+            $nextState = 0
+            foreach ($observedState in $updateTrace) {
+              if ($nextState -lt $expectedStates.Length -and $observedState -eq $expectedStates[$nextState]) { $nextState++ }
+            }
+            if ($nextState -ne $expectedStates.Length) { throw 'required ordered updater states were not all observed' }
+            if ($downloadReceived -le 0 -or $downloadTotal -le 0 -or $maxPercent -lt 100) { throw 'real download byte progress did not reach the known total' }
+            Report-Pass 'signed update reported actual download bytes and 100 percent progress'
+            Report-Pass 'signed update emitted downloading, verifying, installing and restarting states in order'
+
+            $script:stage = 'confirm relaunch on installed alpha.2 and settings persistence'
+            $state = Wait-LanoraState { param($s) ($s.version -eq '0.3.0-alpha.2') -and ($s.updateState -eq 'installed') } 120
+            if ($state.playerName -ne 'Updater QA' -or $state.language -ne 'en' -or $state.theme -ne 'light' -or $state.avatar -ne 'fox' -or $state.serverInput -ne 'http://127.0.0.1:8080') {
+              throw 'one or more saved preferences changed during installation'
+            }
+            $versionButton = Wait-UiElement @('0.3.0-alpha.2') 'ControlType.Button' 15
+            Report-Pass 'new process confirmed installed alpha.2 after updater relaunch'
+            Report-Pass 'display name, avatar, language, theme and server setting survived the update'
+            $later = Find-UiElement @('Later') 'ControlType.Button' $true
+            if ($null -ne $later) { Invoke-UiElement $later }
+
+            $script:stage = 'reconnect installed alpha.2 client to local LANORA API'
+            $serverInput = Wait-UiElement @('Your server') 'ControlType.Edit' 15
+            Set-UiValue $serverInput 'http://127.0.0.1:8080'
+            $connect = Wait-UiElement @('Connect to network') 'ControlType.Button' 10
+            Invoke-UiElement $connect
+            $state = Wait-LanoraState { param($s) ($s.version -eq '0.3.0-alpha.2') -and (($s.serverReachable -eq $true) -or ($s.serverPhase -eq 'failed')) } 15
+            if (($state.serverReachable -eq $true) -and ($state.connectedServer -eq 'http://127.0.0.1:8080')) {
+              Report-Pass 'installed alpha.2 client reconnected to the isolated local API'
+            } else {
+              Report-Fail 'installed alpha.2 client reconnected to the isolated local API'
+            }
+
+            $script:stage = 'complete test report'
+          } catch {
+            $script:failed = $true
+            $exceptionType = $_.Exception.GetType().Name
+            $safeFailure = if ($_.Exception.Message -eq 'Expected sanitized LANORA test state was not observed.') { 'state timeout' } elseif ($_.Exception.Message -eq 'Expected accessible UI control was not available.') { 'UI control unavailable' } else { $exceptionType }
+            $line = "FAIL: $($script:stage) (sanitized cause: $safeFailure)"
+            try {
+              Add-Type -AssemblyName System.Drawing
+              Add-Type -AssemblyName System.Windows.Forms
+              $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+              $bitmap = New-Object -TypeName System.Drawing.Bitmap -ArgumentList @($bounds.Width, $bounds.Height)
+              $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+              $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+              $bitmap.Save((Join-Path $env:RUNNER_TEMP 'lanora-updater-failure.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+              $graphics.Dispose()
+              $bitmap.Dispose()
+              Write-Output 'UPDATER_EVIDENCE: screenshot=captured'
+            } catch {
+              Write-Output 'UPDATER_EVIDENCE: screenshot=unavailable'
+            }
+            if ($script:stage -eq 'confirm relaunch on installed alpha.2 and settings persistence') {
+              $originalExited = 'unknown'
+              if ($null -ne $appProcess) { try { $originalExited = [string]$appProcess.HasExited } catch {} }
+              $activeProcesses = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(?i:lanora|nsis)' } | ForEach-Object {
+                $name = if ($_.ProcessName -match '^[A-Za-z0-9_.-]{1,80}$') { $_.ProcessName } else { 'other' }
+                $responding = 'unknown'
+                try { $responding = if ($_.Responding) { 'yes' } else { 'no' } } catch {}
+                $cpu = 'unknown'
+                try { $cpu = [string][Math]::Round([double]$_.CPU, 1) } catch {}
+                $window = if ($_.MainWindowTitle -match '(?i)LANORA.*(Setup|Installer|Update)') { 'lanora_setup' } elseif ($_.MainWindowTitle -match '(?i)LANORA') { 'lanora' } else { 'none' }
+                "$name;responding=$responding;cpu=$cpu;window=$window"
+              })
+              Write-Output "UPDATER_PROCESS: original_exited=$originalExited;processes=$($activeProcesses -join ',')"
+              $windowClasses = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+              $buttonNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+              try {
+                $root = [System.Windows.Automation.AutomationElement]::RootElement
+                $windowCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)
+                $buttonCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
+                foreach ($topWindow in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)) {
+                  try {
+                    $title = [string]$topWindow.Current.Name
+                    if ($title -match '(?i)LANORA') { [void]$windowClasses.Add('lanora') }
+                    elseif ($title -match '(?i)(Setup|Installer|Update)') { [void]$windowClasses.Add('installer') }
+                    elseif ($title -match '(?i)(Error|Blocked|Permission)') { [void]$windowClasses.Add('dialog') }
+                    if ($title -match '(?i)(LANORA|Setup|Installer|Update|Error|Blocked|Permission)') {
+                      foreach ($button in $topWindow.FindAll([System.Windows.Automation.TreeScope]::Descendants, $buttonCondition)) {
+                        $buttonName = [string]$button.Current.Name
+                        if ($buttonName -in @('Allow', 'Block', 'Continue', 'Cancel', 'Retry', 'Close', 'OK', 'Yes', 'No', 'Finish', 'Next')) { [void]$buttonNames.Add($buttonName) }
+                      }
+                    }
+                  } catch {}
+                }
+              } catch {}
+              Write-Output "UPDATER_WINDOWS: windows=$(@($windowClasses | Sort-Object) -join ',');buttons=$(@($buttonNames | Sort-Object) -join ',')"
+              $installerLog = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e-nsis.log'
+              if (Test-Path $installerLog) {
+                $logLines = @(Get-Content -Path $installerLog)
+                $operations = @($logLines | ForEach-Object {
+                  if ($_ -match '^(Section|SectionEnd|SetOutPath|File|Delete|CreateDirectory|RMDir|WriteRegStr|WriteRegDWORD|DeleteRegKey|DeleteRegValue|WriteUninstaller|ExecShell|Exec|Rename|CopyFiles)(?::|$)') { $Matches[1] }
+                } | Select-Object -Last 30)
+                $errorKinds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+                foreach ($logLine in $logLines) {
+                  if ($logLine -match '(?i)error opening file for writing') { [void]$errorKinds.Add('file_write') }
+                  elseif ($logLine -match '(?i)access is denied') { [void]$errorKinds.Add('access_denied') }
+                  elseif ($logLine -match '(?i)restart manager|another application') { [void]$errorKinds.Add('restart_manager') }
+                  elseif ($logLine -match '(?i)\b(error|failed|aborted)\b') { [void]$errorKinds.Add('installer_reported_error') }
+                }
+                Write-Output "UPDATER_INSTALL_LOG: exists=true;lines=$($logLines.Count);operations=$($operations -join ',');errors=$(@($errorKinds | Sort-Object) -join ',')"
+              } else {
+                Write-Output 'UPDATER_INSTALL_LOG: exists=false'
+              }
+            }
+            Write-Output $line
+            if ($null -ne $script:lastStateObserved) {
+              $last = $script:lastStateObserved
+              $reachable = [bool]$last.serverReachable
+              $serverPresent = ![string]::IsNullOrWhiteSpace([string]$last.connectedServer)
+              $inputPresent = ![string]::IsNullOrWhiteSpace([string]$last.serverInput)
+              $failureCode = if ($last.serverFailureCode) { [string]$last.serverFailureCode } else { 'none' }
+              $failureStatus = if ($last.serverFailureStatus) { [string]$last.serverFailureStatus } else { 'none' }
+              $failureCauseName = if ([string]$last.serverFailureCauseName -match '^[A-Za-z]{1,32}$') { [string]$last.serverFailureCauseName } else { 'other' }
+              $downloadReceived = if ($null -ne $last.downloadReceived) { [long]$last.downloadReceived } else { 0 }
+              $downloadTotal = if ($null -ne $last.downloadTotal) { [long]$last.downloadTotal } else { 0 }
+              $downloadPercent = if ($null -ne $last.maxDownloadPercent) { [int]$last.maxDownloadPercent } else { 0 }
+              $safeStates = @($last.updateStates | ForEach-Object { [string]$_ } | Where-Object { $_ -in @('idle','checking','available','downloading','verifying','ready_to_install','installing','restarting','installed','failed') }) -join ','
+              $secureContext = [string]($last.runtimeSecureContext -eq $true)
+              $edgeMajor = if ([string]$last.runtimeEdgeMajor -match '^[0-9]{2,3}$') { [string]$last.runtimeEdgeMajor } else { 'unknown' }
+              $loopbackPermission = if ([string]$last.runtimeLoopbackPermission -in @('granted', 'denied', 'prompt', 'unsupported', 'unknown')) { [string]$last.runtimeLoopbackPermission } else { 'other' }
+              $cspConnectViolation = [string]($last.runtimeConnectCspViolation -eq $true)
+              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;server_phase=$($last.serverPhase);connection_stage=$($last.connectionStage);failure_code=$failureCode;failure_status=$failureStatus;failure_cause=$failureCauseName;secure_context=$secureContext;edge_major=$edgeMajor;loopback_permission=$loopbackPermission;csp_connect_violation=$cspConnectViolation;version=$($last.version);update_state=$($last.updateState);download_received=$downloadReceived;download_total=$downloadTotal;download_percent=$downloadPercent;update_states=$safeStates"
+            } else {
+              Write-Output 'CLIENT_STATE: telemetry_available=false'
+            }
+            $script:results.Add($line)
+            foreach ($check in @(
+              'installed alpha.1 client connected to the isolated local API',
+              'invalid signature rejected and alpha.1 remained installed',
+              'signed update reported actual download bytes and 100 percent progress',
+              'signed update emitted downloading, verifying, installing and restarting states in order',
+              'new process confirmed installed alpha.2 after updater relaunch',
+              'display name, avatar, language, theme and server setting survived the update',
+              'installed alpha.2 client reconnected to the isolated local API'
+            )) {
+              if (!$script:passed.Contains($check) -and !$script:failedChecks.Contains($check)) { Add-NotVerified $check }
+            }
+          } finally {
+            $traceLines = @()
+            if ($env:LANORA_API_TRACE_LOG -and (Test-Path $env:LANORA_API_TRACE_LOG)) {
+              $traceLines = @(Get-Content -Path $env:LANORA_API_TRACE_LOG)
+            }
+            if ($traceLines.Count -gt 0) {
+              foreach ($traceLine in $traceLines) { Write-Output "API_TRACE: $traceLine" }
+            } else {
+              Write-Output 'API_TRACE: no local API requests were recorded'
+            }
+            $summary = @('## Installed Windows updater test', '')
+            $summary += $script:results
+            $summary += ''
+            $summary += '### Sanitized local API trace'
+            if ($traceLines.Count -gt 0) { $summary += $traceLines | ForEach-Object { "API_TRACE: $_" } } else { $summary += "No local API requests were recorded." }
+            $updaterLines = @()
+            if ($updaterTracePath -and (Test-Path $updaterTracePath)) {
+              $updaterLines = @(Get-Content -Path $updaterTracePath | Where-Object { $_ -match '^(request|response|complete|stream_error) ' })
+            }
+            if ($updaterLines.Count -gt 0) {
+              foreach ($traceLine in $updaterLines) { Write-Output "UPDATER_TRACE: $traceLine" }
+              $summary += ''
+              $summary += '### Sanitized updater asset trace'
+              $summary += $updaterLines | ForEach-Object { "UPDATER_TRACE: $_" }
+            } else {
+              Write-Output 'UPDATER_TRACE: no updater asset requests were recorded'
+              $summary += ''
+              $summary += 'No updater asset requests were recorded.'
+            }
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary -Encoding utf8
+          }
+          if ($script:failed) { exit 1 }
+      - name: Upload title bar UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanora-updater-ui-evidence
+          path: |
+            ${{ runner.temp }}/lanora-titlebar-update.png
+            ${{ runner.temp }}/lanora-updater-failure.png
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Stop temporary processes
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:LANORA_E2E_SERVER_PID) { Stop-Process -Id ([int]$env:LANORA_E2E_SERVER_PID) -Force -ErrorAction SilentlyContinue }
+          if ($env:LANORA_API_PROXY_PID) { Stop-Process -Id ([int]$env:LANORA_API_PROXY_PID) -Force -ErrorAction SilentlyContinue }
+          if ($env:LANORA_API_PID) { Stop-Process -Id ([int]$env:LANORA_API_PID) -Force -ErrorAction SilentlyContinue }
+          Get-Process lanora-api, lanora-desktop -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+) {
+                $proxyProcessAlive = $null -ne (Get-Process -Id ([int]$env:LANORA_API_PROXY_PID) -ErrorAction SilentlyContinue)
+              }
+              $apiProcessAlive = $false
+              if ($env:LANORA_API_PID -match '^[0-9]{1,8}
+            }
+            $cancel = Find-UiElement @('Cancel') 'ControlType.Button' $true
+            if ($null -ne $cancel) { Invoke-UiElement $cancel }
+
+            $script:stage = 'reject invalid update signature'
+            $script:stage = 'find standalone Check for Updates control'
+            $updateButton = Wait-UiElement @('Check for Updates') 'ControlType.Button' 20 $true
+            if ($updateButton.Current.IsOffscreen -or !$updateButton.Current.IsEnabled) { throw 'standalone Check for Updates control was not visible and enabled' }
+            Report-Pass 'standalone Check for Updates control is visible and accessible by name'
+            $script:uiEvidencePath = Save-TitleBarEvidence (Join-Path $env:RUNNER_TEMP 'lanora-titlebar-update.png')
+            Write-Output 'UI_EVIDENCE: titlebar screenshot captured'
+            $script:stage = 'check for invalid-signature update'
+            Invoke-UiElement $updateButton
+            $script:stage = 'wait for invalid-signature update offer'
+            $state = Wait-LanoraState { param($s) $s.updateState -eq 'available' } 40
+            $script:stage = 'find invalid-signature install control'
+            $installButton = Wait-UiElement @('Install update') 'ControlType.Button' 15
+            $script:stage = 'invoke update with invalid signature'
+            Invoke-UiElement $installButton
+            $script:stage = 'confirm invalid signature rejection'
+            $state = Wait-LanoraState { param($s) ($s.updateState -eq 'failed') -and ($s.version -eq '0.3.0-alpha.1') } 60
+            Report-Pass 'invalid signature rejected and alpha.1 remained installed'
+            $later = Find-UiElement @('Later') 'ControlType.Button' $true
+            if ($null -ne $later) { Invoke-UiElement $later }
+
+            $script:stage = 'download and install correctly signed alpha.2'
+            $script:stage = 'prepare correctly signed update manifest'
+            Write-TestManifest $goodSignature
+            Start-Sleep -Milliseconds 500
+            $script:stage = 'find standalone Check for Updates control for signed update'
+            $updateButton = Wait-UiElement @('Check for Updates') 'ControlType.Button' 20 $true
+            $script:stage = 'check for correctly signed update'
+            Invoke-UiElement $updateButton
+            $script:stage = 'wait for signed update offer'
+            $state = Wait-LanoraState { param($s) $s.updateState -eq 'available' } 40
+            if ($state.version -ne '0.3.0-alpha.1') { throw 'baseline version changed before valid update' }
+            $traceStart = @($state.updateStates).Count
+            $script:stage = 'find signed update install control'
+            $installButton = Wait-UiElement @('Install update') 'ControlType.Button' 15
+            $script:stage = 'activate signed update installation'
+            Invoke-UiElement $installButton
+            $script:stage = 'observe signed update download and state transitions'
+            $maxPercent = 0
+            $downloadReceived = 0
+            $downloadTotal = 0
+            $lastState = $null
+            $installStartDeadline = [DateTime]::UtcNow.AddSeconds(30)
+            $installStarted = $false
+            $updateDeadline = [DateTime]::UtcNow.AddMinutes(4)
+            while ([DateTime]::UtcNow -lt $updateDeadline) {
+              $snapshot = Get-LanoraState
+              if ($null -ne $snapshot) {
+                $lastState = $snapshot
+                $script:lastStateObserved = $snapshot
+                if ($snapshot.maxDownloadPercent -ne $null) { $maxPercent = [Math]::Max($maxPercent, [int]$snapshot.maxDownloadPercent) }
+                if ($snapshot.downloadReceived -ne $null) { $downloadReceived = [Math]::Max($downloadReceived, [long]$snapshot.downloadReceived) }
+                if ($snapshot.downloadTotal -ne $null) { $downloadTotal = [Math]::Max($downloadTotal, [long]$snapshot.downloadTotal) }
+                $tail = @($snapshot.updateStates | Select-Object -Skip $traceStart)
+                if ($snapshot.updateState -eq 'failed') { throw 'valid signed update reported failure' }
+                if (!$installStarted -and $tail -contains 'downloading') {
+                  $installStarted = $true
+                  Report-Pass 'signed update entered downloading after install activation'
+                }
+                if (!$installStarted -and [DateTime]::UtcNow -ge $installStartDeadline) { throw 'signed update did not begin downloading after install activation' }
+                if ($snapshot.version -eq '0.3.0-alpha.2' -or $tail -contains 'restarting') { break }
+              }
+              Start-Sleep -Milliseconds 250
+            }
+            $script:stage = 'validate signed update states and byte progress'
+            if ($null -eq $lastState) { throw 'client state disappeared before update telemetry was captured' }
+            $updateTrace = @($lastState.updateStates | Select-Object -Skip $traceStart)
+            $expectedStates = @('downloading', 'verifying', 'installing', 'restarting')
+            $nextState = 0
+            foreach ($observedState in $updateTrace) {
+              if ($nextState -lt $expectedStates.Length -and $observedState -eq $expectedStates[$nextState]) { $nextState++ }
+            }
+            if ($nextState -ne $expectedStates.Length) { throw 'required ordered updater states were not all observed' }
+            if ($downloadReceived -le 0 -or $downloadTotal -le 0 -or $maxPercent -lt 100) { throw 'real download byte progress did not reach the known total' }
+            Report-Pass 'signed update reported actual download bytes and 100 percent progress'
+            Report-Pass 'signed update emitted downloading, verifying, installing and restarting states in order'
+
+            $script:stage = 'confirm relaunch on installed alpha.2 and settings persistence'
+            $state = Wait-LanoraState { param($s) ($s.version -eq '0.3.0-alpha.2') -and ($s.updateState -eq 'installed') } 120
+            if ($state.playerName -ne 'Updater QA' -or $state.language -ne 'en' -or $state.theme -ne 'light' -or $state.avatar -ne 'fox' -or $state.serverInput -ne 'http://127.0.0.1:8080') {
+              throw 'one or more saved preferences changed during installation'
+            }
+            $versionButton = Wait-UiElement @('0.3.0-alpha.2') 'ControlType.Button' 15
+            Report-Pass 'new process confirmed installed alpha.2 after updater relaunch'
+            Report-Pass 'display name, avatar, language, theme and server setting survived the update'
+            $later = Find-UiElement @('Later') 'ControlType.Button' $true
+            if ($null -ne $later) { Invoke-UiElement $later }
+
+            $script:stage = 'reconnect installed alpha.2 client to local LANORA API'
+            $serverInput = Wait-UiElement @('Your server') 'ControlType.Edit' 15
+            Set-UiValue $serverInput 'http://127.0.0.1:8080'
+            $connect = Wait-UiElement @('Connect to network') 'ControlType.Button' 10
+            Invoke-UiElement $connect
+            $state = Wait-LanoraState { param($s) ($s.version -eq '0.3.0-alpha.2') -and (($s.serverReachable -eq $true) -or ($s.serverPhase -eq 'failed')) } 15
+            if (($state.serverReachable -eq $true) -and ($state.connectedServer -eq 'http://127.0.0.1:8080')) {
+              Report-Pass 'installed alpha.2 client reconnected to the isolated local API'
+            } else {
+              Report-Fail 'installed alpha.2 client reconnected to the isolated local API'
+            }
+
+            $script:stage = 'complete test report'
+          } catch {
+            $script:failed = $true
+            $exceptionType = $_.Exception.GetType().Name
+            $safeFailure = if ($_.Exception.Message -eq 'Expected sanitized LANORA test state was not observed.') { 'state timeout' } elseif ($_.Exception.Message -eq 'Expected accessible UI control was not available.') { 'UI control unavailable' } else { $exceptionType }
+            $line = "FAIL: $($script:stage) (sanitized cause: $safeFailure)"
+            if ($script:stage -eq 'confirm relaunch on installed alpha.2 and settings persistence') {
+              $originalExited = 'unknown'
+              if ($null -ne $appProcess) { try { $originalExited = [string]$appProcess.HasExited } catch {} }
+              $activeProcesses = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^(?i:lanora|nsis)' } | ForEach-Object {
+                $name = if ($_.ProcessName -match '^[A-Za-z0-9_.-]{1,80}$') { $_.ProcessName } else { 'other' }
+                $responding = 'unknown'
+                try { $responding = if ($_.Responding) { 'yes' } else { 'no' } } catch {}
+                $cpu = 'unknown'
+                try { $cpu = [string][Math]::Round([double]$_.CPU, 1) } catch {}
+                $window = if ($_.MainWindowTitle -match '(?i)LANORA.*(Setup|Installer|Update)') { 'lanora_setup' } elseif ($_.MainWindowTitle -match '(?i)LANORA') { 'lanora' } else { 'none' }
+                "$name;responding=$responding;cpu=$cpu;window=$window"
+              })
+              Write-Output "UPDATER_PROCESS: original_exited=$originalExited;processes=$($activeProcesses -join ',')"
+              $windowClasses = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+              $buttonNames = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+              try {
+                $root = [System.Windows.Automation.AutomationElement]::RootElement
+                $windowCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Window)
+                $buttonCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
+                foreach ($topWindow in $root.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)) {
+                  try {
+                    $title = [string]$topWindow.Current.Name
+                    if ($title -match '(?i)LANORA') { [void]$windowClasses.Add('lanora') }
+                    elseif ($title -match '(?i)(Setup|Installer|Update)') { [void]$windowClasses.Add('installer') }
+                    elseif ($title -match '(?i)(Error|Blocked|Permission)') { [void]$windowClasses.Add('dialog') }
+                    if ($title -match '(?i)(LANORA|Setup|Installer|Update|Error|Blocked|Permission)') {
+                      foreach ($button in $topWindow.FindAll([System.Windows.Automation.TreeScope]::Descendants, $buttonCondition)) {
+                        $buttonName = [string]$button.Current.Name
+                        if ($buttonName -in @('Allow', 'Block', 'Continue', 'Cancel', 'Retry', 'Close', 'OK', 'Yes', 'No', 'Finish', 'Next')) { [void]$buttonNames.Add($buttonName) }
+                      }
+                    }
+                  } catch {}
+                }
+              } catch {}
+              Write-Output "UPDATER_WINDOWS: windows=$(@($windowClasses | Sort-Object) -join ',');buttons=$(@($buttonNames | Sort-Object) -join ',')"
+              $installerLog = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e-nsis.log'
+              if (Test-Path $installerLog) {
+                $logLines = @(Get-Content -Path $installerLog)
+                $operations = @($logLines | ForEach-Object {
+                  if ($_ -match '^(Section|SectionEnd|SetOutPath|File|Delete|CreateDirectory|RMDir|WriteRegStr|WriteRegDWORD|DeleteRegKey|DeleteRegValue|WriteUninstaller|ExecShell|Exec|Rename|CopyFiles)(?::|$)') { $Matches[1] }
+                } | Select-Object -Last 30)
+                $errorKinds = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::Ordinal)
+                foreach ($logLine in $logLines) {
+                  if ($logLine -match '(?i)error opening file for writing') { [void]$errorKinds.Add('file_write') }
+                  elseif ($logLine -match '(?i)access is denied') { [void]$errorKinds.Add('access_denied') }
+                  elseif ($logLine -match '(?i)restart manager|another application') { [void]$errorKinds.Add('restart_manager') }
+                  elseif ($logLine -match '(?i)\b(error|failed|aborted)\b') { [void]$errorKinds.Add('installer_reported_error') }
+                }
+                Write-Output "UPDATER_INSTALL_LOG: exists=true;lines=$($logLines.Count);operations=$($operations -join ',');errors=$(@($errorKinds | Sort-Object) -join ',')"
+              } else {
+                Write-Output 'UPDATER_INSTALL_LOG: exists=false'
+              }
+            }
+            Write-Output $line
+            if ($null -ne $script:lastStateObserved) {
+              $last = $script:lastStateObserved
+              $reachable = [bool]$last.serverReachable
+              $serverPresent = ![string]::IsNullOrWhiteSpace([string]$last.connectedServer)
+              $inputPresent = ![string]::IsNullOrWhiteSpace([string]$last.serverInput)
+              $failureCode = if ($last.serverFailureCode) { [string]$last.serverFailureCode } else { 'none' }
+              $failureStatus = if ($last.serverFailureStatus) { [string]$last.serverFailureStatus } else { 'none' }
+              $failureCauseName = if ([string]$last.serverFailureCauseName -match '^[A-Za-z]{1,32}$') { [string]$last.serverFailureCauseName } else { 'other' }
+              $downloadReceived = if ($null -ne $last.downloadReceived) { [long]$last.downloadReceived } else { 0 }
+              $downloadTotal = if ($null -ne $last.downloadTotal) { [long]$last.downloadTotal } else { 0 }
+              $downloadPercent = if ($null -ne $last.maxDownloadPercent) { [int]$last.maxDownloadPercent } else { 0 }
+              $safeStates = @($last.updateStates | ForEach-Object { [string]$_ } | Where-Object { $_ -in @('idle','checking','available','downloading','verifying','ready_to_install','installing','restarting','installed','failed') }) -join ','
+              $secureContext = [string]($last.runtimeSecureContext -eq $true)
+              $edgeMajor = if ([string]$last.runtimeEdgeMajor -match '^[0-9]{2,3}$') { [string]$last.runtimeEdgeMajor } else { 'unknown' }
+              $loopbackPermission = if ([string]$last.runtimeLoopbackPermission -in @('granted', 'denied', 'prompt', 'unsupported', 'unknown')) { [string]$last.runtimeLoopbackPermission } else { 'other' }
+              $cspConnectViolation = [string]($last.runtimeConnectCspViolation -eq $true)
+              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;server_phase=$($last.serverPhase);connection_stage=$($last.connectionStage);failure_code=$failureCode;failure_status=$failureStatus;failure_cause=$failureCauseName;secure_context=$secureContext;edge_major=$edgeMajor;loopback_permission=$loopbackPermission;csp_connect_violation=$cspConnectViolation;version=$($last.version);update_state=$($last.updateState);download_received=$downloadReceived;download_total=$downloadTotal;download_percent=$downloadPercent;update_states=$safeStates"
+            } else {
+              Write-Output 'CLIENT_STATE: telemetry_available=false'
+            }
+            $script:results.Add($line)
+            foreach ($check in @(
+              'installed alpha.1 client connected to the isolated local API',
+              'invalid signature rejected and alpha.1 remained installed',
+              'signed update reported actual download bytes and 100 percent progress',
+              'signed update emitted downloading, verifying, installing and restarting states in order',
+              'new process confirmed installed alpha.2 after updater relaunch',
+              'display name, avatar, language, theme and server setting survived the update',
+              'installed alpha.2 client reconnected to the isolated local API'
+            )) {
+              if (!$script:passed.Contains($check) -and !$script:failedChecks.Contains($check)) { Add-NotVerified $check }
+            }
+          } finally {
+            $traceLines = @()
+            if ($env:LANORA_API_TRACE_LOG -and (Test-Path $env:LANORA_API_TRACE_LOG)) {
+              $traceLines = @(Get-Content -Path $env:LANORA_API_TRACE_LOG)
+            }
+            if ($traceLines.Count -gt 0) {
+              foreach ($traceLine in $traceLines) { Write-Output "API_TRACE: $traceLine" }
+            } else {
+              Write-Output 'API_TRACE: no local API requests were recorded'
+            }
+            $summary = @('## Installed Windows updater test', '')
+            $summary += $script:results
+            $summary += ''
+            $summary += '### Sanitized local API trace'
+            if ($traceLines.Count -gt 0) { $summary += $traceLines | ForEach-Object { "API_TRACE: $_" } } else { $summary += "No local API requests were recorded." }
+            $updaterLines = @()
+            if ($updaterTracePath -and (Test-Path $updaterTracePath)) {
+              $updaterLines = @(Get-Content -Path $updaterTracePath | Where-Object { $_ -match '^(request|response|complete|stream_error) ' })
+            }
+            if ($updaterLines.Count -gt 0) {
+              foreach ($traceLine in $updaterLines) { Write-Output "UPDATER_TRACE: $traceLine" }
+              $summary += ''
+              $summary += '### Sanitized updater asset trace'
+              $summary += $updaterLines | ForEach-Object { "UPDATER_TRACE: $_" }
+            } else {
+              Write-Output 'UPDATER_TRACE: no updater asset requests were recorded'
+              $summary += ''
+              $summary += 'No updater asset requests were recorded.'
+            }
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary -Encoding utf8
+          }
+          if ($script:failed) { exit 1 }
+      - name: Upload title bar UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanora-titlebar-ui-evidence
+          path: ${{ runner.temp }}/lanora-titlebar-update.png
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Stop temporary processes
+        if: always()
+        shell: pwsh
+        run: |
+          if ($env:LANORA_E2E_SERVER_PID) { Stop-Process -Id ([int]$env:LANORA_E2E_SERVER_PID) -Force -ErrorAction SilentlyContinue }
+          if ($env:LANORA_API_PROXY_PID) { Stop-Process -Id ([int]$env:LANORA_API_PROXY_PID) -Force -ErrorAction SilentlyContinue }
+          if ($env:LANORA_API_PID) { Stop-Process -Id ([int]$env:LANORA_API_PID) -Force -ErrorAction SilentlyContinue }
+          Get-Process lanora-api, lanora-desktop -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+) {
+                $apiProcessAlive = $null -ne (Get-Process -Id ([int]$env:LANORA_API_PID) -ErrorAction SilentlyContinue)
+              }
+              $proxyTcpConnectable = $false
+              try { $proxyTcpConnectable = [bool](Test-NetConnection -ComputerName 127.0.0.1 -Port 8080 -InformationLevel Quiet -WarningAction SilentlyContinue) } catch {}
+              $apiHealthy = $false
+              try { $apiHealthy = (Invoke-RestMethod 'http://127.0.0.1:8081/api/v1/health' -TimeoutSec 3).status -eq 'ok' } catch {}
+              $proxyNames = @('HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy', 'NO_PROXY', 'no_proxy') | Where-Object {
+                ![string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($_))
+              }
+              Write-Output "LOCAL_API_DIAGNOSTIC: proxy_process_alive=$proxyProcessAlive;api_process_alive=$apiProcessAlive;proxy_tcp_connectable=$proxyTcpConnectable;api_healthy=$apiHealthy;proxy_environment_names=$($proxyNames -join ',')"
               Report-Fail 'installed alpha.1 client connected to the isolated local API'
             }
             $cancel = Find-UiElement @('Cancel') 'ControlType.Button' $true
