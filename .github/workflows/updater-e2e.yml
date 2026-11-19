@@ -351,12 +351,20 @@ jobs:
           const http = require('node:http');
           const path = require('node:path');
           const root = process.argv[2];
+          const tracePath = process.argv[3];
+          function record(line) { fs.appendFileSync(tracePath, line + '\n', { encoding: 'utf8' }); }
+          function safe(value) { return String(value ?? 'missing').replace(/[^A-Za-z0-9:._/-]/g, '_').slice(0, 128); }
           const server = http.createServer((req, res) => {
             const name = path.basename(new URL(req.url, 'http://127.0.0.1').pathname);
+            const method = safe(req.method);
+            record('request method=' + method + ' path=' + safe(name));
             if (name === 'health') { res.writeHead(200); res.end('ok'); return; }
             const file = path.join(root, name);
             let stat;
-            try { stat = fs.statSync(file); } catch { res.writeHead(404); res.end('not found'); return; }
+            try { stat = fs.statSync(file); } catch { record('response path=' + safe(name) + ' status=404'); res.writeHead(404); res.end('not found'); return; }
+            const started = Date.now();
+            let bytes = 0;
+            record('response path=' + safe(name) + ' status=200 content_length=' + stat.size);
             res.writeHead(200, {
               'Content-Length': stat.size,
               'Content-Type': name.endsWith('.json') ? 'application/json' : 'application/octet-stream',
@@ -364,20 +372,24 @@ jobs:
             });
             const stream = fs.createReadStream(file, { highWaterMark: 262144 });
             stream.on('data', chunk => {
+              bytes += chunk.length;
               res.write(chunk);
               stream.pause();
               setTimeout(() => stream.resume(), 60);
             });
-            stream.on('end', () => res.end());
-            stream.on('error', () => res.destroy());
+            stream.on('end', () => { res.end(); record('complete path=' + safe(name) + ' bytes=' + bytes + ' elapsed_ms=' + Math.max(0, Date.now() - started)); });
+            stream.on('error', () => { record('stream_error path=' + safe(name) + ' bytes=' + bytes); res.destroy(); });
           });
           server.listen(8765, '127.0.0.1');
           '@
             [System.IO.File]::WriteAllText($nodeServer, $nodeSource, [System.Text.UTF8Encoding]::new($false))
             $nodeOut = Join-Path $env:RUNNER_TEMP 'lanora-updater-server.stdout.log'
             $nodeErr = Join-Path $env:RUNNER_TEMP 'lanora-updater-server.stderr.log'
-            $serverProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList @($nodeServer, $env:LANORA_E2E_DIR) -PassThru -WindowStyle Hidden -RedirectStandardOutput $nodeOut -RedirectStandardError $nodeErr
+            $updaterTracePath = Join-Path $env:RUNNER_TEMP 'lanora-updater-server-trace.log'
+            Remove-Item -LiteralPath $updaterTracePath -Force -ErrorAction SilentlyContinue
+            $serverProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList @($nodeServer, $env:LANORA_E2E_DIR, $updaterTracePath) -PassThru -WindowStyle Hidden -RedirectStandardOutput $nodeOut -RedirectStandardError $nodeErr
             "LANORA_E2E_SERVER_PID=$($serverProcess.Id)" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
+            "LANORA_UPDATER_TRACE_LOG=$updaterTracePath" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
             $serverReady = $false
             for ($i = 0; $i -lt 40; $i++) {
               try {
@@ -472,8 +484,9 @@ jobs:
             $traceStart = @($state.updateStates).Count
             $script:stage = 'find signed update install control'
             $installButton = Wait-UiElement @('Install update') 'ControlType.Button' 15
-            $script:stage = 'invoke signed update installation'
+            $script:stage = 'activate signed update installation'
             Invoke-UiElement $installButton
+            $script:stage = 'observe signed update download and state transitions'
             $maxPercent = 0
             $downloadReceived = 0
             $downloadTotal = 0
@@ -485,6 +498,7 @@ jobs:
               $snapshot = Get-LanoraState
               if ($null -ne $snapshot) {
                 $lastState = $snapshot
+                $script:lastStateObserved = $snapshot
                 if ($snapshot.maxDownloadPercent -ne $null) { $maxPercent = [Math]::Max($maxPercent, [int]$snapshot.maxDownloadPercent) }
                 if ($snapshot.downloadReceived -ne $null) { $downloadReceived = [Math]::Max($downloadReceived, [long]$snapshot.downloadReceived) }
                 if ($snapshot.downloadTotal -ne $null) { $downloadTotal = [Math]::Max($downloadTotal, [long]$snapshot.downloadTotal) }
@@ -499,6 +513,7 @@ jobs:
               }
               Start-Sleep -Milliseconds 250
             }
+            $script:stage = 'validate signed update states and byte progress'
             if ($null -eq $lastState) { throw 'client state disappeared before update telemetry was captured' }
             $updateTrace = @($lastState.updateStates | Select-Object -Skip $traceStart)
             $expectedStates = @('downloading', 'verifying', 'installing', 'restarting')
@@ -548,7 +563,11 @@ jobs:
               $inputPresent = ![string]::IsNullOrWhiteSpace([string]$last.serverInput)
               $failureCode = if ($last.serverFailureCode) { [string]$last.serverFailureCode } else { 'none' }
               $failureStatus = if ($last.serverFailureStatus) { [string]$last.serverFailureStatus } else { 'none' }
-              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;server_phase=$($last.serverPhase);connection_stage=$($last.connectionStage);failure_code=$failureCode;failure_status=$failureStatus;version=$($last.version);update_state=$($last.updateState)"
+              $downloadReceived = if ($null -ne $last.downloadReceived) { [long]$last.downloadReceived } else { 0 }
+              $downloadTotal = if ($null -ne $last.downloadTotal) { [long]$last.downloadTotal } else { 0 }
+              $downloadPercent = if ($null -ne $last.maxDownloadPercent) { [int]$last.maxDownloadPercent } else { 0 }
+              $safeStates = @($last.updateStates | ForEach-Object { [string]$_ } | Where-Object { $_ -in @('idle','checking','available','downloading','verifying','ready_to_install','installing','restarting','installed','failed') }) -join ','
+              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;server_phase=$($last.serverPhase);connection_stage=$($last.connectionStage);failure_code=$failureCode;failure_status=$failureStatus;version=$($last.version);update_state=$($last.updateState);download_received=$downloadReceived;download_total=$downloadTotal;download_percent=$downloadPercent;update_states=$safeStates"
             } else {
               Write-Output 'CLIENT_STATE: telemetry_available=false'
             }
@@ -579,6 +598,20 @@ jobs:
             $summary += ''
             $summary += '### Sanitized local API trace'
             if ($traceLines.Count -gt 0) { $summary += $traceLines | ForEach-Object { "API_TRACE: $_" } } else { $summary += "No local API requests were recorded." }
+            $updaterLines = @()
+            if ($env:LANORA_UPDATER_TRACE_LOG -and (Test-Path $env:LANORA_UPDATER_TRACE_LOG)) {
+              $updaterLines = @(Get-Content -Path $env:LANORA_UPDATER_TRACE_LOG | Where-Object { $_ -match '^(request|response|complete|stream_error) ' })
+            }
+            if ($updaterLines.Count -gt 0) {
+              foreach ($traceLine in $updaterLines) { Write-Output "UPDATER_TRACE: $traceLine" }
+              $summary += ''
+              $summary += '### Sanitized updater asset trace'
+              $summary += $updaterLines | ForEach-Object { "UPDATER_TRACE: $_" }
+            } else {
+              Write-Output 'UPDATER_TRACE: no updater asset requests were recorded'
+              $summary += ''
+              $summary += 'No updater asset requests were recorded.'
+            }
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary -Encoding utf8
           }
           if ($script:failed) { exit 1 }
