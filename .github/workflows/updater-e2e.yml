@@ -330,7 +330,6 @@ jobs:
             $appProcess = Start-Process -FilePath $app.FullName -PassThru
             $profileName = Wait-UiElement @('Display name', 'Enter a display name') 'ControlType.Edit' 45
             Set-UiValue $profileName 'Updater QA'
-            $state = Wait-LanoraState { param($s) $s.playerName -eq 'Updater QA' } 10
             $english = Wait-UiElement @('English') 'ControlType.Button' 10
             Invoke-UiElement $english
             $light = Wait-UiElement @('Light') 'ControlType.Button' 10
@@ -339,8 +338,9 @@ jobs:
             Invoke-UiElement $continue
             $connectLater = Wait-UiElement @('Connect later') 'ControlType.Button' 10
             Invoke-UiElement $connectLater
-            $state = Wait-LanoraState { param($s) $s.version -eq '0.3.0-alpha.0' } 30
-            Report-Pass 'installed alpha.0 client launched with UI Automation'
+            # The onboarding modal hides background accessibility nodes; read the test-only output after it closes.
+            $state = Wait-LanoraState { param($s) ($s.version -eq '0.3.0-alpha.0') -and ($s.playerName -eq 'Updater QA') -and ($s.language -eq 'en') -and ($s.theme -eq 'light') -and ($s.avatar -eq 'fox') } 30
+            Report-Pass 'installed alpha.0 client launched with saved profile settings through UI Automation'
 
             $script:stage = 'find installed alpha.0 API address field'
             $serverInput = Wait-UiElement @('Your server') 'ControlType.Edit' 15
