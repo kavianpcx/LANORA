@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/updater-e2e.yml'
       - 'apps/desktop/src/App.tsx'
+      - 'apps/desktop/src/api.ts'
       - 'apps/desktop/src/components/TitleBar.tsx'
       - 'apps/desktop/src/style.css'
 permissions:
@@ -536,7 +537,7 @@ jobs:
                   Report-Pass 'signed update entered downloading after install activation'
                 }
                 if (!$installStarted -and [DateTime]::UtcNow -ge $installStartDeadline) { throw 'signed update did not begin downloading after install activation' }
-                if ($tail -contains 'restarting') { break }
+                if ($snapshot.version -eq '0.3.0-alpha.2' -or $tail -contains 'restarting') { break }
               }
               Start-Sleep -Milliseconds 250
             }

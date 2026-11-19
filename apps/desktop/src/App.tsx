@@ -375,8 +375,18 @@ export default function App() {
     }
     setUpdateActionBusy(true);
     setUpdateState("installing");
+    const windowsInstallerRestartsApp = /Windows/i.test(navigator.userAgent);
+    if (windowsInstallerRestartsApp) {
+      // The Windows updater exits this process after it launches the NSIS installer.
+      // Show the handoff state before that process can terminate.
+      setUpdateState("restarting");
+      await new Promise<void>((resolve) =>
+        window.setTimeout(resolve, LANORA_E2E_ENABLED ? 750 : 120),
+      );
+    }
     // Tauri verifies the downloaded artifact signature before download() resolves.
     await nextUpdate.install({ restartAfterInstall: true });
+    if (windowsInstallerRestartsApp) return;
     setUpdateState("restarting");
     try {
       await relaunch();

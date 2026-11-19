@@ -69,15 +69,20 @@ export async function api<T>(
   if (options.signal?.aborted) controller.abort();
   const timer = setTimeout(cancel, options.timeoutMs ?? 10000);
   try {
-    const response = await fetch(server + path, {
+    const parsedServer = new URL(server);
+    const requestOptions: RequestInit & { targetAddressSpace?: "loopback" } = {
       signal: controller.signal,
       method: method ?? (data ? "POST" : "GET"),
       headers: {
-        "Content-Type": "application/json",
+        ...(data ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       ...(data ? { body: JSON.stringify(data) } : {}),
-    });
+    };
+    if (parsedServer.protocol === "http:" && isLoopbackHost(parsedServer.hostname)) {
+      requestOptions.targetAddressSpace = "loopback";
+    }
+    const response = await fetch(server + path, requestOptions);
     const body = await response.json().catch(() => {
       throw new RequestError("response", response.status);
     });
