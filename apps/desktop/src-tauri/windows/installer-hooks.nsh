@@ -1,11 +1,11 @@
 !include "Win\RestartManager.nsh"
 
-; When the updater test opts in, write only fixed status markers to a fixed temp file.
+; When the updater test opts in, write only fixed status markers to its runner-temp file.
 ; Normal production launches do not set this variable and create no diagnostic file.
 !macro LANORA_UPDATER_E2E_LOG message
   ReadEnvStr $R6 "LANORA_UPDATER_HOOK_E2E_LOG"
   ${If} $R6 != ""
-    FileOpen $R5 "$TEMP\LANORA-updater-e2e-hook.log" a
+    FileOpen $R5 "$R6" a
     ${If} $R5 != error
       FileWrite $R5 "${message}$\r$\n"
       FileClose $R5
