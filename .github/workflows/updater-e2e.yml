@@ -95,7 +95,6 @@ jobs:
                 dangerousInsecureTransportProtocol = $true
                 windows = @{
                   installMode = 'passive'
-                  installerArgs = @("/LOG=$($env:RUNNER_TEMP)\lanora-updater-e2e-nsis.log")
                 }
               }
             }
