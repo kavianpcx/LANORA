@@ -74,7 +74,6 @@ jobs:
             version = '0.3.0-alpha.1'
             bundle = @{
               createUpdaterArtifacts = $true
-              windows = @{ nsis = @{ installerHooks = './windows/installer-hooks.nsh' } }
             }
             plugins = @{
               updater = @{
@@ -104,7 +103,7 @@ jobs:
           "LANORA_E2E_BASELINE_INSTALLER=$baselineInstaller" | Add-Content -Path $env:GITHUB_ENV -Encoding utf8
           $targetConfig = $config.Replace('0.3.0-alpha.1', '0.3.0-alpha.2')
           $targetConfigMap = $targetConfig | ConvertFrom-Json
-          # Keep the update target aligned with the release NSIS installer hook.
+          # Inherit the NSIS hook from tauri.conf.json so its project-relative path stays valid.
           $targetConfigPath = Join-Path $env:RUNNER_TEMP 'lanora-updater-e2e-target-config.json'
           $targetConfig = $targetConfigMap | ConvertTo-Json -Depth 8 -Compress
           [System.IO.File]::WriteAllText($targetConfigPath, $targetConfig, [System.Text.UTF8Encoding]::new($false))
