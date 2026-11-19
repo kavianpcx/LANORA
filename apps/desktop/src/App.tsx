@@ -181,7 +181,7 @@ export default function App() {
         setRuntimeLoopbackPermission("unsupported");
       } else {
         void permissions
-          .query({ name: "loopback-network" } as PermissionDescriptor)
+          .query({ name: "loopback-network" } as unknown as PermissionDescriptor)
           .then(({ state }) => {
             if (active) setRuntimeLoopbackPermission(state);
           })
