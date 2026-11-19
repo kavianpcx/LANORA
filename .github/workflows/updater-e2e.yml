@@ -199,8 +199,13 @@ jobs:
           }
           function Set-UiValue($element, [string]$value) {
             $element.SetFocus()
-            $pattern = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
-            $pattern.SetValue($value)
+            try {
+              $pattern = $element.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+              $pattern.SetValue($value)
+            } catch {}
+            Start-Sleep -Milliseconds 150
+            [System.Windows.Forms.SendKeys]::SendWait('^a')
+            [System.Windows.Forms.SendKeys]::SendWait($value)
           }
           function Get-LanoraState {
             foreach ($element in @(Get-UiElements)) {
@@ -218,8 +223,10 @@ jobs:
           }
           function Wait-LanoraState([scriptblock]$condition, [int]$timeoutSeconds = 30) {
             $deadline = [DateTime]::UtcNow.AddSeconds($timeoutSeconds)
+            $script:lastStateObserved = $null
             while ([DateTime]::UtcNow -lt $deadline) {
               $state = Get-LanoraState
+              if ($null -ne $state) { $script:lastStateObserved = $state }
               if ($null -ne $state -and (& $condition $state)) { return $state }
               Start-Sleep -Milliseconds 250
             }
@@ -319,9 +326,11 @@ jobs:
             $script:stage = 'start installed alpha.0 client'
             Add-Type -AssemblyName UIAutomationClient
             Add-Type -AssemblyName UIAutomationTypes
+            Add-Type -AssemblyName System.Windows.Forms
             $appProcess = Start-Process -FilePath $app.FullName -PassThru
             $profileName = Wait-UiElement @('Display name', 'Enter a display name') 'ControlType.Edit' 45
             Set-UiValue $profileName 'Updater QA'
+            $state = Wait-LanoraState { param($s) $s.playerName -eq 'Updater QA' } 10
             $english = Wait-UiElement @('English') 'ControlType.Button' 10
             Invoke-UiElement $english
             $light = Wait-UiElement @('Light') 'ControlType.Button' 10
@@ -333,11 +342,17 @@ jobs:
             $state = Wait-LanoraState { param($s) $s.version -eq '0.3.0-alpha.0' } 30
             Report-Pass 'installed alpha.0 client launched with UI Automation'
 
-            $script:stage = 'connect installed alpha.0 client to local LANORA API'
+            $script:stage = 'find installed alpha.0 API address field'
             $serverInput = Wait-UiElement @('Your server') 'ControlType.Edit' 15
+            $script:stage = 'enter API address through UI Automation'
             Set-UiValue $serverInput 'http://127.0.0.1:8080'
+            $state = Wait-LanoraState { param($s) $s.serverInput -eq 'http://127.0.0.1:8080' } 12
+            Report-Pass 'UI Automation input reached the installed client state'
+            $script:stage = 'find installed alpha.0 API connect control'
             $connect = Wait-UiElement @('Connect to network') 'ControlType.Button' 10
+            $script:stage = 'invoke installed alpha.0 API connect control'
             Invoke-UiElement $connect
+            $script:stage = 'confirm installed alpha.0 client reached the local API'
             $state = Wait-LanoraState { param($s) ($s.serverReachable -eq $true) -and ($s.connectedServer -eq 'http://127.0.0.1:8080') } 30
             Report-Pass 'installed alpha.0 client connected to the isolated local API'
             $cancel = Find-UiElement @('Cancel') 'ControlType.Button' $true
@@ -421,8 +436,18 @@ jobs:
           } catch {
             $script:failed = $true
             $exceptionType = $_.Exception.GetType().Name
-            $line = "FAIL: $($script:stage) (sanitized error type: $exceptionType)"
+            $safeFailure = if ($_.Exception.Message -eq 'Expected sanitized LANORA test state was not observed.') { 'state timeout' } elseif ($_.Exception.Message -eq 'Expected accessible UI control was not available.') { 'UI control unavailable' } else { $exceptionType }
+            $line = "FAIL: $($script:stage) (sanitized cause: $safeFailure)"
             Write-Output $line
+            if ($null -ne $script:lastStateObserved) {
+              $last = $script:lastStateObserved
+              $reachable = [bool]$last.serverReachable
+              $serverPresent = ![string]::IsNullOrWhiteSpace([string]$last.connectedServer)
+              $inputPresent = ![string]::IsNullOrWhiteSpace([string]$last.serverInput)
+              Write-Output "CLIENT_STATE: telemetry_available=true;server_reachable=$reachable;server_selected=$serverPresent;server_input_present=$inputPresent;version=$($last.version);update_state=$($last.updateState)"
+            } else {
+              Write-Output 'CLIENT_STATE: telemetry_available=false'
+            }
             $script:results.Add($line)
             foreach ($check in @(
               'installed alpha.0 client connected to the isolated local API',
