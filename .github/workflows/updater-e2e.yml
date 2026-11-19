@@ -5,6 +5,8 @@ on:
       - release/0.2.x
     paths:
       - '.github/workflows/updater-e2e.yml'
+      - 'apps/desktop/src-tauri/tauri.conf.json'
+      - 'apps/desktop/src-tauri/windows/installer-hooks.nsh'
       - 'apps/desktop/src/App.tsx'
       - 'apps/desktop/src/api.ts'
       - 'apps/desktop/src/components/TitleBar.tsx'
@@ -62,7 +64,10 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY)) { throw 'TAURI_UPDATER_PUBLIC_KEY is unavailable to this test workflow.' }
           $config = @{
             version = '0.3.0-alpha.1'
-            bundle = @{ createUpdaterArtifacts = $true }
+            bundle = @{
+              createUpdaterArtifacts = $true
+              windows = @{ nsis = @{ installerHooks = './windows/installer-hooks.nsh' } }
+            }
             plugins = @{
               updater = @{
                 pubkey = $env:TAURI_UPDATER_PUBLIC_KEY
