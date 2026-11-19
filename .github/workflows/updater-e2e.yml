@@ -257,6 +257,34 @@ jobs:
             if ($null -eq $window) { return @() }
             try { return $window.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) } catch { return @() }
           }
+          function Find-LocalAccessAllowButton {
+            $allowNames = @('Allow', 'Allow access', 'Allow once', 'Allow always')
+            $button = Find-UiElement $allowNames 'ControlType.Button' $true
+            if ($null -ne $button) { return $button }
+            try {
+              $root = [System.Windows.Automation.AutomationElement]::RootElement
+              $buttonCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)
+              foreach ($topWindow in $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)) {
+                try {
+                  $title = [string]$topWindow.Current.Name
+                  if ($title -notmatch '(?i)(LANORA|local network|permission|webview|edge)') { continue }
+                  foreach ($candidate in $topWindow.FindAll([System.Windows.Automation.TreeScope]::Descendants, $buttonCondition)) {
+                    if ([string]$candidate.Current.Name -in $allowNames) { return $candidate }
+                  }
+                } catch {}
+              }
+            } catch {}
+            return $null
+          }
+          function Wait-LocalAccessAllowButton([int]$timeoutSeconds = 4) {
+            $deadline = [DateTime]::UtcNow.AddSeconds($timeoutSeconds)
+            while ([DateTime]::UtcNow -lt $deadline) {
+              $button = Find-LocalAccessAllowButton
+              if ($null -ne $button) { return $button }
+              Start-Sleep -Milliseconds 200
+            }
+            return $null
+          }
           function Find-UiElement([string[]]$names, [string]$controlType, [bool]$exact = $false) {
             foreach ($element in @(Get-UiElements)) {
               try {
@@ -492,6 +520,15 @@ jobs:
             Invoke-UiElement $connect
             $script:stage = 'confirm installed alpha.1 client reached the local API'
             $state = Wait-LanoraState { param($s) ($s.serverReachable -eq $true) -or ($s.serverPhase -eq 'failed') } 15
+            $allowButton = $null
+            if ($state.serverReachable -ne $true) { $allowButton = Wait-LocalAccessAllowButton 3 }
+            $allowClicked = $false
+            if ($null -ne $allowButton) {
+              Invoke-UiElement $allowButton
+              $allowClicked = $true
+              $state = Wait-LanoraState { param($s) ($s.serverReachable -eq $true) -or ($s.serverPhase -eq 'failed') } 15
+            }
+            Write-Output "LOCAL_ACCESS_UI: allow_button_visible=$($null -ne $allowButton);allow_clicked=$allowClicked"
             if (($state.serverReachable -eq $true) -and ($state.connectedServer -eq 'http://127.0.0.1:8080')) {
               Report-Pass 'installed alpha.1 client connected to the isolated local API'
             } else {
