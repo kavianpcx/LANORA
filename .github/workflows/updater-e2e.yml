@@ -253,9 +253,16 @@ jobs:
             $pattern = $null
             try { $pattern = $element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern) } catch {}
             if ($null -ne $pattern) {
-              $pattern.Invoke()
-              return
+              try {
+                $pattern.Invoke()
+                return
+              } catch {}
             }
+            $element.SetFocus()
+            Start-Sleep -Milliseconds 100
+            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+            Start-Sleep -Milliseconds 250
+          }
             $element.SetFocus()
             Start-Sleep -Milliseconds 100
             [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
@@ -476,6 +483,8 @@ jobs:
             $downloadReceived = 0
             $downloadTotal = 0
             $lastState = $null
+            $installStartDeadline = [DateTime]::UtcNow.AddSeconds(30)
+            $installStarted = $false
             $updateDeadline = [DateTime]::UtcNow.AddMinutes(4)
             while ([DateTime]::UtcNow -lt $updateDeadline) {
               $snapshot = Get-LanoraState
@@ -486,6 +495,11 @@ jobs:
                 if ($snapshot.downloadTotal -ne $null) { $downloadTotal = [Math]::Max($downloadTotal, [long]$snapshot.downloadTotal) }
                 $tail = @($snapshot.updateStates | Select-Object -Skip $traceStart)
                 if ($snapshot.updateState -eq 'failed') { throw 'valid signed update reported failure' }
+                if (!$installStarted -and $tail -contains 'downloading') {
+                  $installStarted = $true
+                  Report-Pass 'signed update entered downloading after install activation'
+                }
+                if (!$installStarted -and [DateTime]::UtcNow -ge $installStartDeadline) { throw 'signed update did not begin downloading after install activation' }
                 if ($tail -contains 'restarting') { break }
               }
               Start-Sleep -Milliseconds 250
