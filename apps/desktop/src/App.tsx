@@ -66,7 +66,7 @@ function localDeviceId() {
 export default function App() {
   const [startupReady, setStartupReady] = useState(false);
   const [showStartupSkeleton, setShowStartupSkeleton] = useState(false);
-  const [appVersion, setAppVersion] = useState("0.3.0-alpha.1");
+  const [appVersion, setAppVersion] = useState("0.3.0-alpha.2");
   const [appVersionLoaded, setAppVersionLoaded] = useState(false);
   const [lang, setLang] = useState<Lang>(() =>
     localStorage.getItem("lanora.language") === "fa" ? "fa" : "en",
@@ -1302,13 +1302,13 @@ export default function App() {
         <button
           className="app-update-toast"
           type="button"
-          onClick={() => { setUpdateToast(false); setUpdateDialogOpen(true); void installUpdate(); }}
-          aria-label={`${t.updateAvailable}: ${updateEntry.version}. ${t.updateInstall}`}
+          onClick={() => { setUpdateToast(false); setUpdateDialogOpen(true); }}
+          aria-label={`${t.updateAvailable}: ${updateEntry.version}. ${t.updateView}`}
           dir={lang === "fa" ? "rtl" : "ltr"}
         >
           <Info size={16} aria-hidden="true" />
           <span>{t.updateAvailable} · <bdi dir="ltr">{updateEntry.version}</bdi></span>
-          <b>{t.updateInstall}</b>
+          <b>{t.updateView}</b>
         </button>
       )}
       <div className="lanora-app" dir="ltr" data-lang={lang}>

@@ -45,7 +45,8 @@ fn collect_peer_statuses(value: &Value, output: &mut Vec<PeerStatus>) {
         }
         Value::Object(fields) => {
             let cost = fields.get("cost").and_then(Value::as_str);
-            if cost.is_some_and(|value| value != "Local") {
+            // Only a known active route demonstrates peer reachability.
+            if matches!(cost, Some("Direct" | "Relay")) {
                 let raw_ip = fields
                     .get("ipv4")
                     .or_else(|| fields.get("cidr"))
@@ -379,7 +380,9 @@ mod tests {
             {"ipv4":"10.126.0.1","cost":"Local","lat_ms":"0.00"},
             {"ipv4":"10.126.0.2","cost":"Direct","lat_ms":"24.50"},
             {"cidr":"10.126.0.3/24","cost":"Relay","lat_ms":"0.00"},
-            {"ipv4":"127.0.0.1","cost":"Direct","lat_ms":"1.00"}
+            {"ipv4":"127.0.0.1","cost":"Direct","lat_ms":"1.00"},
+            {"ipv4":"10.126.0.4","cost":"Unknown","lat_ms":"12.00"},
+            {"ipv4":"10.126.0.5","cost":"Offline","lat_ms":"10.00"}
         ]));
         assert_eq!(
             peers,

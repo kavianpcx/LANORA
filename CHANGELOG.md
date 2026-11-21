@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0-alpha.2 — Update consent and peer evidence — 2026-11-22
+
+- Open the update details dialog from the available-update notice without starting a download or installation. Installation still requires an explicit Install click.
+- Exclude unknown/offline EasyTier peer route rows from reachable-player evidence; extend Rust regression fixtures.
+- Add the real Linux CI desktop screenshot to both READMEs, with a platform/version disclaimer.
+- Guard notification behavior and screenshot presence in repository checks.
+- Keep the alpha limitations for real Windows gameplay, independent-network testing and installed-version updates.
+
 ## 0.3.0-alpha.1 — Compact profile UI and signed updater groundwork — 2026-11-18
 
 - Reduce the ordinary Settings panel to avatar, language, and appearance. Move display-name editing to the titlebar profile menu while keeping first-run onboarding and authenticated profile/avatar synchronization.

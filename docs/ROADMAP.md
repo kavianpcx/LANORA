@@ -1,8 +1,8 @@
 # Roadmap
 
-## Published alpha: 0.2.0-alpha.8
+## Published alpha: 0.3.0-alpha.1
 
-The current source candidate is `0.3.0-alpha.1` and is not a published release. It compacts Settings, moves display-name editing into the titlebar profile menu, corrects peer-route counts for players awaiting an IP, and adds a signed Windows updater path. The candidate is not stable and has not passed a real installed-version update test.
+The next maintenance candidate is `0.3.0-alpha.2`, pending review and signed CI. It prevents an update-notification click from initiating installation, tightens peer-route evidence, and documents the existing Linux desktop screenshot. The candidate is not stable and has not passed a real installed-version update test.
 
 - Default flow enters a server URL, discovers whether player passwords are required, and joins one server-wide EasyTier network after authorization.
 - Server owners can choose protected or passwordless player access; administrator and relay credentials remain separate.
