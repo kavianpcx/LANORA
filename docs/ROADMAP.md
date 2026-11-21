@@ -1,8 +1,8 @@
 # Roadmap
 
-## Published alpha: 0.3.0-alpha.1
+## Published alpha: 0.3.0-alpha.2
 
-The next maintenance candidate is `0.3.0-alpha.2`, pending review and signed CI. It prevents an update-notification click from initiating installation, tightens peer-route evidence, and documents the existing Linux desktop screenshot. The candidate is not stable and has not passed a real installed-version update test.
+The latest prerelease passed signed Windows and Linux build/install/launch workflows, native/frontend tests, server checks, and isolated Linux networking. It keeps update installation behind an explicit confirmation, avoids treating unknown EasyTier route rows as peer reachability, and adds a real Linux desktop screenshot to the README. It remains experimental; physical independent-PC gameplay and an installed-version-to-installed-version updater/restart cycle remain unverified.
 
 - Default flow enters a server URL, discovers whether player passwords are required, and joins one server-wide EasyTier network after authorization.
 - Server owners can choose protected or passwordless player access; administrator and relay credentials remain separate.
@@ -29,6 +29,6 @@ The next maintenance candidate is `0.3.0-alpha.2`, pending review and signed CI.
 
 - Test the Windows tunnel on two separate machines and capture route, firewall, relay/direct, and game-level evidence.
 - Improve peer and relay diagnostics from data the native engine can actually provide.
-- Verify the 0.3.0-alpha.1 candidate against an installed signed Windows build before treating updates as functional.
+- Test the signed updater from an installed 0.3.0-alpha.1 build to installed 0.3.0-alpha.2 on Windows and Linux, including relaunch and invalid-signature rejection.
 - Keep the default connection flow to server address, authorization, and connect.
 - Retain room-based workflow only as an advanced option until real users need it.

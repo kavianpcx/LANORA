@@ -7,7 +7,7 @@
 
 LANORA is an open-source, self-hosted virtual LAN app for friends playing LAN-supported games over the internet. One person runs the server on a Linux VPS. Players install the desktop app, enter the server address, and provide a password only when the server owner requires one. There is no account and no website.
 
-> **Status: experimental alpha.** Next maintenance candidate: `v0.3.0-alpha.2` (pending review and signed CI). Downloads below remain on the published `v0.3.0-alpha.1` release until publication succeeds.  The latest published version is `v0.3.0-alpha.1`, with signed Windows and Debian packages and a Tauri updater manifest. CI passed frontend and native tests, isolated Linux networking tests, API/VPS command checks, Windows installer build/install/launch, Linux package build/install/launch, checksum checks, and updater signature verification. The `v0.2.0-alpha.8` app has no updater, so this first updater-enabled version must be installed manually. Installed-version update/restart behavior, Windows-to-Windows public-network play, Windows game traffic, direct P2P, and game-specific LAN discovery remain unverified.
+> **Status: experimental alpha.** The latest published version is `v0.3.0-alpha.2`, with signed Windows and Debian packages and a Tauri updater manifest. CI passed frontend and native tests, isolated Linux networking tests, API/VPS command checks, Windows installer build/install/launch, Linux package build/install/launch, checksum checks, and updater signature verification. The `v0.2.0-alpha.8` app has no updater, so this first updater-enabled version must be installed manually. Installed-version update/restart behavior, Windows-to-Windows public-network play, Windows game traffic, direct P2P, and game-specific LAN discovery remain unverified.
 >
 > **Security limit:** Changing the player-password policy revokes API sessions and rotates the current network identity, but cannot force a modified client already connected to the old EasyTier overlay to disconnect. Ask all players to fully disconnect and rejoin after a policy change.
 
@@ -53,11 +53,11 @@ Disabling protection opens player access to anyone who can reach the server. Thi
 
 ## Download and connect as a player
 
-These links point to the `v0.3.0-alpha.1` prerelease. Both installers are signed, and the release includes SHA-256 checksums and detached signatures. The app’s live updater manifest is published at the [updater manifest](https://raw.githubusercontent.com/kavianpcx/LANORA/release/0.2.x/updates/alpha/latest.json).
+These links point to the `v0.3.0-alpha.2` prerelease. Both installers are signed, and the release includes SHA-256 checksums and detached signatures. The app’s live updater manifest is published at the [updater manifest](https://raw.githubusercontent.com/kavianpcx/LANORA/release/0.2.x/updates/alpha/latest.json).
 
-- **Windows 10/11 x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe.sha256) · [Signature](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_x64-setup.exe.sig)
-- **Linux x64 (Debian/Ubuntu):** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb.sha256) · [Signature](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.1/LANORA_0.3.0-alpha.1_amd64.deb.sig)
-- [View release notes and all assets](https://github.com/kavianpcx/LANORA/releases/tag/v0.3.0-alpha.1)
+- **Windows 10/11 x64:** [Download the installer](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.2/LANORA_0.3.0-alpha.2_x64-setup.exe) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.2/LANORA_0.3.0-alpha.2_x64-setup.exe.sha256) · [Signature](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.2/LANORA_0.3.0-alpha.2_x64-setup.exe.sig)
+- **Linux x64 (Debian/Ubuntu):** [Download the .deb package](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.2/LANORA_0.3.0-alpha.2_amd64.deb) · [SHA-256](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.2/LANORA_0.3.0-alpha.2_amd64.deb.sha256) · [Signature](https://github.com/kavianpcx/LANORA/releases/download/v0.3.0-alpha.2/LANORA_0.3.0-alpha.2_amd64.deb.sig)
+- [View release notes and all assets](https://github.com/kavianpcx/LANORA/releases/tag/v0.3.0-alpha.2)
 
 1. Install and open LANORA. Choose a display name; no signup is needed.
 2. Enter the server address and press **Connect**. LANORA asks for a password only when that server requires one.
