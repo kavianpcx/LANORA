@@ -32,6 +32,8 @@ assert lock['version']==version and lock['packages']['']['version']==version
 assert version in (root/'CHANGELOG.md').read_text()
 assert version in (root/'README.md').read_text()
 assert version in (root/'README.fa.md').read_text()
+assert (root/'docs/screenshots/linux-first-launch.png').is_file()
+assert all('docs/screenshots/linux-first-launch.png' in (root/file).read_text() for file in ['README.md', 'README.fa.md'])
 assert (root/f'docs/releases/{version}.md').is_file()
 release_workflow=(root/'.github/workflows/windows.yml').read_text()
 assert 'tag="v$version"' in release_workflow
@@ -47,6 +49,8 @@ assert '@tauri-apps/plugin-updater' in (root/'apps/desktop/package.json').read_t
 assert '0.2.0-alpha.8' in (root/'README.md').read_text(), 'keep download links pinned to an actually published release until a new release exists'
 app_source=(root/'apps/desktop/src/App.tsx').read_text()
 assert f'useState("{version}")' in app_source
+assert 'onClick={() => { setUpdateToast(false); setUpdateDialogOpen(true); }}' in app_source, 'update notice must open details only'
+assert 'onClick={() => { setUpdateToast(false); setUpdateDialogOpen(true); void installUpdate(); }}' not in app_source
 assert 'document.documentElement.dir = "ltr"' in app_source
 assert '<div className="lanora-app" dir="ltr"' in app_source
 titlebar_source=(root/'apps/desktop/src/components/TitleBar.tsx').read_text()

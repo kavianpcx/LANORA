@@ -7,11 +7,17 @@
 
 LANORA is an open-source, self-hosted virtual LAN app for friends playing LAN-supported games over the internet. One person runs the server on a Linux VPS. Players install the desktop app, enter the server address, and provide a password only when the server owner requires one. There is no account and no website.
 
-> **Status: experimental alpha.** The latest published version is `v0.3.0-alpha.1`, with signed Windows and Debian packages and a Tauri updater manifest. CI passed frontend and native tests, isolated Linux networking tests, API/VPS command checks, Windows installer build/install/launch, Linux package build/install/launch, checksum checks, and updater signature verification. The `v0.2.0-alpha.8` app has no updater, so this first updater-enabled version must be installed manually. Installed-version update/restart behavior, Windows-to-Windows public-network play, Windows game traffic, direct P2P, and game-specific LAN discovery remain unverified.
+> **Status: experimental alpha.** Next maintenance candidate: `v0.3.0-alpha.2` (pending review and signed CI). Downloads below remain on the published `v0.3.0-alpha.1` release until publication succeeds.  The latest published version is `v0.3.0-alpha.1`, with signed Windows and Debian packages and a Tauri updater manifest. CI passed frontend and native tests, isolated Linux networking tests, API/VPS command checks, Windows installer build/install/launch, Linux package build/install/launch, checksum checks, and updater signature verification. The `v0.2.0-alpha.8` app has no updater, so this first updater-enabled version must be installed manually. Installed-version update/restart behavior, Windows-to-Windows public-network play, Windows game traffic, direct P2P, and game-specific LAN discovery remain unverified.
 >
 > **Security limit:** Changing the player-password policy revokes API sessions and rotates the current network identity, but cannot force a modified client already connected to the old EasyTier overlay to disconnect. Ask all players to fully disconnect and rejoin after a policy change.
 
 [![CI](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/ci.yml) [![Desktop builds](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml/badge.svg?branch=release/0.2.x)](https://github.com/kavianpcx/LANORA/actions/workflows/windows.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-4355DB)](LICENSE) [![Latest alpha](https://img.shields.io/github/v/release/kavianpcx/LANORA?include_prereleases&label=alpha)](https://github.com/kavianpcx/LANORA/releases)
+
+## Desktop preview
+
+![LANORA desktop first-launch screenshot on Linux](docs/screenshots/linux-first-launch.png)
+
+*Real Linux screenshot captured in a desktop CI smoke test. The Windows interface and details in newer alpha builds may differ.*
 
 ## Quick setup for the server owner
 
