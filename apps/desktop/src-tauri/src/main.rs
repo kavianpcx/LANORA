@@ -127,6 +127,205 @@ fn core_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| e.to_string())
 }
 
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct LoopbackApiFailure {
+    code: String,
+    status: Option<u16>,
+    cause_name: Option<String>,
+}
+
+impl LoopbackApiFailure {
+    fn new(code: &str, status: Option<u16>, cause_name: Option<&str>) -> Self {
+        Self {
+            code: code.to_owned(),
+            status,
+            cause_name: cause_name.map(str::to_owned),
+        }
+    }
+}
+
+fn validate_loopback_api_server(server: &str) -> Result<url::Url, &'static str> {
+    let url = url::Url::parse(server).map_err(|_| "invalid_address")?;
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || url.path() != "/"
+    {
+        return Err("invalid_address");
+    }
+    let is_loopback = match url.host() {
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        Some(url::Host::Domain(host)) => host.eq_ignore_ascii_case("localhost"),
+        None => false,
+    };
+    if url.scheme() != "http" || !is_loopback {
+        return Err("insecure_http");
+    }
+    Ok(url)
+}
+
+fn valid_loopback_api_path(path: &str) -> bool {
+    if !path.starts_with("/api/v1/")
+        || path.contains("..")
+        || path.contains('?')
+        || path.contains('#')
+        || path.contains('\\')
+        || path.contains('%')
+        || !path.is_ascii()
+        || path.chars().any(|c| c.is_control() || c.is_whitespace())
+    {
+        return false;
+    }
+
+    let Ok(base) = url::Url::parse("http://127.0.0.1/") else {
+        return false;
+    };
+    base.join(path)
+        .is_ok_and(|normalized| normalized.path().starts_with("/api/v1/"))
+}
+
+fn valid_loopback_api_method(method: &str) -> bool {
+    matches!(method, "GET" | "POST" | "PATCH" | "DELETE")
+}
+
+fn io_error_cause_name(kind: std::io::ErrorKind) -> &'static str {
+    match kind {
+        std::io::ErrorKind::NotFound => "NotFound",
+        std::io::ErrorKind::PermissionDenied => "PermissionDenied",
+        std::io::ErrorKind::ConnectionRefused => "ConnectionRefused",
+        std::io::ErrorKind::ConnectionReset => "ConnectionReset",
+        std::io::ErrorKind::ConnectionAborted => "ConnectionAborted",
+        std::io::ErrorKind::NotConnected => "NotConnected",
+        std::io::ErrorKind::AddrInUse => "AddrInUse",
+        std::io::ErrorKind::AddrNotAvailable => "AddrNotAvailable",
+        std::io::ErrorKind::TimedOut => "TimedOut",
+        _ => "OtherIoError",
+    }
+}
+
+fn reqwest_cause_name(error: &reqwest::Error) -> &'static str {
+    if error.is_timeout() {
+        "TimeoutError"
+    } else if error.is_connect() {
+        let mut cause = std::error::Error::source(error);
+        while let Some(current) = cause {
+            if let Some(io_error) = current.downcast_ref::<std::io::Error>() {
+                return io_error_cause_name(io_error.kind());
+            }
+            cause = current.source();
+        }
+        "ConnectError"
+    } else if error.is_body() {
+        "BodyError"
+    } else if error.is_request() {
+        "RequestError"
+    } else {
+        "ReqwestError"
+    }
+}
+
+#[tauri::command]
+async fn loopback_api_request(
+    server: String,
+    path: String,
+    token: Option<String>,
+    data: Option<Value>,
+    method: String,
+    timeout_ms: u64,
+) -> Result<Value, LoopbackApiFailure> {
+    let base = validate_loopback_api_server(&server)
+        .map_err(|code| LoopbackApiFailure::new(code, None, None))?;
+    if !valid_loopback_api_path(&path) || !valid_loopback_api_method(&method) {
+        return Err(LoopbackApiFailure::new("invalid_input", None, None));
+    }
+    if token.as_ref().is_some_and(|value| value.len() > 4096) {
+        return Err(LoopbackApiFailure::new("invalid_input", None, None));
+    }
+
+    let endpoint = base
+        .join(&path)
+        .map_err(|_| LoopbackApiFailure::new("invalid_input", None, None))?;
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(std::time::Duration::from_millis(
+            timeout_ms.clamp(1, 30_000),
+        ))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|_| LoopbackApiFailure::new("network", None, Some("ReqwestBuildError")))?;
+    let mut request = client.request(
+        reqwest::Method::from_bytes(method.as_bytes())
+            .map_err(|_| LoopbackApiFailure::new("invalid_input", None, None))?,
+        endpoint,
+    );
+    if let Some(token) = token {
+        let authorization = reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
+            .map_err(|_| LoopbackApiFailure::new("invalid_input", None, None))?;
+        request = request.header(reqwest::header::AUTHORIZATION, authorization);
+    }
+    if let Some(data) = data {
+        request = request.json(&data);
+    }
+
+    let mut response = request.send().await.map_err(|error| {
+        LoopbackApiFailure::new(
+            if error.is_timeout() {
+                "timeout"
+            } else {
+                "network"
+            },
+            None,
+            Some(reqwest_cause_name(&error)),
+        )
+    })?;
+    let status = response.status().as_u16();
+    const MAX_API_RESPONSE_BYTES: u64 = 4 * 1024 * 1024;
+    if response
+        .content_length()
+        .is_some_and(|length| length > MAX_API_RESPONSE_BYTES)
+    {
+        return Err(LoopbackApiFailure::new("response", Some(status), None));
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|error| {
+        LoopbackApiFailure::new(
+            if error.is_timeout() {
+                "timeout"
+            } else {
+                "network"
+            },
+            Some(status),
+            Some(reqwest_cause_name(&error)),
+        )
+    })? {
+        if bytes.len().saturating_add(chunk.len()) as u64 > MAX_API_RESPONSE_BYTES {
+            return Err(LoopbackApiFailure::new("response", Some(status), None));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    let body = serde_json::from_slice::<Value>(&bytes)
+        .map_err(|_| LoopbackApiFailure::new("response", Some(status), None))?;
+    if !response.status().is_success() {
+        let code = body
+            .get("error")
+            .and_then(|error| error.get("code"))
+            .and_then(Value::as_str)
+            .filter(|code| {
+                !code.is_empty()
+                    && code.len() <= 64
+                    && code.bytes().all(|byte| {
+                        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_'
+                    })
+            })
+            .unwrap_or("http");
+        return Err(LoopbackApiFailure::new(code, Some(status), None));
+    }
+    Ok(body)
+}
+
 #[tauri::command]
 async fn engine_start(
     state: State<'_, Engine>,
@@ -333,6 +532,7 @@ fn main() {
             rpc_port: Mutex::new(0),
         })
         .invoke_handler(tauri::generate_handler![
+            loopback_api_request,
             engine_start,
             engine_status,
             engine_peers,
@@ -413,5 +613,49 @@ mod tests {
         assert!(!valid_config(&c));
         c.peer_url = "file:///bin/sh".into();
         assert!(!valid_config(&c));
+    }
+    #[test]
+    fn native_network_diagnostics_expose_only_safe_io_error_classes() {
+        assert_eq!(
+            io_error_cause_name(std::io::ErrorKind::ConnectionRefused),
+            "ConnectionRefused"
+        );
+        assert_eq!(
+            io_error_cause_name(std::io::ErrorKind::PermissionDenied),
+            "PermissionDenied"
+        );
+        assert_eq!(
+            io_error_cause_name(std::io::ErrorKind::Other),
+            "OtherIoError"
+        );
+    }
+
+    #[test]
+    fn loopback_api_bridge_rejects_nonlocal_hosts_and_unsafe_routes() {
+        assert!(validate_loopback_api_server("http://127.0.0.1:8080").is_ok());
+        assert!(validate_loopback_api_server("http://localhost:8080").is_ok());
+        assert!(validate_loopback_api_server("http://[::1]:8080").is_ok());
+        assert_eq!(
+            validate_loopback_api_server("http://192.168.1.5:8080"),
+            Err("insecure_http")
+        );
+        assert_eq!(
+            validate_loopback_api_server("https://example.org"),
+            Err("insecure_http")
+        );
+        assert_eq!(
+            validate_loopback_api_server("http://user:pass@127.0.0.1:8080"),
+            Err("invalid_address")
+        );
+        assert!(valid_loopback_api_path("/api/v1/rooms/join"));
+        assert!(valid_loopback_api_path(
+            "/api/v1/rooms/0123456789abcdef0123456789abcdef"
+        ));
+        assert!(!valid_loopback_api_path("/api/v1/../admin"));
+        assert!(!valid_loopback_api_path("/api/v1/%2e%2e/%2e%2e/admin"));
+        assert!(!valid_loopback_api_path("/api/v1/rooms%2fadmin"));
+        assert!(!valid_loopback_api_path("/api/v1/rooms?token=secret"));
+        assert!(valid_loopback_api_method("PATCH"));
+        assert!(!valid_loopback_api_method("OPTIONS"));
     }
 }

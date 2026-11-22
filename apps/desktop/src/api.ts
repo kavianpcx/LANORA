@@ -1,7 +1,10 @@
+import { invoke, isTauri } from "@tauri-apps/api/core";
+
 export class RequestError extends Error {
   constructor(
     public code: string,
     public status?: number,
+    public causeName?: string,
   ) {
     super(code);
   }
@@ -67,17 +70,63 @@ export async function api<T>(
   const cancel = () => controller.abort();
   options.signal?.addEventListener("abort", cancel, { once: true });
   if (options.signal?.aborted) controller.abort();
-  const timer = setTimeout(cancel, options.timeoutMs ?? 10000);
+  const timeoutMs = options.timeoutMs ?? 10000;
+  const timer = setTimeout(cancel, timeoutMs);
   try {
-    const response = await fetch(server + path, {
+    const parsedServer = new URL(server);
+    const requestMethod = method ?? (data ? "POST" : "GET");
+    if (
+      isTauri() &&
+      parsedServer.protocol === "http:" &&
+      isLoopbackHost(parsedServer.hostname)
+    ) {
+      try {
+        const result = await invoke<T>("loopback_api_request", {
+          server: parsedServer.origin,
+          path,
+          token: token ?? null,
+          data: data ?? null,
+          method: requestMethod,
+          timeoutMs,
+        });
+        if (options.signal?.aborted) throw new RequestError("cancelled");
+        if (controller.signal.aborted) throw new RequestError("timeout");
+        return result;
+      } catch (error) {
+        if (error instanceof RequestError) throw error;
+        if (options.signal?.aborted) throw new RequestError("cancelled");
+        if (controller.signal.aborted) throw new RequestError("timeout");
+        if (error && typeof error === "object" && "code" in error) {
+          const failure = error as {
+            code?: unknown;
+            status?: unknown;
+            causeName?: unknown;
+          };
+          if (typeof failure.code === "string") {
+            throw new RequestError(
+              failure.code,
+              typeof failure.status === "number" ? failure.status : undefined,
+              typeof failure.causeName === "string" ? failure.causeName : undefined,
+            );
+          }
+        }
+        throw new RequestError("network", undefined, "NativeError");
+      }
+    }
+
+    const requestOptions: RequestInit & { targetAddressSpace?: "loopback" } = {
       signal: controller.signal,
-      method: method ?? (data ? "POST" : "GET"),
+      method: requestMethod,
       headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(data ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: "Bearer " + token } : {}),
       },
       ...(data ? { body: JSON.stringify(data) } : {}),
-    });
+    };
+    if (parsedServer.protocol === "http:" && isLoopbackHost(parsedServer.hostname)) {
+      requestOptions.targetAddressSpace = "loopback";
+    }
+    const response = await fetch(server + path, requestOptions);
     const body = await response.json().catch(() => {
       throw new RequestError("response", response.status);
     });
@@ -93,7 +142,8 @@ export async function api<T>(
         : looksLikeTlsCertificateError(error)
           ? "tls_certificate"
           : "network";
-    throw new RequestError(code);
+    const causeName = error instanceof Error ? error.name : "UnknownError";
+    throw new RequestError(code, undefined, causeName);
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", cancel);
