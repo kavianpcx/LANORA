@@ -15,7 +15,7 @@ services:
     expose: ["8080"]
     networks: [private]
   easytier:
-    image: ghcr.io/easytier/easytier:v2.6.4@sha256:91d6732ea5ff71542fdb99333d2ee7b168e973443114db84db061e452427d91e
+    image: ghcr.io/easytier/easytier:v2.7.1@sha256:24248ca25f55f97fde509af450124b31decd44421403518350c6f4109fb139ef
     restart: unless-stopped
     devices:
       - /dev/net/tun:/dev/net/tun
